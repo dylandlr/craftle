@@ -57,6 +57,7 @@ jobs:
           CRAFTLE_RECORD_FRAMES: ${{ inputs.frames || '120' }}
           CRAFTLE_RECORD_SIZE: '512'
           LIBGL_ALWAYS_SOFTWARE: '1'
+          CRAFTLE_CAMERA_SWEEP: '1'
         run: |
           mkdir -p recordings/pov
           set +e
