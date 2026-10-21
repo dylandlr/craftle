@@ -1,7 +1,5 @@
 name: Real POV capture (eight-agent test)
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       frames:
@@ -68,6 +66,7 @@ jobs:
           echo "Controller exit code: $code"
           tail -n 100 recordings/controller.log || true
           node scripts/verify-pov.js recordings/pov config.json
+          python3 scripts/verify-motion.py recordings/pov --min-different-frames 2
       - name: Server diagnostics
         if: always()
         run: |
