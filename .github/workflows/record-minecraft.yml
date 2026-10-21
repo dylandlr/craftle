@@ -1,0 +1,71 @@
+name: Record eight-agent Minecraft smoke
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Recording duration
+        type: choice
+        options: ['90', '180', '300']
+        default: '180'
+permissions:
+  contents: read
+concurrency:
+  group: minecraft-recording
+  cancel-in-progress: false
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install toolchain
+        run: |
+          npm install --no-audit --no-fund
+          npm run configure
+          python -m pip install pillow==11.3.0
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Start disposable local Minecraft server
+        run: |
+          docker run -d --name craftle-server -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-server 2>&1 | grep -Eq 'Done \(.*\)!'; then exit 0; fi
+            if ! docker ps --format '{{.Names}}' | grep -qx craftle-server; then docker logs craftle-server; exit 1; fi
+            sleep 3
+          done
+          docker logs craftle-server; exit 1
+      - name: Run eight agents and record
+        env:
+          TEST_SECONDS: ${{ inputs.seconds }}
+        run: |
+          mkdir -p recordings
+          node src/main.js > recordings/controller.txt 2>&1 &
+          pid=$!
+          sleep "$TEST_SECONDS"
+          kill -TERM "$pid" || true
+          wait "$pid" || true
+          log=$(find logs -name '*.jsonl' | head -1)
+          test -n "$log"
+          node scripts/validate-run.js "$log"
+          python scripts/record-run.py --log "$log" --out recordings/output
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p recordings
+          printf '%s\n' "commit=$GITHUB_SHA" "run=$GITHUB_RUN_ID" > recordings/run-info.txt
+          docker logs craftle-server > recordings/server.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minecraft-recording-${{ github.run_id }}
+          path: |
+            recordings/
+            logs/
+            config.json
+          retention-days: 14
+          if-no-files-found: warn
