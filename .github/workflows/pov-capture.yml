@@ -21,8 +21,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore npm package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.run_id }}
+          restore-keys: |
+            npm-${{ runner.os }}-${{ hashFiles('package.json') }}-
+      - name: Restore Minecraft server cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/minecraft
+          key: mc-1.21.1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            mc-1.21.1-${{ runner.os }}-
       - name: Install renderer dependencies
         run: |
+          mkdir -p .cache/minecraft
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
           npm install --no-audit --no-fund
@@ -31,7 +46,8 @@ jobs:
           node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));c.agents=c.agents.slice(0,1);fs.writeFileSync(p,JSON.stringify(c,null,2))"
       - name: Launch Minecraft
         run: |
-          docker run -d --name craftle-server -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          rm -rf .cache/minecraft/world .cache/minecraft/world_nether .cache/minecraft/world_the_end .cache/minecraft/logs
+          docker run -d --name craftle-server -v "$PWD/.cache/minecraft:/data" -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
           for i in $(seq 1 120); do
             if docker logs craftle-server 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
             sleep 3
