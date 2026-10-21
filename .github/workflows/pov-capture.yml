@@ -1,0 +1,58 @@
+name: Real POV capture (experimental)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      frames:
+        description: Frames per agent
+        required: true
+        default: '120'
+        type: choice
+        options: ['60','120','240']
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install renderer dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+      - name: Launch Minecraft
+        run: |
+          docker run -d --name craftle-server -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-server 2>&1 | grep -Eq 'Done \\(.*\\)!'; then exit 0; fi
+            sleep 3
+          done
+          docker logs craftle-server
+          exit 1
+      - name: Capture actual bot POV
+        env:
+          CRAFTLE_RECORD_POV: '1'
+          CRAFTLE_RECORD_FRAMES: ${{ inputs.frames || '120' }}
+          CRAFTLE_RECORD_SIZE: '512'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/pov
+          timeout --signal=TERM 240s xvfb-run -a node src/main.js > recordings/controller.log 2>&1 || test "$?" -eq 124
+          node scripts/verify-pov.js recordings/pov config.json
+      - name: Server diagnostics
+        if: always()
+        run: docker logs craftle-server > recordings/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-pov-${{ github.run_id }}
+          path: recordings/
+          retention-days: 7
