@@ -8,7 +8,10 @@ const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
 const log=(name,type,extra={})=>{const e={timestamp:new Date().toISOString(),agent:name,type,...extra};events.write(JSON.stringify(e)+'\n');console.log(JSON.stringify(e));};
 const bots=[];
 let stopping=false;
-for(const profile of config.agents){
+for(const [index,profile] of config.agents.entries()){
+ await new Promise(resolve=>setTimeout(resolve,index===0?0:6000));
+ if(stopping)break;
+ log(profile.name,'connecting',{agent_id:profile.id,index});
  const bot=mineflayer.createBot({host:config.host,port:config.port,username:profile.name,version:config.version,hideErrors:true});
  bots.push(bot);
  bot.on('spawn',()=>{
