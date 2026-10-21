@@ -1,4 +1,4 @@
-name: Real POV capture (single-agent diagnostic)
+name: Real POV capture (eight-agent test)
 on:
   push:
     branches: [main]
@@ -43,7 +43,6 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
-          node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));c.agents=c.agents.slice(0,1);fs.writeFileSync(p,JSON.stringify(c,null,2))"
       - name: Launch Minecraft
         run: |
           rm -rf .cache/minecraft/world .cache/minecraft/world_nether .cache/minecraft/world_the_end .cache/minecraft/logs
@@ -63,7 +62,7 @@ jobs:
         run: |
           mkdir -p recordings/pov
           set +e
-          timeout --signal=TERM 100s xvfb-run -a node src/main.js > recordings/controller.log 2>&1
+          timeout --signal=TERM 180s xvfb-run -a node src/main.js > recordings/controller.log 2>&1
           code=$?
           set -e
           echo "Controller exit code: $code"
