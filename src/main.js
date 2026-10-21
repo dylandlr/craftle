@@ -13,6 +13,14 @@ for(const profile of config.agents){
  bots.push(bot);
  bot.on('spawn',()=>{
    log(profile.name,'spawn',{agent_id:profile.id,position:bot.entity?.position});
+   if(process.env.CRAFTLE_CAMERA_SWEEP==='1'){
+     let tick=0;
+     const sweep=setInterval(()=>{
+       if(!bot.entity||stopping){clearInterval(sweep);return;}
+       bot.look((tick++%12)*Math.PI/6,0).catch(e=>log(profile.name,'camera_sweep_error',{message:e.message}));
+     },1000);
+     bot.once('end',()=>clearInterval(sweep));
+   }
    attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data))
      .catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
