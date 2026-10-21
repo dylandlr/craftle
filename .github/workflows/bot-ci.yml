@@ -1,0 +1,24 @@
+name: Craftle bot smoke CI
+on:
+  pull_request:
+  push:
+    branches: ['feat/**',main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run configure
+      - run: npm test
+      - name: Validate recording prerequisites
+        run: |
+          node --check src/main.js
+          node --check src/recording.js
+          node --check scripts/verify-pov.js
