@@ -1,4 +1,4 @@
-name: Real POV capture (four paired jobs)
+name: Real POV capture (five paired jobs)
 on:
   push:
     branches: [main]
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        batch: [0, 1, 2, 3]
+        batch: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -95,7 +95,7 @@ jobs:
           retention-days: 7
 
   compose-grid:
-    name: Assemble 8 POV review grid
+    name: Assemble 9 POV review grid
     needs: capture
     if: always()
     runs-on: ubuntu-latest
@@ -112,13 +112,13 @@ jobs:
           pattern: actual-pov-${{ github.run_id }}-batch-*
           path: recordings/batches
           merge-multiple: false
-      - name: Render 4x2 review wall
+      - name: Render 3x3 review wall
         run: python3 scripts/compose-grid.py recordings/batches recordings/grid.mp4 --seconds 5
       - name: Upload synchronized review video
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: craftle-eight-pov-grid-${{ github.run_id }}
+          name: craftle-nine-pov-grid-${{ github.run_id }}
           path: |
             recordings/grid.mp4
             recordings/grid.json
