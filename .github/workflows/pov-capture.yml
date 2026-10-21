@@ -93,3 +93,33 @@ jobs:
           name: actual-pov-${{ github.run_id }}-batch-${{ matrix.batch }}
           path: recordings/
           retention-days: 7
+
+  compose-grid:
+    name: Assemble 8 POV review grid
+    needs: capture
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install video tools
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Download paired POV artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: actual-pov-${{ github.run_id }}-batch-*
+          path: recordings/batches
+          merge-multiple: false
+      - name: Render 4x2 review wall
+        run: python3 scripts/compose-grid.py recordings/batches recordings/grid.mp4 --seconds 5
+      - name: Upload synchronized review video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: craftle-eight-pov-grid-${{ github.run_id }}
+          path: |
+            recordings/grid.mp4
+            recordings/grid.json
+          retention-days: 7
