@@ -1,4 +1,4 @@
-name: Real POV capture (eight-agent test)
+name: Real POV capture (four paired jobs)
 on:
   push:
     branches: [main]
@@ -16,6 +16,10 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,6 +47,9 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
+          node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));const b=Number(process.env.CRAFTLE_BATCH);c.agents=c.agents.slice(b*2,b*2+2);fs.writeFileSync(p,JSON.stringify(c,null,2))"
+        env:
+          CRAFTLE_BATCH: ${{ matrix.batch }}
       - name: Launch Minecraft
         run: |
           rm -rf .cache/minecraft/world .cache/minecraft/world_nether .cache/minecraft/world_the_end .cache/minecraft/logs
@@ -83,6 +90,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: actual-pov-${{ github.run_id }}
+          name: actual-pov-${{ github.run_id }}-batch-${{ matrix.batch }}
           path: recordings/
           retention-days: 7
