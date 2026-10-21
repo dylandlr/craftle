@@ -1,4 +1,4 @@
-name: Real POV capture (experimental)
+name: Real POV capture (single-agent diagnostic)
 on:
   push:
     branches: [main]
@@ -28,6 +28,7 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
+          node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));c.agents=c.agents.slice(0,1);fs.writeFileSync(p,JSON.stringify(c,null,2))"
       - name: Launch Minecraft
         run: |
           docker run -d --name craftle-server -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
@@ -45,7 +46,12 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           mkdir -p recordings/pov
-          timeout --signal=TERM 240s xvfb-run -a node src/main.js > recordings/controller.log 2>&1 || test "$?" -eq 124
+          set +e
+          timeout --signal=TERM 100s xvfb-run -a node src/main.js > recordings/controller.log 2>&1
+          code=$?
+          set -e
+          echo "Controller exit code: $code"
+          tail -n 100 recordings/controller.log || true
           node scripts/verify-pov.js recordings/pov config.json
       - name: Server diagnostics
         if: always()
