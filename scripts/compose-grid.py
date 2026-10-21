@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compose nine Craftle POV clips into one labeled 3x3 review video.
 
-Each cell is 480x270. Missing clips receive a visible MISSING slate.
+Each cell is 480x480, preserving the source's square framing. Missing clips receive a visible MISSING slate.
 Paired CI jobs have separate worlds: this grid is a renderer review, not a shared-world replay.
 """
 import argparse
@@ -42,11 +42,11 @@ def main():
         if video:
             command += ["-stream_loop", "-1", "-i", str(video)]
         else:
-            command += ["-f", "lavfi", "-i", "color=c=black:s=480x270:r=25"]
+            command += ["-f", "lavfi", "-i", "color=c=black:s=480x480:r=25"]
         label = f"{i+1:02d} {name}" + ("" if video else "  MISSING")
         filters.append(
-            f"[{i}:v]fps=25,scale=480:270:force_original_aspect_ratio=decrease,"
-            f"pad=480:270:(ow-iw)/2:(oh-ih)/2:black,setsar=1,"
+            f"[{i}:v]fps=25,scale=480:480:force_original_aspect_ratio=decrease,"
+            f"pad=480:480:(ow-iw)/2:(oh-ih)/2:black,setsar=1,"
             f"drawtext=text='{label}':fontcolor=white:fontsize=19:"
             f"x=12:y=12:box=1:boxcolor=black@0.7[v{i}]"
         )
