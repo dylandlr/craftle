@@ -32,7 +32,7 @@ jobs:
         run: |
           docker run -d --name craftle-server -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
           for i in $(seq 1 120); do
-            if docker logs craftle-server 2>&1 | grep -Eq 'Done \\(.*\\)!'; then exit 0; fi
+            if docker logs craftle-server 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
             sleep 3
           done
           docker logs craftle-server
@@ -49,7 +49,9 @@ jobs:
           node scripts/verify-pov.js recordings/pov config.json
       - name: Server diagnostics
         if: always()
-        run: docker logs craftle-server > recordings/server.log 2>&1 || true
+        run: |
+          mkdir -p recordings
+          docker logs craftle-server > recordings/server.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
