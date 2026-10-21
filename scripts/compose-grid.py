@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose eight Craftle POV clips into one labeled 4x2 review video.
+"""Compose nine Craftle POV clips into one labeled 3x3 review video.
 
 Each cell is 480x270. Missing clips receive a visible MISSING slate.
 Paired CI jobs have separate worlds: this grid is a renderer review, not a shared-world replay.
@@ -10,7 +10,7 @@ import pathlib
 import subprocess
 import sys
 
-NAMES = ["Turesla", "Edislov", "Curiday", "Faradell", "Lovring", "Hoppage", "Wattoni", "Shannileo"]
+NAMES = ["Turesla", "Edislov", "Curiday", "Faradell", "Lovring", "Hoppage", "Wattoni", "Shannileo", "Teslard"]
 
 def valid_video(path):
     if not path or not path.is_file() or path.stat().st_size == 0:
@@ -51,14 +51,15 @@ def main():
             f"x=12:y=12:box=1:boxcolor=black@0.7[v{i}]"
         )
         status.append({"agent": name, "id": key[:-4], "source": str(video) if video else None, "present": bool(video)})
-    filters.append("".join(f"[v{i}]" for i in range(4)) + "hstack=inputs=4[top]")
-    filters.append("".join(f"[v{i}]" for i in range(4,8)) + "hstack=inputs=4[bottom]")
-    filters.append("[top][bottom]vstack=inputs=2[out]")
+    filters.append("".join(f"[v{i}]" for i in range(3)) + "hstack=inputs=3[top]")
+    filters.append("".join(f"[v{i}]" for i in range(3,6)) + "hstack=inputs=3[middle]")
+    filters.append("".join(f"[v{i}]" for i in range(6,9)) + "hstack=inputs=3[bottom]")
+    filters.append("[top][middle][bottom]vstack=inputs=3[out]")
     command += ["-filter_complex", ";".join(filters), "-map", "[out]",
                 "-t", str(args.seconds), "-an", "-c:v", "libx264",
                 "-preset", "veryfast", "-pix_fmt", "yuv420p", str(args.output)]
     result = subprocess.run(command)
-    report = {"layout": "4 columns × 2 rows", "separateWorlds": True, "durationSeconds": args.seconds,
+    report = {"layout": "3 columns × 3 rows", "separateWorlds": True, "durationSeconds": args.seconds,
               "video": str(args.output), "agents": status}
     args.output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
