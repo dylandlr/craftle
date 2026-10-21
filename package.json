@@ -1,0 +1,18 @@
+{
+  "name": "craftle",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test",
+    "configure": "node scripts/make-config.js",
+    "verify:pov": "node scripts/verify-pov.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.35.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "minecraft-data": "^3.0.0",
+    "prismarine-viewer": "^1.33.0"
+  }
+}
