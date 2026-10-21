@@ -44,10 +44,7 @@ jobs:
         run: |
           mkdir -p recordings/pov
           timeout --signal=TERM 240s xvfb-run -a node src/main.js > recordings/controller.log 2>&1 || test "$?" -eq 124
-          count=$(find recordings/pov -type f -name '*.mp4' -size +1k | wc -l)
-          echo "Captured $count of 8 POV videos"
-          test "$count" -eq 8
-          for f in recordings/pov/*.mp4; do ffprobe -v error -show_entries stream=width,height -of csv=p=0 "$f"; done
+          node scripts/verify-pov.js recordings/pov config.json
       - name: Server diagnostics
         if: always()
         run: docker logs craftle-server > recordings/server.log 2>&1 || true
