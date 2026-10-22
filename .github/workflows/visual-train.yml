@@ -1,0 +1,60 @@
+name: PyTorch visual policy smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'training/**'
+      - 'src/torch-policy.js'
+      - '.github/workflows/visual-train.yml'
+permissions:
+  contents: read
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install CPU learning stack
+        run: |
+          python -m pip install numpy
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Unit tests
+        run: python -m unittest discover -s training -p 'test_*.py' -v
+      - name: Build synthetic data and train checkpoint
+        run: |
+          python - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('recordings/synthetic')
+          (root/'frames').mkdir(parents=True,exist_ok=True)
+          with (root/'decisions.jsonl').open('w') as manifest:
+              for i in range(32):
+                  rgb=bytes(([30,80,150] if i%2 else [180,30,70])*16*16)
+                  name=f'frames/{i:03d}.rgb'
+                  (root/name).write_bytes(rgb)
+                  row=dict(observationSource='first_person_rgb',pixelFormat='RGB24',image=name,width=16,height=16,sha256=hashlib.sha256(rgb).hexdigest(),action='forward' if i%2 else 'left',episode='synthetic_smoke')
+                  manifest.write(json.dumps(row)+'\n')
+          PY
+          python -m training.train_visual_bc --dataset recordings/synthetic --output recordings/synthetic/checkpoint.pt --epochs 1 --batch-size 8
+      - name: Check inference protocol
+        run: |
+          python - <<'PY'
+          import base64,json,subprocess
+          p=subprocess.Popen(['python','-m','training.serve_visual_policy','--checkpoint','recordings/synthetic/checkpoint.pt'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+          ready=json.loads(p.stdout.readline())
+          assert ready['ready']
+          p.stdin.write(json.dumps({'frameId':4,'width':16,'height':16,'rgbBase64':base64.b64encode(bytes([30,80,150])*256).decode()})+'\n');p.stdin.flush()
+          outcome=json.loads(p.stdout.readline())
+          assert outcome['frameId']==4 and outcome['action'] in ready['actions'],outcome
+          print(outcome)
+          p.terminate();p.wait(timeout=10)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-visual-checkpoint-${{ github.run_id }}
+          path: recordings/synthetic/checkpoint.pt
+          retention-days: 3
