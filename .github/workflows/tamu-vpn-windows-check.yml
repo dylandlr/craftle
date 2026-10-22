@@ -1,0 +1,23 @@
+name: TAMU VPN connectivity (self-hosted Windows)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64, craftle-vpn]
+    timeout-minutes: 5
+    env:
+      TAMU_API_KEY: ${{ secrets.TAMU_API_KEY }}
+      TAMU_CF_COOKIE: ${{ secrets.TAMU_CF_COOKIE }}
+      CRAFTLE_LLM_BASE_URL: https://chat-api.tamu.ai/openai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test TAMU API access over host VPN
+        shell: pwsh
+        run: |
+          if (-not $env:TAMU_API_KEY) { throw 'Missing TAMU_API_KEY secret' }
+          node scripts/check-tamu-connection.js
