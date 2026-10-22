@@ -71,14 +71,15 @@ for(const [index,profile] of activeProfiles.entries()){
        log:entry=>log(profile.name,entry.type,{agent_id:profile.id,...entry})
      });
      const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
-     let busy=false,lastDecision=0;
+     let busy=false,lastDecision=0,lastOutcome=null;
      const intervalMs=Math.max(1000,Number(process.env.CRAFTLE_LLM_INTERVAL_MS??5000));
      const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
        if(stopping||busy||Date.now()-lastDecision<intervalMs)return;
        busy=true;
        try{
-         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food});
+         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,lastOutcome});
          const outcome=await executeLlmAction(bot,decision.action);
+         lastOutcome=outcome;
          lastDecision=Date.now();
          log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
        }catch(error){
