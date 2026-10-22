@@ -58,6 +58,23 @@ jobs:
           test -n "$CRAFTLE_LLM_API_KEY" || { echo "Missing TAMU_API_KEY GitHub Actions secret"; exit 1; }
           test -n "$TAMU_CF_COOKIE" || { echo "Missing TAMU_CF_COOKIE GitHub Actions secret"; exit 1; }
           [[ "$CRAFTLE_LLM_MAX_STEPS" =~ ^[0-9]+$ ]] && test "$CRAFTLE_LLM_MAX_STEPS" -ge 1 && test "$CRAFTLE_LLM_MAX_STEPS" -le 30
+      - name: Verify runner can reach TAMU gateway
+        if: ${{ inputs.runner == 'tamu-vpn' }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const target = new URL(process.env.CRAFTLE_LLM_BASE_URL);
+          if (target.protocol !== 'https:' || target.hostname !== 'chat-api.tamu.ai') {
+            console.error('Unexpected TAMU gateway'); process.exit(1);
+          }
+          try {
+            const response = await fetch(target.origin, {signal: AbortSignal.timeout(10000)});
+            console.log('TAMU gateway network reachable; HTTP status:', response.status);
+          } catch (error) {
+            console.error('Cannot reach TAMU gateway from this runner:', error.cause?.code || error.name);
+            process.exit(1);
+          }
+          NODE
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
