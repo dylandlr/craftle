@@ -16,8 +16,8 @@ export function verifyMilestones(events){
    if(items.some(x=>x.name==='ender_pearl'))recorded('held_ender_pearl',e,'inventory_snapshot');
    if(items.some(x=>x.name==='blaze_rod'))recorded('held_blaze_rod',e,'inventory_snapshot');
   }
-  if(e.type==='minecraft_dimension'&&e.dimension==='minecraft:the_nether')recorded('entered_nether',e,'client_dimension_event');
-  if(e.type==='minecraft_dimension'&&e.dimension==='minecraft:the_end')recorded('entered_end',e,'client_dimension_event');
+  if(e.type==='minecraft_dimension'&&['minecraft:the_nether','the_nether'].includes(e.dimension))recorded('entered_nether',e,'client_dimension_event');
+  if(e.type==='minecraft_dimension'&&['minecraft:the_end','the_end'].includes(e.dimension))recorded('entered_end',e,'client_dimension_event');
  }
  return [...milestones.values()];
 }
