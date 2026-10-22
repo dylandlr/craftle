@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 const args=process.argv.slice(2);
-const opt=name=>args[args.indexOf(name)+1];
+const opt=name=>{const index=args.indexOf(name);return index<0?undefined:args[index+1];};
 const manifestPath=opt('--manifest')??'experiments/llm-factorial-trials.v1.json';
 const trialId=opt('--trial');
 const execute=args.includes('--execute');
