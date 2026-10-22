@@ -77,8 +77,8 @@ for(const [index,profile] of activeProfiles.entries()){
        if(stopping||busy||Date.now()-lastDecision<intervalMs)return;
        busy=true;
        try{
-         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,lastOutcome});
-         const outcome=await executeLlmAction(bot,decision.action);
+         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),lastOutcome});
+         const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
          lastOutcome=outcome;
          lastDecision=Date.now();
          log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
