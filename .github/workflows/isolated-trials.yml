@@ -47,6 +47,10 @@ jobs:
         run: |
           node scripts/analyze-llm-factorial.js recordings/factorial-plans/manifest.json recordings/factorial > recordings/factorial-plans/analysis.json
           node -e "const r=require('./recordings/factorial-plans/analysis.json');if(r.completed!==0||r.missing!==45)process.exit(1)"
+      - name: Verify empty experiment reports honestly
+        run: |
+          node scripts/analyze-factorial.js --manifest recordings/factorial-plans/manifest.json --root recordings/factorial --output recordings/factorial-plans/empty-summary.json
+          node -e "const r=require('./recordings/factorial-plans/empty-summary.json');if(r.completed!==0||r.missing.length!==45||r.paired.length!==0)process.exit(1)"
       - uses: actions/upload-artifact@v4
         with:
           name: isolated-factorial-plans-${{ github.run_id }}
