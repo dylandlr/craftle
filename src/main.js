@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import mineflayer from 'mineflayer';
-import {attachRecorder,recordingOptions} from './recording.js';
+import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -57,6 +57,7 @@ for(const [index,profile] of activeProfiles.entries()){
    const startRecorder=async()=>{
      const barrier=process.env.CRAFTLE_CAPTURE_BARRIER;
      if(barrier){
+       await prepareRecorder();
        log(profile.name,'capture_waiting',{agent_id:profile.id,barrier});
        const deadline=Date.now()+180000;
        while(!stopping && !fs.existsSync(barrier) && Date.now()<deadline)
