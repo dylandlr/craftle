@@ -70,6 +70,7 @@ for(const [index,profile] of activeProfiles.entries()){
        infer:createVisionClient(),
        memoryFile:process.env.CRAFTLE_LLM_MEMORY_FILE??'recordings/llm/agent-memory.json',
        maxSteps:Number(process.env.CRAFTLE_LLM_MAX_STEPS??100),
+       cognition:profile.cognition,
        log:entry=>log(profile.name,entry.type,{agent_id:profile.id,...entry})
      });
      const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
@@ -80,7 +81,7 @@ for(const [index,profile] of activeProfiles.entries()){
        if(stopping||busy||budgetExhausted||Date.now()-lastDecision<intervalMs)return;
        busy=true;
        try{
-         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),lastOutcome});
+         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),position:bot.entity?.position?{x:bot.entity.position.x,z:bot.entity.position.z}:null,lastOutcome});
          const before=snapshotAgentState(bot);
          const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
          await new Promise(resolve=>setTimeout(resolve,350));
@@ -107,7 +108,7 @@ for(const [index,profile] of activeProfiles.entries()){
      bot.once('end',()=>{server.close().catch(()=>{});bot.clearControlStates();});
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1000),width:size,height:size});
-     log(profile.name,'llm_agent_started',{agent_id:profile.id,size,source:'first_person_rgb',model:process.env.CRAFTLE_LLM_MODEL});
+     log(profile.name,'llm_agent_started',{agent_id:profile.id,size,source:'first_person_rgb',model:process.env.CRAFTLE_LLM_MODEL,cognition:profile.cognition});
    }
    if(['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR)){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
