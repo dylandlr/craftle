@@ -21,6 +21,7 @@ test('learning updates Q values, persists, and reloads without pretrained knowle
   const b=createOnlineVisualQLearner({epsilon:0,checkpoint:file});
   assert.equal(b.choose('0000').action,'right');
   assert.ok(b.stats().states>0);
+  assert.equal(b.stats().transitions,1);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('intrinsic reward favors novelty and motion, penalizes damage',()=>{
