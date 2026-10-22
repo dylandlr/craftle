@@ -1,0 +1,59 @@
+name: One-agent live RGB smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/live-rgb-one.yml']
+permissions:
+  contents: read
+jobs:
+  live-rgb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install graphics and decoding
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start isolated Minecraft server
+        run: |
+          docker run -d --name craftle-rgb -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-rgb 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Verify real frame-to-action loop
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: vision_probe
+          CRAFTLE_LIVE_SIZE: '128'
+          CRAFTLE_RECORD_FRAMES: '100'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/live-rgb
+          timeout --signal=TERM 70s xvfb-run -a node src/main.js > recordings/live-rgb/agent.log 2>&1 || true
+          grep -q '"type":"live_rgb_started"' recordings/live-rgb/agent.log
+          count=$(grep -c '"type":"visual_decision"' recordings/live-rgb/agent.log || true)
+          echo "Live RGB decisions: $count"
+          test "$count" -ge 3
+          ! grep '"type":"visual_decision"' recordings/live-rgb/agent.log | grep -q 'privileged_block_state'
+      - name: Preserve evidence
+        if: always()
+        run: |
+          mkdir -p recordings/live-rgb
+          docker logs craftle-rgb > recordings/live-rgb/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-rgb-single-agent-${{ github.run_id }}
+          path: recordings/live-rgb
+          retention-days: 7
