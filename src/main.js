@@ -85,6 +85,8 @@ for(const [index,profile] of activeProfiles.entries()){
          const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
          await new Promise(resolve=>setTimeout(resolve,350));
          const effect=summarizeActionEffect(before,snapshotAgentState(bot),decision.action,outcome);
+         // A single decision must not leave movement held during the next LLM request.
+         bot.clearControlStates();
          const reflection=progress.observe({goal:decision.goal,action:decision.action,effect});
          lastOutcome={...outcome,effect,reflection};
          log(profile.name,'llm_progress',{agent_id:profile.id,frameId:frame.frameId,...reflection});
