@@ -1,5 +1,8 @@
 name: Continuous non-LLM Minecraft learning (manual)
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/continuous-visual-rl.yml']
   workflow_dispatch:
     inputs:
       episodes:
@@ -28,7 +31,7 @@ jobs:
       CRAFTLE_BEHAVIOR: visual_online_rl
       CRAFTLE_RL_CHECKPOINT: recordings/continuous/agent-q.json
       CRAFTLE_RL_EPSILON: '0.30'
-      CRAFTLE_RL_ACTION_MS: ${{ inputs.action_ms }}
+      CRAFTLE_RL_ACTION_MS: ${{ inputs.action_ms || '350' }}
       CRAFTLE_RECORD_FRAMES: '100000'
       LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
@@ -39,8 +42,8 @@ jobs:
       - name: Validate experiment limits
         shell: bash
         env:
-          EPISODES: ${{ inputs.episodes }}
-          SECONDS: ${{ inputs.seconds_per_episode }}
+          EPISODES: ${{ inputs.episodes || '2' }}
+          SECONDS: ${{ inputs.seconds_per_episode || '75' }}
         run: |
           [[ "$EPISODES" =~ ^[0-9]+$ ]] && ((EPISODES>=1 && EPISODES<=12))
           [[ "$SECONDS" =~ ^[0-9]+$ ]] && ((SECONDS>=45 && SECONDS<=240))
