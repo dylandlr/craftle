@@ -6,6 +6,14 @@ on:
         description: 'Vision-capable chat model'
         required: true
         type: string
+      runner:
+        description: 'Runner: github-hosted or approved TAMU-VPN-connected self-hosted runner'
+        required: true
+        default: github-hosted
+        type: choice
+        options:
+          - github-hosted
+          - tamu-vpn
       base_url:
         description: 'OpenAI-compatible API base URL (set for TAMU gateway; blank uses OpenAI default)'
         required: false
@@ -19,7 +27,7 @@ permissions:
   contents: read
 jobs:
   episode:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner == 'tamu-vpn' && fromJSON('["self-hosted","linux","x64","tamu-vpn"]') || fromJSON('["ubuntu-latest"]') }}
     timeout-minutes: 18
     env:
       CRAFTLE_AGENT_IDS: agent_001
