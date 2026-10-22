@@ -24,9 +24,11 @@ jobs:
       - run: npm run configure
       - run: npm test
       - run: node scripts/audit-cognition-factorial.js recordings/cognition-audit/report.json
+      - run: node scripts/generate-llm-factorial-trials.js recordings/cognition-audit/trials.json
+      - run: node -e "const m=require('./recordings/cognition-audit/trials.json');if(m.trials.length!==45||new Set(m.trials.map(t=>t.id)).size!==45||m.trials.some(t=>t.worldMode!=='isolated'))process.exit(1)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cognition-contract-audit-${{ github.run_id }}
-          path: recordings/cognition-audit/report.json
+          path: recordings/cognition-audit/
           retention-days: 7
