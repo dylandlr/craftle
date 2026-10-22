@@ -43,12 +43,12 @@ jobs:
         shell: bash
         env:
           EPISODES: ${{ inputs.episodes || '2' }}
-          SECONDS: ${{ inputs.seconds_per_episode || '75' }}
+          SESSION_DURATION: ${{ inputs.seconds_per_episode || '75' }}
         run: |
           [[ "$EPISODES" =~ ^[0-9]+$ ]] && ((EPISODES>=1 && EPISODES<=12))
-          [[ "$SECONDS" =~ ^[0-9]+$ ]] && ((SECONDS>=45 && SECONDS<=240))
+          [[ "$SESSION_DURATION" =~ ^[0-9]+$ ]] && ((SESSION_DURATION>=45 && SESSION_DURATION<=240))
           [[ "$CRAFTLE_RL_ACTION_MS" =~ ^[0-9]+$ ]] && ((CRAFTLE_RL_ACTION_MS>=100 && CRAFTLE_RL_ACTION_MS<=1500))
-          ((EPISODES*SECONDS<=3000))
+          ((EPISODES*SESSION_DURATION<=3000))
       - name: Install rendering dependencies
         run: |
           sudo apt-get update -qq
@@ -70,14 +70,14 @@ jobs:
         shell: bash
         env:
           EPISODES: ${{ inputs.episodes || '2' }}
-          SECONDS: ${{ inputs.seconds_per_episode || '75' }}
+          SESSION_DURATION: ${{ inputs.seconds_per_episode || '75' }}
         run: |
           set -euo pipefail
           for index in $(seq 1 "$EPISODES"); do
             episode="recordings/continuous/episode-$index"
             mkdir -p "$episode"
             echo "Starting episode $index of $EPISODES (same world; retained Q-table)"
-            timeout --signal=TERM --kill-after=8s "$SECONDS" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
+            CRAFTLE_RL_MAX_MS="$((SESSION_DURATION*1000))" timeout --signal=TERM --kill-after=8s "$((SESSION_DURATION+15))" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
             if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then
               echo "Agent process failed with status $status"; exit 1
             fi
