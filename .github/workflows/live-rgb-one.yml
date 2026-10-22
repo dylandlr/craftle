@@ -45,6 +45,7 @@ jobs:
           count=$(grep -c '"type":"visual_decision"' recordings/live-rgb/agent.log || true)
           echo "Live RGB decisions: $count"
           test "$count" -ge 3
+          node scripts/verify-visual-decisions.js recordings/live-rgb/agent.log 3
           ! grep '"type":"visual_decision"' recordings/live-rgb/agent.log | grep -q 'privileged_block_state'
       - name: Preserve evidence
         if: always()
