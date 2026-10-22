@@ -27,3 +27,11 @@ test('LLM client authenticates and sends image without exposing key',async()=>{
  assert.equal(sent.opts.headers.Authorization,'Bearer test-only');
  assert.match(sent.opts.body,/data:image\/jpeg;base64/);
 });
+
+test('TAMU session cookie is passed only to configured API request',async()=>{
+ let headers;
+ const client=createVisionClient({apiKey:'fake',cfCookie:'cf_clearance=test-session',model:'protected.gpt-4o',baseUrl:'https://chat-api.tamu.ai/openai',fetchImpl:async(url,opts)=>{headers=opts.headers;assert.equal(String(url),'https://chat-api.tamu.ai/openai/chat/completions');return {ok:true,json:async()=>({choices:[{message:{content:answer}}]})};}});
+ await client({system:'system',observation:{text:'test',jpeg:Buffer.from([255,216])}});
+ assert.equal(headers.Cookie,'cf_clearance=test-session');
+ assert.equal(headers.Authorization,'Bearer fake');
+});
