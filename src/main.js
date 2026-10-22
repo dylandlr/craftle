@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import mineflayer from 'mineflayer';
 import {decideNavigation} from './navigation.js';
@@ -77,7 +78,7 @@ for(const [index,profile] of activeProfiles.entries()){
          const decision=await evaluateVisualPolicy(policy,frame);
          await applyVisualAction(bot,decision.action);
          lastAction=Date.now();
-         log(profile.name,'visual_decision',{agent_id:profile.id,policy:'rgb_brightness_probe',observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,action:decision.action});
+         log(profile.name,'visual_decision',{agent_id:profile.id,policy:'rgb_brightness_probe',observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,frameSha256:createHash('sha256').update(frame.rgb).digest('hex'),action:decision.action});
        }catch(error){log(profile.name,'visual_policy_error',{message:error.message});}
        finally{busy=false;}
      }});
