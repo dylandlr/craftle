@@ -12,6 +12,7 @@ import {createVisionClient} from './llm-client.js';
 import {createLlmAgent} from './llm-agent.js';
 import {executeLlmAction} from './llm-tools.js';
 import {snapshotAgentState,summarizeActionEffect} from './llm-effects.js';
+import {createProgressTracker} from './llm-progress.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -73,6 +74,7 @@ for(const [index,profile] of activeProfiles.entries()){
      });
      const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
      let busy=false,lastDecision=0,lastOutcome=null;
+     const progress=createProgressTracker();
      const intervalMs=Math.max(1000,Number(process.env.CRAFTLE_LLM_INTERVAL_MS??5000));
      const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
        if(stopping||busy||Date.now()-lastDecision<intervalMs)return;
@@ -83,7 +85,9 @@ for(const [index,profile] of activeProfiles.entries()){
          const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
          await new Promise(resolve=>setTimeout(resolve,350));
          const effect=summarizeActionEffect(before,snapshotAgentState(bot),decision.action,outcome);
-         lastOutcome={...outcome,effect};
+         const reflection=progress.observe({goal:decision.goal,action:decision.action,effect});
+         lastOutcome={...outcome,effect,reflection};
+         log(profile.name,'llm_progress',{agent_id:profile.id,frameId:frame.frameId,...reflection});
          log(profile.name,'llm_action_effect',{agent_id:profile.id,frameId:frame.frameId,...effect});
          lastDecision=Date.now();
          log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
