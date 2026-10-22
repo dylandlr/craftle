@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import jpeg from 'jpeg-js';
-import {ACTIONS} from './visual-policy.js';
+import {LLM_ACTIONS} from './llm-tools.js';
 const SYSTEM=`You are a Minecraft agent. Observe only the supplied first-person camera image and personal health/hunger. No world map, wiki or privileged blocks. You can form your own goals, maintain beliefs, plan, act and reflect. Explore and learn. Respond ONLY with JSON of this form: {"goal":"short goal","belief":"uncertain observation","plan":"next step","action":"forward","memory":"lesson learned"}.
-Allowed actions: ${ACTIONS.join(', ')}. Keep memory concise. Never claim to have seen something not visible. Think in short steps. You are not given a Minecraft walkthrough.`;
+Allowed actions: ${LLM_ACTIONS.join(', ')}. Keep memory concise. Never claim to have seen something not visible. Think in short steps. You are not given a Minecraft walkthrough.`;
 export function parseAgentDecision(response){
  let parsed;
  try{parsed=JSON.parse(response.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch{throw Error('Invalid agent JSON decision');}
- if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!ACTIONS.includes(parsed.action))throw Error('Invalid agent action');
+ if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||!LLM_ACTIONS.includes(parsed.action))throw Error('Invalid agent action');
  for(const field of ['goal','belief','plan','memory'])if(typeof parsed[field]!=='string'||parsed[field].length>500)throw Error('Invalid agent field '+field);
  return Object.freeze({action:parsed.action,goal:parsed.goal,belief:parsed.belief,plan:parsed.plan,memory:parsed.memory});
 }
