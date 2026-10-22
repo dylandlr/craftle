@@ -1,6 +1,7 @@
 // Offline ablation contract audit: this verifies the experimental manipulation,
 // not Minecraft success or the cognitive benefit of any feature.
 import fs from 'node:fs';
+import path from 'node:path';
 import {createLlmAgent} from '../src/llm-agent.js';
 import {cognitionFor,describeCognition} from '../src/cognition-config.js';
 import {makeVisualObservation} from '../src/vision-observation.js';
@@ -29,6 +30,6 @@ const pass=results.every(r=>r.inputsMatchFlags&&r.hasMainImage)&&baselinesEqual;
 const report={schemaVersion:1,kind:'offline_mock_contract_audit',pass,baselinesEqual,rows:results,
  note:'Mock outputs do not demonstrate autonomy, Minecraft exploration, or factual knowledge-graph construction.'};
 const output=process.argv[2];
-if(output){fs.mkdirSync(new URL('.',new URL('file://'+process.cwd()+'/'+output)),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n');}
+if(output){fs.mkdirSync(path.dirname(output),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n');}
 console.log(JSON.stringify(report,null,2));
 if(!pass)process.exitCode=1;
