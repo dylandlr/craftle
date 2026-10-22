@@ -45,7 +45,7 @@ jobs:
             id=$(printf "agent_%03d" "$n")
             CRAFTLE_AGENT_IDS="$id" timeout --signal=TERM 160s xvfb-run -a node src/main.js > "recordings/shared/$id.log" 2>&1 &
             pids+=("$!")
-            sleep 6
+            sleep 12
           done
           for pid in "${pids[@]}"; do wait "$pid" || true; done
           for log in recordings/shared/agent_*.log; do
