@@ -6,6 +6,7 @@ const events=fs.readFileSync(file,'utf8').split(/\r?\n/).flatMap(line=>{try{retu
 const decisions=events.filter(x=>x.type==='llm_decision');
 const outcomes=events.filter(x=>x.type==='llm_action_applied');
 const deaths=events.filter(x=>x.type==='death');
+const effects=events.filter(x=>x.type==='llm_action_effect');
 const goals=new Map();
 for(const e of decisions){if(!goals.has(e.goal))goals.set(e.goal,0);goals.set(e.goal,goals.get(e.goal)+1);}
 const actions={};
@@ -18,6 +19,7 @@ const report={
  uniqueObservedFrameIds:new Set(decisions.map(x=>x.frameId)).size,
  reportedGoals:[...goals].map(([goal,occurrences])=>({goal,occurrences})),
  actionOutcomes:actions,
+ measuredEffects:{samples:effects.length,moved:effects.filter(e=>e.moved===true).length,stationary:effects.filter(e=>e.moved===false).length,inventoryChanges:effects.filter(e=>Object.keys(e.inventoryDelta??{}).length>0).length},
  deaths:deaths.length,
  durationSeconds:first&&last?Math.round((Date.parse(last.timestamp)-Date.parse(first.timestamp))/1000):null,
  minecraftMilestonesVerified:[],
