@@ -48,9 +48,19 @@ jobs:
             sleep 6
           done
           for pid in "${pids[@]}"; do wait "$pid" || true; done
+          for log in recordings/shared/agent_*.log; do
+            echo "=== $log ==="
+            grep -E '"type":"(spawn|kicked|error|pov_capture_started|pov_capture_failed|disconnected)"' "$log" | tail -n 20 || true
+          done
           node scripts/verify-pov.js recordings/shared/pov config.json
           python3 scripts/verify-motion.py recordings/shared/pov --min-different-frames 2
           python3 scripts/compose-grid.py recordings/shared/pov recordings/shared/grid.mp4 --seconds 5
+      - name: Report resource usage
+        if: always()
+        run: |
+          mkdir -p recordings/shared
+          docker stats --no-stream craftle-nine > recordings/shared/resource-stats.txt 2>&1 || true
+          free -h >> recordings/shared/resource-stats.txt || true
       - name: Save server evidence
         if: always()
         run: |
