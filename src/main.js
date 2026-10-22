@@ -150,7 +150,9 @@ for(const [index,profile] of activeProfiles.entries()){
      bot.once('end',()=>{bot.clearControlStates();if(!randomControl)learner.save(checkpoint);server.close().catch(()=>{});});
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1200),width:128,height:128});
-     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,observationSource:'first_person_rgb',policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
+     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,loadedLearningUpdates:learner.stats().transitions,observationSource:'first_person_rgb',policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
+     const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??0);
+     if(Number.isFinite(maxMs)&&maxMs>=1000){const timer=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(timer));}
    }
    if(['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR)){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
