@@ -48,6 +48,7 @@ jobs:
           test "$count" -ge 3
           node scripts/verify-visual-decisions.js recordings/live-rgb/agent.log 3
           test "$(find recordings/live-rgb/dataset/frames -name '*.rgb' | wc -l)" -ge 3
+          node scripts/audit-frame-diversity.js recordings/live-rgb/dataset/decisions.jsonl 4 0.35
           ! grep '"type":"visual_decision"' recordings/live-rgb/agent.log | grep -q 'privileged_block_state'
       - name: Preserve evidence
         if: always()
