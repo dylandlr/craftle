@@ -1,0 +1,71 @@
+name: Real LLM Minecraft experiment (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Vision-capable chat model'
+        required: true
+        type: string
+      decision_budget:
+        description: 'Maximum decisions (1-30)'
+        required: true
+        default: '12'
+        type: string
+permissions:
+  contents: read
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CRAFTLE_AGENT_IDS: agent_001
+      CRAFTLE_BEHAVIOR: llm_agent
+      CRAFTLE_LLM_API_KEY: ${{ secrets.CRAFTLE_LLM_API_KEY }}
+      CRAFTLE_LLM_MODEL: ${{ inputs.model }}
+      CRAFTLE_LLM_MAX_STEPS: ${{ inputs.decision_budget }}
+      CRAFTLE_LLM_TIMEOUT_MS: '20000'
+      CRAFTLE_LLM_INTERVAL_MS: '3000'
+      CRAFTLE_LIVE_SIZE: '128'
+      CRAFTLE_RECORD_FRAMES: '1200'
+      CRAFTLE_LLM_MEMORY_FILE: recordings/real-llm/memory.json
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate budget and credentials
+        run: |
+          test -n "$CRAFTLE_LLM_API_KEY" || { echo "Missing CRAFTLE_LLM_API_KEY GitHub Actions secret"; exit 1; }
+          [[ "$CRAFTLE_LLM_MAX_STEPS" =~ ^[0-9]+$ ]] && test "$CRAFTLE_LLM_MAX_STEPS" -ge 1 && test "$CRAFTLE_LLM_MAX_STEPS" -le 30
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start Minecraft
+        run: |
+          mkdir -p recordings/real-llm
+          docker run -d --name craftle-real-llm -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-real-llm 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Run bounded real-model episode
+        run: |
+          timeout --signal=TERM 150s xvfb-run -a node src/main.js > recordings/real-llm/agent.log 2>&1 || true
+          node scripts/report-llm-episode.js recordings/real-llm/agent.log > recordings/real-llm/episode-report.json
+          node -e "const fs=require('fs');const r=JSON.parse(fs.readFileSync('recordings/real-llm/episode-report.json'));if(r.modelActions<1||r.appliedActions<1)process.exit(1);console.log({decisions:r.modelActions,applied:r.appliedActions})"
+      - name: Capture server logs
+        if: always()
+        run: docker logs craftle-real-llm > recordings/real-llm/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-llm-one-agent-${{ github.run_id }}
+          path: recordings/real-llm
+          retention-days: 7
