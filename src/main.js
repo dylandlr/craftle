@@ -6,6 +6,7 @@ import {decideNavigation} from './navigation.js';
 import {createScriptedControl,stepAgent} from './agent-core.js';
 import {startLiveObservationServer} from './live-pov.js';
 import {evaluateVisualPolicy,applyVisualAction} from './visual-policy.js';
+import {createVisualDatasetWriter} from './visual-dataset.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -61,6 +62,7 @@ for(const [index,profile] of activeProfiles.entries()){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
      // Receives only RGB and cannot access Mineflayer block state.
      let busy=false,lastAction=0;
+     const dataset=process.env.CRAFTLE_VISUAL_DATASET_DIR?createVisualDatasetWriter(process.env.CRAFTLE_VISUAL_DATASET_DIR):null;
      const policy={predict:({rgb,width,height})=>{
        let left=0,right=0;
        for(let y=0;y<height;y+=4)for(let x=0;x<width;x+=4){
@@ -77,6 +79,7 @@ for(const [index,profile] of activeProfiles.entries()){
        try{
          const decision=await evaluateVisualPolicy(policy,frame);
          await applyVisualAction(bot,decision.action);
+         if(dataset)dataset.append(frame,decision.action,{policy:'rgb_brightness_probe',episode:profile.id});
          lastAction=Date.now();
          log(profile.name,'visual_decision',{agent_id:profile.id,policy:'rgb_brightness_probe',observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,frameSha256:createHash('sha256').update(frame.rgb).digest('hex'),action:decision.action});
        }catch(error){log(profile.name,'visual_policy_error',{message:error.message});}
