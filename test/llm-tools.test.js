@@ -25,3 +25,18 @@ test('use and attack dispatch bounded embodied controls',async()=>{
  assert.equal((await executeLlmAction(bot,'attack')).success,true);
  assert.equal(used,1);assert.equal(attacked,1);
 });
+
+test('craft accepts a named target and executes only inventory recipe',async()=>{
+ let requested,calls=0;
+ const bot={entity:{},clearControlStates(){},registry:{itemsByName:{oak_planks:{id:5}}},recipesFor:(id,meta,count,table)=>{requested=[id,meta,count,table];return [{result:'planks'}];},craft:async(recipe,count,table)=>{calls++;assert.equal(recipe.result,'planks');assert.equal(count,1);assert.equal(table,null);}};
+ assert.equal((await executeLlmAction(bot,'craft',{target:'oak_planks'})).success,true);
+ assert.deepEqual(requested,[5,null,1,null]);assert.equal(calls,1);
+ assert.equal((await executeLlmAction(bot,'craft',{target:'invalid/item'})).success,false);
+});
+test('equip requires owned inventory item',async()=>{
+ let equipped;
+ const bot={entity:{},clearControlStates(){},inventory:{items:()=>[{name:'stone_axe'}]},equip:async(item,hand)=>{equipped=[item.name,hand];}};
+ assert.equal((await executeLlmAction(bot,'equip',{target:'stone_axe'})).success,true);
+ assert.deepEqual(equipped,['stone_axe','hand']);
+ assert.equal((await executeLlmAction(bot,'equip',{target:'diamond_sword'})).success,false);
+});
