@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+const [file]=process.argv.slice(2);
+if(!file)throw Error('Usage: node scripts/verify-llm-smoke.js <agent.log>');
+const events=fs.readFileSync(file,'utf8').split(/\r?\n/).flatMap(line=>{try{return [JSON.parse(line)]}catch{return []}});
+const start=events.filter(x=>x.type==='llm_agent_started');
+const decisions=events.filter(x=>x.type==='llm_decision');
+const applied=events.filter(x=>x.type==='llm_action_applied');
+const errors=events.filter(x=>x.type==='llm_agent_error');
+const ids=new Set(decisions.map(x=>x.frameId));
+const used=new Set(applied.map(x=>x.action));
+const result={started:start.length,decisions:decisions.length,applied:applied.length,uniqueFrameIds:ids.size,actions:[...used],errors:errors.slice(0,3).map(x=>x.message)};
+result.pass=start.length>=1&&decisions.length>=3&&applied.length>=3&&ids.size>=3&&used.size>=2;
+console.log(JSON.stringify(result,null,2));
+if(!result.pass)process.exit(1);
