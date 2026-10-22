@@ -1,7 +1,5 @@
 name: Isolated POV recorder diagnostic (five paired jobs)
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       frames:
