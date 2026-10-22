@@ -17,6 +17,16 @@ for(const [index,profile] of activeProfiles.entries()){
  log(profile.name,'connecting',{agent_id:profile.id,index});
  const bot=mineflayer.createBot({host:config.host,port:config.port,username:profile.name,version:config.version,hideErrors:true});
  bots.push(bot);
+ // Minecraft time_update packets provide an authoritative but periodic world-age anchor.
+ let lastWorldAge=null;
+ bot._client.on('update_time',packet=>{const raw=packet.age??packet.worldAge??packet.time; if(raw!==undefined)lastWorldAge=String(raw);});
+ let lastSample=0;
+ bot.on('physicsTick',()=>{
+   if(process.env.CRAFTLE_CAPTURE_TELEMETRY!=='1'||!bot.entity)return;
+   const now=Date.now();if(now-lastSample<250)return;lastSample=now;
+   const p=bot.entity.position;
+   log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch});
+ });
  bot.on('spawn',()=>{
    log(profile.name,'spawn',{agent_id:profile.id,position:bot.entity?.position});
    if(process.env.CRAFTLE_CAMERA_SWEEP==='1'){
