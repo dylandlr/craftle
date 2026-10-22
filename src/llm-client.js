@@ -3,6 +3,7 @@ export function createVisionClient({apiKey=process.env.CRAFTLE_LLM_API_KEY,model
  if(!apiKey||!model)throw Error('Set CRAFTLE_LLM_API_KEY and CRAFTLE_LLM_MODEL');
  const url=new URL(baseUrl.replace(/\/$/,'')+'/chat/completions');
  if(url.protocol!=='https:' && !(url.protocol==='http:' && ['localhost','127.0.0.1'].includes(url.hostname)))throw Error('LLM endpoint must use HTTPS (or loopback HTTP)');
+ if(cfCookie && !['chat-api.tamu.ai'].includes(url.hostname))throw Error('TAMU session cookie may only be sent to approved TAMU API host');
  if(!Number.isFinite(timeoutMs)||timeoutMs<1000||timeoutMs>120000)throw Error('Invalid LLM timeout');
  return async ({system,observation,history=[],signal})=>{
    const timeout=AbortSignal.timeout(timeoutMs);
