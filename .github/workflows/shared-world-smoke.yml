@@ -1,0 +1,67 @@
+name: Shared-world POV smoke test
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main.js'
+      - '.github/workflows/shared-world-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  two-pov:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install capture dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('config.json'));c.agents=c.agents.slice(0,2);fs.writeFileSync('config-shared-smoke.json',JSON.stringify(c))"
+      - name: Start exactly one Minecraft world
+        run: |
+          docker run -d --name craftle-shared -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-shared 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Capture two independent POV workers in same world
+        env:
+          CRAFTLE_RECORD_POV: '1'
+          CRAFTLE_RECORD_FRAMES: '120'
+          CRAFTLE_RECORD_SIZE: '512'
+          CRAFTLE_RECORD_DIRECTORY: recordings/shared/pov
+          CRAFTLE_CAMERA_SWEEP: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/shared/pov
+          CRAFTLE_AGENT_IDS=agent_001 timeout --signal=TERM 110s xvfb-run -a node src/main.js > recordings/shared/agent_001.log 2>&1 &
+          pid1=$!
+          sleep 8
+          CRAFTLE_AGENT_IDS=agent_002 timeout --signal=TERM 110s xvfb-run -a node src/main.js > recordings/shared/agent_002.log 2>&1 &
+          pid2=$!
+          wait "$pid1" || true
+          wait "$pid2" || true
+          node scripts/verify-pov.js recordings/shared/pov config-shared-smoke.json
+          python3 scripts/verify-motion.py recordings/shared/pov --min-different-frames 2
+          echo 'Both independent POVs passed in a single Minecraft server'
+      - name: Preserve server diagnostics
+        if: always()
+        run: |
+          mkdir -p recordings/shared
+          docker logs craftle-shared > recordings/shared/server.log 2>&1 || true
+      - name: Upload shared-world evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-world-two-pov-${{ github.run_id }}
+          path: recordings/shared/
+          retention-days: 7
