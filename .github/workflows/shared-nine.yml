@@ -1,0 +1,61 @@
+name: Nine-agent shared-world POV
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared-nine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install capture stack
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+      - name: Start one world
+        run: |
+          docker run -d --name craftle-nine -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-nine 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Nine independent POV processes
+        env:
+          CRAFTLE_RECORD_POV: '1'
+          CRAFTLE_RECORD_FRAMES: '120'
+          CRAFTLE_RECORD_SIZE: '384'
+          CRAFTLE_RECORD_DIRECTORY: recordings/shared/pov
+          CRAFTLE_CAMERA_SWEEP: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/shared/pov
+          pids=()
+          for n in $(seq -w 1 9); do
+            id="agent_0$n"
+            CRAFTLE_AGENT_IDS="$id" timeout --signal=TERM 160s xvfb-run -a node src/main.js > "recordings/shared/$id.log" 2>&1 &
+            pids+=("$!")
+            sleep 6
+          done
+          for pid in "${pids[@]}"; do wait "$pid" || true; done
+          node scripts/verify-pov.js recordings/shared/pov config.json
+          python3 scripts/verify-motion.py recordings/shared/pov --min-different-frames 2
+          python3 scripts/compose-grid.py recordings/shared/pov recordings/shared/grid.mp4 --seconds 5
+      - name: Save server evidence
+        if: always()
+        run: |
+          mkdir -p recordings/shared
+          docker logs craftle-nine > recordings/shared/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nine-agent-shared-world-${{ github.run_id }}
+          path: recordings/shared
+          retention-days: 7
