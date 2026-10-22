@@ -19,13 +19,13 @@ export function createLlmAgent({infer,memoryFile,maxSteps=100,log=()=>{}}){
    if(Array.isArray(stored.memories))memories=stored.memories.filter(x=>typeof x==='string').slice(-20);
  }
  return {
-   async decide(frame,{health=null,hunger=null}={}){
+   async decide(frame,{health=null,hunger=null,lastOutcome=null}={}){
      if(steps>=maxSteps)throw Error('Decision budget exhausted');
      if(!frame||frame.source!=='first_person_rgb'||frame.rgb.length!==frame.width*frame.height*3)throw Error('Actual RGB frame required');
      const rgba=Buffer.alloc(frame.width*frame.height*4);
      for(let i=0,j=0;i<frame.rgb.length;i+=3,j+=4){rgba[j]=frame.rgb[i];rgba[j+1]=frame.rgb[i+1];rgba[j+2]=frame.rgb[i+2];rgba[j+3]=255;}
      const jpegBuffer=jpeg.encode({data:rgba,width:frame.width,height:frame.height},75).data;
-     const context=`Frame ${frame.frameId}. Self status: health=${health??'unknown'}, hunger=${hunger??'unknown'}. Known lessons: ${memories.slice(-8).join(' | ')||'none'}.`;
+     const context=`Frame ${frame.frameId}. Self status: health=${health??'unknown'}, hunger=${hunger??'unknown'}. Previous action outcome: ${lastOutcome?JSON.stringify(lastOutcome).slice(0,400):'none'}. Known lessons: ${memories.slice(-8).join(' | ')||'none'}.`;
      const raw=await infer({system:SYSTEM,observation:{text:context,jpeg:jpegBuffer},history});
      const decision=parseAgentDecision(raw);
      steps++;
