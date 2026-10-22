@@ -49,6 +49,7 @@ jobs:
         run: |
           timeout --signal=TERM 75s xvfb-run -a node src/main.js > recordings/llm-smoke/agent.log 2>&1 || true
           node scripts/verify-llm-smoke.js recordings/llm-smoke/agent.log
+          node scripts/report-llm-episode.js recordings/llm-smoke/agent.log > recordings/llm-smoke/episode-report.json
           grep -q '"action":"mine"' recordings/llm-smoke/agent.log
           grep -q '"action":"craft"' recordings/llm-smoke/agent.log
           grep -q '"action":"equip"' recordings/llm-smoke/agent.log
