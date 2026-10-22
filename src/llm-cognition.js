@@ -11,29 +11,42 @@ export function centerCropJpeg(frame){
  }
  return jpeg.encode({data:rgba,width:side,height:side},75).data;
 }
+// Belief memory is evidence-tagged. Self-reports never become verified observations.
 export function createCognition({cognition}){
  validateCognition(cognition);
- const visits=new Map(),claims=[];
+ const visits=new Map(),hypotheses=new Map();
+ let lastCell=null,step=0;
  return {
   observe({position=null}={}){
+    step++;
     if(cognition.cognitiveMap&&position&&Number.isFinite(position.x)&&Number.isFinite(position.z)){
       const cell=`${Math.floor(position.x/8)},${Math.floor(position.z/8)}`;
       visits.set(cell,(visits.get(cell)??0)+1);
+      lastCell=cell;
       if(visits.size>128)visits.delete(visits.keys().next().value);
     }
     const pieces=[];
-    if(cognition.cognitiveMap)pieces.push('Egocentric exploration grid (8-block cells, derived from your own position; not a terrain map): '+JSON.stringify([...visits].slice(-12)));
-    if(cognition.knowledgeGraph)pieces.push('Unverified hypotheses recalled from your earlier reflections: '+JSON.stringify(claims.slice(-8)));
+    if(cognition.cognitiveMap){
+      const [cx,cz]=lastCell?.split(',').map(Number)??[0,0];
+      const neighbors=lastCell?[[cx+1,cz],[cx-1,cz],[cx,cz+1],[cx,cz-1]]
+        .map(([x,z])=>({cell:`${x},${z}`,visits:visits.get(`${x},${z}`)??0}))
+        .sort((a,b)=>a.visits-b.visits):[];
+      pieces.push('Egocentric exploration grid (8-block cells, self-position only; no terrain knowledge): '+JSON.stringify({current:lastCell,visited:[...visits].slice(-12),leastVisitedAdjacent:neighbors.slice(0,2)}));
+    }
+    if(cognition.knowledgeGraph)pieces.push('Unverified hypotheses recalled from your earlier reflections: '+JSON.stringify([...hypotheses.values()].slice(-8)));
     return pieces.join('\n');
   },
   reflect({belief='',memory=''}={}){
     if(!cognition.knowledgeGraph)return;
-    // Store quoted hypotheses only; no fabricated verified facts or symbolic triples.
-    const statement=[belief,memory].filter(Boolean).join(' / ').slice(0,180);
-    if(statement&&!claims.includes(statement))claims.push(statement);
-    if(claims.length>32)claims.shift();
+    for(const statement of [belief,memory]){
+      if(typeof statement!=='string'||!statement.trim())continue;
+      const key=statement.trim().slice(0,180);
+      const previous=hypotheses.get(key);
+      hypotheses.set(key,{statement:key,source:'agent_self_report',verified:false,mentions:(previous?.mentions??0)+1,lastStep:step});
+      if(hypotheses.size>32)hypotheses.delete(hypotheses.keys().next().value);
+    }
   },
   fovealImage(frame){return cognition.foveatedVision?centerCropJpeg(frame):null;},
-  summary(){return {visitedCells:visits.size,unverifiedHypotheses:claims.length};}
+  summary(){return {visitedCells:visits.size,unverifiedHypotheses:hypotheses.size};}
  };
 }
