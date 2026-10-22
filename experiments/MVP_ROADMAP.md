@@ -14,7 +14,8 @@ Run one agent at a time in a *fresh isolated world* per trial. Use identical wor
 - [x] Scripted reference goal selection and live Mineflayer integration (await live behavioral validation).
 - [x] Define and unit-test an RGB-only observation contract, plus offline MP4-to-RGB decoding for recorded footage.
 - [ ] **Connect the live first-person renderer stream** to the agent observation API with real frame timestamps and no block-state leakage.
-- [ ] Add allowed proprioception (health, hunger, inventory, own motion), explicit action schema and synchronized observations.
+- [x] Add an RGB-only policy boundary and a validated discrete action schema (policy-to-Minecraft adapter; live frame input pending).
+- [ ] Extend allowed proprioception (inventory, own motion) and synchronize with real captured frames.
 - [ ] Implement a trainable visual baseline and checkpoint loading.
 - [ ] Add repeatable training and held-out paired-seed evaluation against separately run scripted control.
 - [ ] Inspect footage, decisions, displacement, survival, task completion and policy ablations.
