@@ -22,6 +22,7 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
+          node scripts/validate-world-mode.js shared
       - name: Start one world
         run: |
           docker run -d --name craftle-nine -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=12 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
