@@ -13,7 +13,7 @@ export function visualState(frame){
   }
   return regions.map((sum,i)=>Math.min(3,Math.floor(sum/Math.max(1,counts[i])/64))).join('');
 }
-export function createOnlineVisualQLearner({epsilon=0.3,alpha=0.2,gamma=0.9,random=Math.random,checkpoint=null}={}){
+export function createOnlineVisualQLearner({epsilon=0.3,alpha=0.2,gamma=0.9,random=Math.random,checkpoint=null,training=true}={}){
   if([epsilon,alpha,gamma].some(x=>!Number.isFinite(x)||x<0||x>1))throw Error('Invalid learning hyperparameters');
   const q=new Map();
   let transitions=0;
@@ -28,15 +28,16 @@ export function createOnlineVisualQLearner({epsilon=0.3,alpha=0.2,gamma=0.9,rand
   return {
     choose(state){
       if(!/^[0-3]{4}$/.test(state))throw Error('Invalid visual state');
-      const values=scores(state);
+      const values=training?scores(state):(q.get(state)??RL_ACTIONS.map(()=>0));
       let index;
-      if(random()<epsilon)index=sampleIndex(RL_ACTIONS.length);
+      if(training&&random()<epsilon)index=sampleIndex(RL_ACTIONS.length);
       else {const best=Math.max(...values);index=values.findIndex(x=>x===best);}
       return {state,action:RL_ACTIONS[index],index};
     },
     learn({state,index,reward,nextState,terminal=false}){
       if(!Number.isFinite(reward)||!Number.isInteger(index)||index<0||index>=RL_ACTIONS.length)throw Error('Invalid RL transition');
       const values=scores(state),future=terminal?0:Math.max(...scores(nextState));
+      if(!training)throw Error('Frozen policy cannot learn');
       values[index]+=alpha*(reward+gamma*future-values[index]);transitions++;
       return {tdValue:values[index],transitions};
     },
