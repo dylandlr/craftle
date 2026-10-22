@@ -69,8 +69,8 @@ jobs:
       - name: Train continuously with checkpoint persistence
         shell: bash
         env:
-          EPISODES: ${{ inputs.episodes }}
-          SECONDS: ${{ inputs.seconds_per_episode }}
+          EPISODES: ${{ inputs.episodes || '2' }}
+          SECONDS: ${{ inputs.seconds_per_episode || '75' }}
         run: |
           set -euo pipefail
           for index in $(seq 1 "$EPISODES"); do
