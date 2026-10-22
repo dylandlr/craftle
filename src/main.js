@@ -11,6 +11,7 @@ import {openTorchPolicy} from './torch-policy.js';
 import {createVisionClient} from './llm-client.js';
 import {createLlmAgent} from './llm-agent.js';
 import {executeLlmAction} from './llm-tools.js';
+import {snapshotAgentState,summarizeActionEffect} from './llm-effects.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -78,8 +79,12 @@ for(const [index,profile] of activeProfiles.entries()){
        busy=true;
        try{
          const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),lastOutcome});
+         const before=snapshotAgentState(bot);
          const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
-         lastOutcome=outcome;
+         await new Promise(resolve=>setTimeout(resolve,350));
+         const effect=summarizeActionEffect(before,snapshotAgentState(bot),decision.action,outcome);
+         lastOutcome={...outcome,effect};
+         log(profile.name,'llm_action_effect',{agent_id:profile.id,frameId:frame.frameId,...effect});
          lastDecision=Date.now();
          log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
        }catch(error){
