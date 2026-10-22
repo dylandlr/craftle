@@ -1,0 +1,56 @@
+name: One-agent non-LLM online RL smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/visual-online-rl.yml']
+permissions:
+  contents: read
+jobs:
+  online-rl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Minecraft viewer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start fresh Minecraft server
+        run: |
+          docker run -d --name craftle-online-rl -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-online-rl 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Verify online state action reward loop
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: visual_online_rl
+          CRAFTLE_RL_CHECKPOINT: recordings/online-rl/agent-q.json
+          CRAFTLE_RECORD_FRAMES: '200'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/online-rl
+          timeout --signal=TERM 75s xvfb-run -a node src/main.js > recordings/online-rl/agent.log 2>&1 || true
+          grep -q '"type":"online_rl_started"' recordings/online-rl/agent.log
+          test "$(grep -c '"type":"rl_transition"' recordings/online-rl/agent.log)" -ge 3
+          test -s recordings/online-rl/agent-q.json
+          node -e "const fs=require('fs');let x=JSON.parse(fs.readFileSync('recordings/online-rl/agent-q.json'));if(!x.transitions||!Object.keys(x.q).length)process.exit(1);console.log({learnedTransitions:x.transitions,states:Object.keys(x.q).length})"
+      - name: Collect server logs
+        if: always()
+        run: docker logs craftle-online-rl > recordings/online-rl/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: online-rl-agent-${{ github.run_id }}
+          path: recordings/online-rl
+          retention-days: 7
