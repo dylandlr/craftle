@@ -10,6 +10,7 @@ import {createVisualDatasetWriter} from './visual-dataset.js';
 import {openTorchPolicy} from './torch-policy.js';
 import {createVisionClient} from './llm-client.js';
 import {createLlmAgent} from './llm-agent.js';
+import {executeLlmAction} from './llm-tools.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -77,9 +78,9 @@ for(const [index,profile] of activeProfiles.entries()){
        busy=true;
        try{
          const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food});
-         await applyVisualAction(bot,decision.action);
+         const outcome=await executeLlmAction(bot,decision.action);
          lastDecision=Date.now();
-         log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action});
+         log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
        }catch(error){
          bot.clearControlStates();
          lastDecision=Date.now();
