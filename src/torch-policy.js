@@ -35,7 +35,8 @@ export async function openTorchPolicy({checkpoint,python='python3'}){
     async predict(observation){
       if(closed||!ready)throw Error('Policy unavailable');
       if(pending.length)throw Error('Only one visual inference at a time');
-      const input=policyInput(observation);
+      const input=observation?.source==='first_person_rgb'?policyInput(observation):observation;
+      if(!(input?.rgb instanceof Uint8Array)||input.rgb.length!==input.width*input.height*3)throw Error('RGB24 policy input required');
       const response=new Promise((resolve,reject)=>pending.push({kind:'infer',frameId:input.frameId,resolve,reject}));
       child.stdin.write(JSON.stringify({frameId:input.frameId,width:input.width,height:input.height,rgbBase64:Buffer.from(input.rgb).toString('base64')})+'\n');
       return response;
