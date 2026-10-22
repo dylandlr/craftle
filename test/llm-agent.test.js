@@ -35,3 +35,7 @@ test('TAMU session cookie is passed only to configured API request',async()=>{
  assert.equal(headers.Cookie,'cf_clearance=test-session');
  assert.equal(headers.Authorization,'Bearer fake');
 });
+
+test('TAMU cookie cannot be forwarded to third-party endpoint',()=>{
+ assert.throws(()=>createVisionClient({apiKey:'fake',cfCookie:'cf_clearance=secret',model:'vision',baseUrl:'https://example.com/v1'}),/approved TAMU API host/);
+});
