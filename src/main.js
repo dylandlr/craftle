@@ -7,6 +7,7 @@ import {createScriptedControl,stepAgent} from './agent-core.js';
 import {startLiveObservationServer} from './live-pov.js';
 import {evaluateVisualPolicy,applyVisualAction} from './visual-policy.js';
 import {createVisualDatasetWriter} from './visual-dataset.js';
+import {openTorchPolicy} from './torch-policy.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -58,7 +59,7 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'capture_released',{agent_id:profile.id,releaseTime:fs.readFileSync(barrier,'utf8').trim()});
      }
      if(stopping)return;
-   if(process.env.CRAFTLE_BEHAVIOR==='vision_probe'){
+   if(['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR)){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
      // Receives only RGB and cannot access Mineflayer block state.
      let busy=false,lastAction=0;
@@ -72,20 +73,23 @@ for(const [index,profile] of activeProfiles.entries()){
        }
        return Math.abs(left-right)>45000?(left>right?'look_left':'look_right'):'forward';
      }};
+     const learned=process.env.CRAFTLE_BEHAVIOR==='vision_learned';
+     const activePolicy=learned?await openTorchPolicy({checkpoint:process.env.CRAFTLE_POLICY_CHECKPOINT,python:process.env.CRAFTLE_PYTHON??'python3'}):policy;
+     const policyName=learned?'torch_visual_bc':'rgb_brightness_probe';
      const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
      const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
        if(busy||Date.now()-lastAction<250)return;
        busy=true;
        try{
-         const decision=await evaluateVisualPolicy(policy,frame);
+         const decision=await evaluateVisualPolicy(activePolicy,frame);
          await applyVisualAction(bot,decision.action);
-         if(dataset)dataset.append(frame,decision.action,{policy:'rgb_brightness_probe',episode:profile.id});
+         if(dataset)dataset.append(frame,decision.action,{policy:policyName,episode:profile.id});
          lastAction=Date.now();
-         log(profile.name,'visual_decision',{agent_id:profile.id,policy:'rgb_brightness_probe',observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,frameSha256:createHash('sha256').update(frame.rgb).digest('hex'),action:decision.action});
+         log(profile.name,'visual_decision',{agent_id:profile.id,policy:policyName,observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,frameSha256:createHash('sha256').update(frame.rgb).digest('hex'),action:decision.action});
        }catch(error){log(profile.name,'visual_policy_error',{message:error.message});}
        finally{busy=false;}
      }});
-     bot.once('end',()=>{server.close().catch(()=>{});});
+     bot.once('end',()=>{server.close().catch(()=>{});if(learned)activePolicy.close();});
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??180),width:size,height:size});
      log(profile.name,'live_rgb_started',{agent_id:profile.id,size,source:'prismarine-viewer-jpeg-tcp'});
@@ -160,7 +164,7 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(timer));
    }
-     if(process.env.CRAFTLE_BEHAVIOR!=='vision_probe')await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
+     if(!['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR))await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
    };
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
