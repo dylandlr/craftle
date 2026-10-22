@@ -1,0 +1,98 @@
+name: Continuous non-LLM Minecraft learning (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      episodes:
+        description: 'Sequential training sessions in ONE persistent Minecraft world (1-12)'
+        default: '4'
+        required: true
+        type: string
+      seconds_per_episode:
+        description: 'Wall-clock seconds per session (45-240)'
+        default: '90'
+        required: true
+        type: string
+      action_ms:
+        description: 'Motor action duration (100-1500 ms)'
+        default: '350'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  continuous-rl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CRAFTLE_AGENT_IDS: agent_001
+      CRAFTLE_BEHAVIOR: visual_online_rl
+      CRAFTLE_RL_CHECKPOINT: recordings/continuous/agent-q.json
+      CRAFTLE_RL_EPSILON: '0.30'
+      CRAFTLE_RL_ACTION_MS: ${{ inputs.action_ms }}
+      CRAFTLE_RECORD_FRAMES: '100000'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate experiment limits
+        shell: bash
+        env:
+          EPISODES: ${{ inputs.episodes }}
+          SECONDS: ${{ inputs.seconds_per_episode }}
+        run: |
+          [[ "$EPISODES" =~ ^[0-9]+$ ]] && ((EPISODES>=1 && EPISODES<=12))
+          [[ "$SECONDS" =~ ^[0-9]+$ ]] && ((SECONDS>=45 && SECONDS<=240))
+          [[ "$CRAFTLE_RL_ACTION_MS" =~ ^[0-9]+$ ]] && ((CRAFTLE_RL_ACTION_MS>=100 && CRAFTLE_RL_ACTION_MS<=1500))
+          ((EPISODES*SECONDS<=3000))
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Launch ONE persistent Minecraft world
+        run: |
+          mkdir -p recordings/continuous
+          docker run -d --name craftle-continuous -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED=20261022 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-continuous 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Train continuously with checkpoint persistence
+        shell: bash
+        env:
+          EPISODES: ${{ inputs.episodes }}
+          SECONDS: ${{ inputs.seconds_per_episode }}
+        run: |
+          set -euo pipefail
+          for index in $(seq 1 "$EPISODES"); do
+            episode="recordings/continuous/episode-$index"
+            mkdir -p "$episode"
+            echo "Starting episode $index of $EPISODES (same world; retained Q-table)"
+            timeout --signal=TERM --kill-after=8s "$SECONDS" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
+            if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then
+              echo "Agent process failed with status $status"; exit 1
+            fi
+            unset status
+            test -s "$CRAFTLE_RL_CHECKPOINT"
+            node scripts/report-rl-episode.js "$episode/agent.log" > "$episode/metrics.json"
+            node -e "const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.argv[1]));if(r.transitions<3)process.exit(1)" "$episode/metrics.json"
+            cp "$CRAFTLE_RL_CHECKPOINT" "$episode/q-after.json"
+          done
+          node scripts/report-continuous-rl.js recordings/continuous > recordings/continuous/summary.json
+          cat recordings/continuous/summary.json
+      - name: Preserve world and logs
+        if: always()
+        run: |
+          docker logs craftle-continuous > recordings/continuous/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: continuous-rl-${{ github.run_id }}
+          path: recordings/continuous
+          retention-days: 14
