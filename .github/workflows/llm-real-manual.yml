@@ -1,5 +1,8 @@
 name: Real LLM Minecraft experiment (manual)
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/llm-real-manual.yml']
   workflow_dispatch:
     inputs:
       model:
@@ -27,8 +30,8 @@ jobs:
       CRAFTLE_LLM_API_KEY: ${{ secrets.TAMU_API_KEY }}
       TAMU_CF_COOKIE: ${{ secrets.TAMU_CF_COOKIE }}
       CRAFTLE_LLM_BASE_URL: ${{ inputs.base_url || 'https://chat-api.tamu.ai/openai' }}
-      CRAFTLE_LLM_MODEL: ${{ inputs.model }}
-      CRAFTLE_LLM_MAX_STEPS: ${{ inputs.decision_budget }}
+      CRAFTLE_LLM_MODEL: ${{ inputs.model || 'protected.gpt-4o' }}
+      CRAFTLE_LLM_MAX_STEPS: ${{ inputs.decision_budget || '3' }}
       CRAFTLE_LLM_TIMEOUT_MS: '20000'
       CRAFTLE_LLM_INTERVAL_MS: '3000'
       CRAFTLE_LIVE_SIZE: '128'
