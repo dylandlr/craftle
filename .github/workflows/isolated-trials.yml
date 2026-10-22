@@ -1,0 +1,46 @@
+name: Isolated factorial trial plans
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/run-isolated-trial.js'
+      - 'scripts/generate-llm-factorial-trials.js'
+      - '.github/workflows/isolated-trials.yml'
+permissions:
+  contents: read
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Generate 45 trial definitions
+        run: |
+          mkdir -p recordings/factorial-plans
+          node scripts/generate-llm-factorial-trials.js recordings/factorial-plans/manifest.json
+      - name: Verify all trials can be prepared without credentials
+        run: |
+          node --check scripts/run-isolated-trial.js
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const manifest='recordings/factorial-plans/manifest.json';
+          const trials=JSON.parse(fs.readFileSync(manifest)).trials;
+          if(trials.length!==45)throw Error('Expected 45 trials');
+          for(const trial of trials){
+            const output=execFileSync('node',['scripts/run-isolated-trial.js','--manifest',manifest,'--trial',trial.id],{encoding:'utf8'});
+            const planned=JSON.parse(output);
+            if(planned.execute||planned.seed!==trial.seed||planned.agentId!==trial.agentId)throw Error('Bad plan: '+trial.id);
+          }
+          console.log('Validated 45 unique isolated trial plans, with no gateway requests or Docker startup');
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isolated-factorial-plans-${{ github.run_id }}
+          path: recordings/factorial-plans/manifest.json
+          retention-days: 7
