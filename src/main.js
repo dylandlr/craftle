@@ -37,6 +37,23 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(sweep));
    }
+   if(process.env.CRAFTLE_BEHAVIOR==='explore'){
+     // Simple deterministic, non-LLM baseline: short walks and occasional turns.
+     // Preserve action telemetry and avoid random behavior confounding cognition comparisons.
+     let step=0;
+     const timer=setInterval(()=>{
+       if(stopping || !bot.entity){clearInterval(timer);return;}
+       const ahead=bot.blockAt(bot.entity.position.offset(0,-1,0));
+       bot.clearControlStates();
+       const phase=step++%16;
+       const yaw=(Number(profile.id.slice(-3))*0.71+Math.floor(step/16)*0.6)%(2*Math.PI);
+       bot.look(yaw,0).catch(()=>{});
+       if(phase<10)bot.setControlState('forward',true);
+       if(phase===11)bot.setControlState('jump',true);
+       log(profile.name,'baseline_action',{agent_id:profile.id,phase,yaw,groundBlock:ahead?.name??null});
+     },1500);
+     bot.once('end',()=>clearInterval(timer));
+   }
    const startRecorder=async()=>{
      const barrier=process.env.CRAFTLE_CAPTURE_BARRIER;
      if(barrier){
