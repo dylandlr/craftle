@@ -23,5 +23,8 @@ test('self-motion grid and hypothesis recall stay distinct from verified observa
  treatment.reflect({belief:'Possibly sand ahead',memory:'Turning helped'});
  assert.match(treatment.observe({position:{x:16,z:-1}}),/Possibly sand ahead/);
  assert.equal(treatment.summary().visitedCells,1);
- assert.equal(treatment.summary().unverifiedHypotheses,1);
+ assert.equal(treatment.summary().unverifiedHypotheses,2);
+ assert.match(treatment.observe({position:{x:16,z:-1}}),/leastVisitedAdjacent/);
+ assert.match(treatment.observe({position:{x:16,z:-1}}),/agent_self_report/);
+ assert.match(treatment.observe({position:{x:16,z:-1}}),/\"verified\":false/);
 });
