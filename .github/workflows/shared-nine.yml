@@ -1,5 +1,8 @@
 name: Nine-agent shared-world POV
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/shared-nine.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,7 +42,7 @@ jobs:
           mkdir -p recordings/shared/pov
           pids=()
           for n in $(seq -w 1 9); do
-            id="agent_0$n"
+            id=$(printf "agent_%03d" "$n")
             CRAFTLE_AGENT_IDS="$id" timeout --signal=TERM 160s xvfb-run -a node src/main.js > "recordings/shared/$id.log" 2>&1 &
             pids+=("$!")
             sleep 6
