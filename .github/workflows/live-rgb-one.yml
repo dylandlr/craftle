@@ -35,6 +35,7 @@ jobs:
         env:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: vision_probe
+          CRAFTLE_CAPTURE_TELEMETRY: '1'
           CRAFTLE_LIVE_SIZE: '128'
           CRAFTLE_VISUAL_DATASET_DIR: recordings/live-rgb/dataset
           CRAFTLE_RECORD_FRAMES: '100'
