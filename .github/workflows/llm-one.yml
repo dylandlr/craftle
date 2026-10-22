@@ -49,6 +49,9 @@ jobs:
         run: |
           timeout --signal=TERM 75s xvfb-run -a node src/main.js > recordings/llm-smoke/agent.log 2>&1 || true
           node scripts/verify-llm-smoke.js recordings/llm-smoke/agent.log
+          grep -q '"action":"mine"' recordings/llm-smoke/agent.log
+          grep -q '"action":"craft"' recordings/llm-smoke/agent.log
+          grep -q '"action":"equip"' recordings/llm-smoke/agent.log
           test -s recordings/llm-smoke/memory.json
       - name: Retain evidence
         if: always()
