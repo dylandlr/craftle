@@ -28,3 +28,17 @@ test('intrinsic reward favors novelty and motion, penalizes damage',()=>{
  assert.ok(intrinsicVisualReward({displacement:1,novelState:true})>intrinsicVisualReward({displacement:0}));
  assert.ok(intrinsicVisualReward({healthDelta:-2})<intrinsicVisualReward({}));
 });
+
+test('frozen checkpoint never trains, explores, or writes novel Q states',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-frozen-')),file=path.join(dir,'q.json');
+ try{
+  const a=createOnlineVisualQLearner({checkpoint:file,epsilon:0,alpha:1,gamma:0});
+  a.learn({state:'0000',index:3,reward:3,nextState:'0000'});a.save();
+  const frozen=createOnlineVisualQLearner({checkpoint:file,training:false,epsilon:1,random:()=>0});
+  assert.equal(frozen.choose('0000').action,'jump');
+  assert.equal(frozen.choose('3333').action,'forward');
+  assert.equal(frozen.stats().states,1);
+  assert.throws(()=>frozen.learn({state:'0000',index:0,reward:1,nextState:'0000'}),/Frozen/);
+  assert.equal(frozen.stats().transitions,1);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
