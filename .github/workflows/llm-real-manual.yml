@@ -1,8 +1,5 @@
 name: Real LLM Minecraft experiment (manual)
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/llm-real-manual.yml']
   workflow_dispatch:
     inputs:
       model:
