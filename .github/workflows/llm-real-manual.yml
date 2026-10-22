@@ -25,7 +25,8 @@ jobs:
       CRAFTLE_AGENT_IDS: agent_001
       CRAFTLE_BEHAVIOR: llm_agent
       CRAFTLE_LLM_API_KEY: ${{ secrets.TAMU_API_KEY }}
-      CRAFTLE_LLM_BASE_URL: ${{ inputs.base_url || 'https://api.openai.com/v1' }}
+      TAMU_CF_COOKIE: ${{ secrets.TAMU_CF_COOKIE }}
+      CRAFTLE_LLM_BASE_URL: ${{ inputs.base_url || 'https://chat-api.tamu.ai/openai' }}
       CRAFTLE_LLM_MODEL: ${{ inputs.model }}
       CRAFTLE_LLM_MAX_STEPS: ${{ inputs.decision_budget }}
       CRAFTLE_LLM_TIMEOUT_MS: '20000'
@@ -39,6 +40,7 @@ jobs:
       - name: Validate budget and credentials
         run: |
           test -n "$CRAFTLE_LLM_API_KEY" || { echo "Missing TAMU_API_KEY GitHub Actions secret"; exit 1; }
+          test -n "$TAMU_CF_COOKIE" || { echo "Missing TAMU_CF_COOKIE GitHub Actions secret"; exit 1; }
           [[ "$CRAFTLE_LLM_MAX_STEPS" =~ ^[0-9]+$ ]] && test "$CRAFTLE_LLM_MAX_STEPS" -ge 1 && test "$CRAFTLE_LLM_MAX_STEPS" -le 30
       - uses: actions/setup-node@v4
         with:
