@@ -1,0 +1,62 @@
+name: One-agent LLM integration smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/llm-one.yml']
+permissions:
+  contents: read
+jobs:
+  llm-one:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless Minecraft stack
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start Minecraft and mock multimodal model
+        run: |
+          mkdir -p recordings/llm-smoke
+          node scripts/mock-vision-llm.js > recordings/llm-smoke/mock.log 2>&1 &
+          docker run -d --name craftle-llm -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-llm 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Exercise actual RGB to LLM to tools loop
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: llm_agent
+          CRAFTLE_LLM_API_KEY: mock-only
+          CRAFTLE_LLM_MODEL: mock-vision
+          CRAFTLE_LLM_BASE_URL: http://127.0.0.1:18765/v1
+          CRAFTLE_LLM_INTERVAL_MS: '1000'
+          CRAFTLE_LLM_MAX_STEPS: '24'
+          CRAFTLE_LIVE_SIZE: '128'
+          CRAFTLE_RECORD_FRAMES: '200'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          CRAFTLE_LLM_MEMORY_FILE: recordings/llm-smoke/memory.json
+        run: |
+          timeout --signal=TERM 75s xvfb-run -a node src/main.js > recordings/llm-smoke/agent.log 2>&1 || true
+          node scripts/verify-llm-smoke.js recordings/llm-smoke/agent.log
+          test -s recordings/llm-smoke/memory.json
+      - name: Retain evidence
+        if: always()
+        run: |
+          docker logs craftle-llm > recordings/llm-smoke/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: single-agent-llm-smoke-${{ github.run_id }}
+          path: recordings/llm-smoke
+          retention-days: 7
