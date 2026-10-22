@@ -111,12 +111,15 @@ for(const [index,profile] of activeProfiles.entries()){
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1000),width:size,height:size});
      log(profile.name,'llm_agent_started',{agent_id:profile.id,size,source:'first_person_rgb',model:process.env.CRAFTLE_LLM_MODEL,cognition:profile.cognition});
    }
-   if(process.env.CRAFTLE_BEHAVIOR==='visual_online_rl'){
+   if(['visual_online_rl','visual_random_control'].includes(process.env.CRAFTLE_BEHAVIOR)){
      if(activeProfiles.length!==1)throw Error('Online RL treatment requires one agent');
      const checkpoint=process.env.CRAFTLE_RL_CHECKPOINT??'recordings/rl/agent-q.json';
+     const randomControl=process.env.CRAFTLE_BEHAVIOR==='visual_random_control';
+     const durationMs=Math.max(100,Math.min(1500,Number(process.env.CRAFTLE_RL_ACTION_MS??350)));
      const learner=createOnlineVisualQLearner({checkpoint,
        epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3)});
      let busy=false,lastTime=0,previous=null,previousPos=null,previousHealth=null;
+     const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
      const server=await startLiveObservationServer({width:128,height:128,onObservation:async frame=>{
        if(busy||stopping||Date.now()-lastTime<700||!bot.entity)return;
@@ -127,25 +130,27 @@ for(const [index,profile] of activeProfiles.entries()){
          if(previous){
            const displacement=now.distanceTo(previousPos);
            reward=intrinsicVisualReward({displacement,healthDelta:bot.health-previousHealth,novelState:!seen.has(state)});
-           learner.learn({...previous,reward,nextState:state});
+           if(!randomControl)learner.learn({...previous,reward,nextState:state});
            log(profile.name,'rl_transition',{agent_id:profile.id,frameId:frame.frameId,previousFrameId:previous.frameId,
              state:previous.state,action:previous.action,reward,nextState:state,displacement});
          }
          seen.add(state);
-         const choice=learner.choose(state);
+         const choice=randomControl?{state,action:actions[Math.floor(Math.random()*actions.length)],index:-1}:learner.choose(state);
          bot.clearControlStates();
          await applyVisualAction(bot,choice.action);
+         await new Promise(resolve=>setTimeout(resolve,durationMs));
+         bot.clearControlStates();
          previous={...choice,frameId:frame.frameId};previousPos=now;previousHealth=bot.health;
          lastTime=Date.now();
-         if(learner.stats().transitions%10===0)learner.save(checkpoint);
-         log(profile.name,'rl_action',{agent_id:profile.id,frameId:frame.frameId,state,action:choice.action,reward,policy:'online_visual_q'});
+         if(!randomControl&&learner.stats().transitions%10===0)learner.save(checkpoint);
+         log(profile.name,'rl_action',{agent_id:profile.id,frameId:frame.frameId,state,action:choice.action,reward,policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
        }catch(error){bot.clearControlStates();log(profile.name,'rl_error',{message:error.message});}
        finally{busy=false;}
      }});
-     bot.once('end',()=>{bot.clearControlStates();learner.save(checkpoint);server.close().catch(()=>{});});
+     bot.once('end',()=>{bot.clearControlStates();if(!randomControl)learner.save(checkpoint);server.close().catch(()=>{});});
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1200),width:128,height:128});
-     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint,observationSource:'first_person_rgb'});
+     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,observationSource:'first_person_rgb',policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
    }
    if(['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR)){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
@@ -252,7 +257,7 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(timer));
    }
-     if(!['vision_probe','vision_learned','llm_agent','visual_online_rl'].includes(process.env.CRAFTLE_BEHAVIOR))await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
+     if(!['vision_probe','vision_learned','llm_agent','visual_online_rl','visual_random_control'].includes(process.env.CRAFTLE_BEHAVIOR))await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
    };
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
