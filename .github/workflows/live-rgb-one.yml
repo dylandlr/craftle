@@ -36,6 +36,7 @@ jobs:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: vision_probe
           CRAFTLE_LIVE_SIZE: '128'
+          CRAFTLE_VISUAL_DATASET_DIR: recordings/live-rgb/dataset
           CRAFTLE_RECORD_FRAMES: '100'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
@@ -46,6 +47,7 @@ jobs:
           echo "Live RGB decisions: $count"
           test "$count" -ge 3
           node scripts/verify-visual-decisions.js recordings/live-rgb/agent.log 3
+          test "$(find recordings/live-rgb/dataset/frames -name '*.rgb' | wc -l)" -ge 3
           ! grep '"type":"visual_decision"' recordings/live-rgb/agent.log | grep -q 'privileged_block_state'
       - name: Preserve evidence
         if: always()
