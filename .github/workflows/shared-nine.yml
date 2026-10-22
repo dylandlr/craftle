@@ -38,15 +38,32 @@ jobs:
           CRAFTLE_RECORD_DIRECTORY: recordings/shared/pov
           CRAFTLE_CAMERA_SWEEP: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
+          CRAFTLE_CAPTURE_BARRIER: recordings/shared/capture-start.txt
         run: |
           mkdir -p recordings/shared/pov
           pids=()
           for n in $(seq -w 1 9); do
             id=$(printf "agent_%03d" "$n")
-            CRAFTLE_AGENT_IDS="$id" timeout --signal=TERM 160s xvfb-run -a node src/main.js > "recordings/shared/$id.log" 2>&1 &
+            CRAFTLE_AGENT_IDS="$id" timeout --signal=TERM 300s xvfb-run -a node src/main.js > "recordings/shared/$id.log" 2>&1 &
             pids+=("$!")
             sleep 12
           done
+          ready=0
+          for attempt in $(seq 1 240); do
+            ready=0
+            for log in recordings/shared/agent_*.log; do
+              if grep -q '"type":"capture_waiting"' "$log"; then ready=$((ready+1)); fi
+            done
+            if [ "$ready" -eq 9 ]; then break; fi
+            sleep 1
+          done
+          echo "Agents waiting at capture barrier: $ready / 9"
+          if [ "$ready" -eq 9 ]; then
+            date -u +%Y-%m-%dT%H:%M:%S.%NZ > recordings/shared/capture-start.txt
+          else
+            echo "ERROR: Not all nine agents spawned; refusing unsynchronized recording" >&2
+            exit 1
+          fi
           for pid in "${pids[@]}"; do wait "$pid" || true; done
           for log in recordings/shared/agent_*.log; do
             echo "=== $log ==="
