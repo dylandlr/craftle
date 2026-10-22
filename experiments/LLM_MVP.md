@@ -14,10 +14,10 @@ Environment variables:
 
 Requires the same Xvfb / software GL / `node-canvas-webgl` environment as existing live RGB tests. Configure with `npm run configure` and start with `npm start`. Do not commit secrets or agent memory files. The model is pretrained; this is an autonomy/planning/memory study, not learning from scratch.
 
-Controller contract: multimodal model returns JSON containing goal, belief, plan, legal action and distilled memory. Decisions are logged; actions are dispatched through the existing movement adapter. Camera images are never sent to a preprocessor that returns game blocks. Timeout/errors stop movement; the agent does not keep walking blindly.
+Controller contract: multimodal model returns JSON containing goal, belief, plan, legal action and distilled memory. The result of the preceding action is included in the next observation context for reflection. Decisions are logged; actions are dispatched through the existing movement adapter. Camera images are never sent to a preprocessor that returns game blocks. Timeout/errors stop movement; the agent does not keep walking blindly.
 
 Limitations of v1:
-- Actions are only elementary movement, jumping and looking; mining, crafting, inventory interactions, long-horizon execution and reward/counterfactual evaluation remain upcoming.
+- Actions include elementary movement, looking, crosshair-targeted mining, item use and entity attack. Crafting, inventory management, long-horizon execution and reward/counterfactual evaluation remain upcoming. Mining target resolution occurs exclusively inside the action executor and is not surfaced as sensory input to the model.
 - Internal LLM pretraining may contain Minecraft knowledge.
 - Memory is a bounded lesson list, not yet episodic retrieval or validated learning.
 - A live agent run needs credentials and a multimodal model; GitHub CI currently only exercises a mocked model.
