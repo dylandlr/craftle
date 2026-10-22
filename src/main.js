@@ -73,11 +73,11 @@ for(const [index,profile] of activeProfiles.entries()){
        log:entry=>log(profile.name,entry.type,{agent_id:profile.id,...entry})
      });
      const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
-     let busy=false,lastDecision=0,lastOutcome=null;
+     let busy=false,lastDecision=0,lastOutcome=null,budgetExhausted=false;
      const progress=createProgressTracker();
      const intervalMs=Math.max(1000,Number(process.env.CRAFTLE_LLM_INTERVAL_MS??5000));
      const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
-       if(stopping||busy||Date.now()-lastDecision<intervalMs)return;
+       if(stopping||busy||budgetExhausted||Date.now()-lastDecision<intervalMs)return;
        busy=true;
        try{
          const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),lastOutcome});
@@ -95,6 +95,11 @@ for(const [index,profile] of activeProfiles.entries()){
          log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action,...outcome});
        }catch(error){
          bot.clearControlStates();
+         if(error.message==='Decision budget exhausted'){
+           budgetExhausted=true;
+           log(profile.name,'llm_episode_finished',{agent_id:profile.id,reason:'decision_budget',steps:agent.getState().steps});
+           server.close().catch(()=>{});
+         }
          lastDecision=Date.now();
          log(profile.name,'llm_agent_error',{agent_id:profile.id,message:error.message});
        }finally{busy=false;}
