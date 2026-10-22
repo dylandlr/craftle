@@ -1,0 +1,81 @@
+name: Held-out frozen Q vs random (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      training_run_id:
+        description: 'Successful continuous-training workflow run ID containing the Q checkpoint'
+        required: true
+        type: string
+      seed:
+        description: 'Held-out Minecraft world seed (must differ from 20261022)'
+        required: true
+        default: '20261119'
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate experiment inputs
+        env:
+          TRAINING_RUN: ${{ inputs.training_run_id }}
+          SEED: ${{ inputs.seed }}
+        run: |
+          [[ "$TRAINING_RUN" =~ ^[0-9]+$ ]]
+          [[ "$SEED" =~ ^[0-9]+$ ]] && test "$SEED" != 20261022
+      - uses: actions/download-artifact@v4
+        with:
+          name: continuous-rl-${{ inputs.training_run_id }}
+          run-id: ${{ inputs.training_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: recordings/continuous
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare Minecraft renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Compare each policy on separate fresh worlds with same seed
+        env:
+          SEED: ${{ inputs.seed }}
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_RL_CHECKPOINT: recordings/continuous/agent-q.json
+          CRAFTLE_RL_ACTION_MS: '350'
+          CRAFTLE_RL_MAX_MS: '60000'
+          CRAFTLE_RECORD_FRAMES: '100000'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set -euo pipefail
+          test -s "$CRAFTLE_RL_CHECKPOINT"
+          mkdir -p recordings/heldout
+          for treatment in visual_frozen_eval visual_random_control; do
+            docker run -d --name craftle-eval -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED="$SEED" itzg/minecraft-server:java21
+            for i in $(seq 1 120); do
+              if docker logs craftle-eval 2>&1 | grep -Fq 'For help, type "help"'; then break; fi
+              sleep 3
+            done
+            CRAFTLE_BEHAVIOR="$treatment" timeout --signal=TERM --kill-after=8s 75s xvfb-run -a node src/main.js > "recordings/heldout/$treatment.log" 2>&1 || status=$?
+            if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then echo "Agent failed: $status"; exit 1; fi
+            unset status
+            node scripts/report-rl-episode.js "recordings/heldout/$treatment.log" > "recordings/heldout/$treatment.json"
+            cp "$CRAFTLE_RL_CHECKPOINT" "recordings/heldout/$treatment.checkpoint.json"
+            docker stop craftle-eval
+            docker rm -v craftle-eval
+          done
+          node scripts/compare-heldout-rl.js recordings/heldout > recordings/heldout/comparison.json
+          cat recordings/heldout/comparison.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: heldout-rl-${{ github.run_id }}
+          path: recordings/heldout
+          retention-days: 14
