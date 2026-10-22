@@ -13,7 +13,8 @@ Run one agent at a time in a *fresh isolated world* per trial. Use identical wor
 - [x] Shared observe/updateBeliefs/selectGoal/plan/act/reflect interface (contract only).
 - [x] Scripted reference goal selection and live Mineflayer integration (await live behavioral validation).
 - [x] Define and unit-test an RGB-only observation contract, plus offline MP4-to-RGB decoding for recorded footage.
-- [ ] **Connect the live first-person renderer stream** to the agent observation API with real frame timestamps and no block-state leakage.
+- [x] Add experimental live Prismarine Viewer JPEG-over-TCP to RGB observation streaming and an opt-in RGB-only brightness-policy action probe (await live CI validation).
+- [ ] Validate the live renderer-to-policy-to-Minecraft loop in a real one-agent run with true arrival timestamps; replace heuristic probe with a trained policy and capture end-to-end evidence.
 - [x] Add an RGB-only policy boundary and a validated discrete action schema (policy-to-Minecraft adapter; live frame input pending).
 - [ ] Extend allowed proprioception (inventory, own motion) and synchronize with real captured frames.
 - [ ] Implement a trainable visual baseline and checkpoint loading.
