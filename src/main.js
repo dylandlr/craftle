@@ -8,7 +8,10 @@ const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
 const log=(name,type,extra={})=>{const e={timestamp:new Date().toISOString(),agent:name,type,...extra};events.write(JSON.stringify(e)+'\n');console.log(JSON.stringify(e));};
 const bots=[];
 let stopping=false;
-for(const [index,profile] of config.agents.entries()){
+const allowedIds=process.env.CRAFTLE_AGENT_IDS?.split(',').map(x=>x.trim()).filter(Boolean);
+const activeProfiles=allowedIds?config.agents.filter(a=>allowedIds.includes(a.id)):config.agents;
+if(allowedIds && activeProfiles.length!==allowedIds.length)throw Error('Unknown agent in CRAFTLE_AGENT_IDS');
+for(const [index,profile] of activeProfiles.entries()){
  await new Promise(resolve=>setTimeout(resolve,index===0?0:6000));
  if(stopping)break;
  log(profile.name,'connecting',{agent_id:profile.id,index});
@@ -42,4 +45,4 @@ const shutdown=()=>{
 };
 process.once('SIGTERM',shutdown);
 process.once('SIGINT',shutdown);
-log('system','recording_started',{agents:config.agents.map(a=>({id:a.id,name:a.name})),mode:'true-rendered-pov',note:'Recording smoke test; agent intelligence not yet evaluated'});
+log('system','recording_started',{agents:activeProfiles.map(a=>({id:a.id,name:a.name})),mode:'true-rendered-pov',note:'Recording smoke test; agent intelligence not yet evaluated'});
