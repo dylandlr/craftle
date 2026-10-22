@@ -3,6 +3,8 @@ import path from 'node:path';
 import mineflayer from 'mineflayer';
 import {decideNavigation} from './navigation.js';
 import {createScriptedControl,stepAgent} from './agent-core.js';
+import {startLiveObservationServer} from './live-pov.js';
+import {evaluateVisualPolicy,applyVisualAction} from './visual-policy.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -54,6 +56,36 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'capture_released',{agent_id:profile.id,releaseTime:fs.readFileSync(barrier,'utf8').trim()});
      }
      if(stopping)return;
+   if(process.env.CRAFTLE_BEHAVIOR==='vision_probe'){
+     // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
+     // Receives only RGB and cannot access Mineflayer block state.
+     let busy=false,lastAction=0;
+     const policy={predict:({rgb,width,height})=>{
+       let left=0,right=0;
+       for(let y=0;y<height;y+=4)for(let x=0;x<width;x+=4){
+         const k=(y*width+x)*3;
+         const brightness=rgb[k]+rgb[k+1]+rgb[k+2];
+         if(x<width/2)left+=brightness;else right+=brightness;
+       }
+       return Math.abs(left-right)>45000?(left>right?'look_left':'look_right'):'forward';
+     }};
+     const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
+     const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
+       if(busy||Date.now()-lastAction<250)return;
+       busy=true;
+       try{
+         const decision=await evaluateVisualPolicy(policy,frame);
+         await applyVisualAction(bot,decision.action);
+         lastAction=Date.now();
+         log(profile.name,'visual_decision',{agent_id:profile.id,policy:'rgb_brightness_probe',observationSource:'first_person_rgb',frameId:decision.frameId,capturedAt:decision.capturedAt,action:decision.action});
+       }catch(error){log(profile.name,'visual_policy_error',{message:error.message});}
+       finally{busy=false;}
+     }});
+     bot.once('end',()=>{server.close().catch(()=>{});});
+     const headless=await prepareRecorder();
+     headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??180),width:size,height:size});
+     log(profile.name,'live_rgb_started',{agent_id:profile.id,size,source:'prismarine-viewer-jpeg-tcp'});
+   }
    if(process.env.CRAFTLE_BEHAVIOR==='explore'){
      // Simple deterministic, non-LLM baseline: short walks and occasional turns.
      // Preserve action telemetry and avoid random behavior confounding cognition comparisons.
@@ -124,7 +156,7 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(timer));
    }
-     await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
+     if(process.env.CRAFTLE_BEHAVIOR!=='vision_probe')await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
    };
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
