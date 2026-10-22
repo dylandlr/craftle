@@ -17,7 +17,8 @@ Run one agent at a time in a *fresh isolated world* per trial. Use identical wor
 - [ ] Validate the live renderer-to-policy-to-Minecraft loop in a real one-agent run with true arrival timestamps; replace heuristic probe with a trained policy and capture end-to-end evidence.
 - [x] Add an RGB-only policy boundary and a validated discrete action schema (policy-to-Minecraft adapter; live frame input pending).
 - [ ] Extend allowed proprioception (inventory, own motion) and synchronize with real captured frames.
-- [ ] Implement a trainable visual baseline and checkpoint loading.
+- [x] Add initial PyTorch RGB CNN behavioral-cloning training script and checkpoint export (not yet CI/live evaluated).
+- [ ] Implement live checkpoint loading and inference with the Minecraft visual action interface.
 - [ ] Add repeatable training and held-out paired-seed evaluation against separately run scripted control.
 - [ ] Inspect footage, decisions, displacement, survival, task completion and policy ablations.
 
