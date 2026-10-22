@@ -16,14 +16,15 @@ export function visualState(frame){
 export function createOnlineVisualQLearner({epsilon=0.3,alpha=0.2,gamma=0.9,random=Math.random,checkpoint=null}={}){
   if([epsilon,alpha,gamma].some(x=>!Number.isFinite(x)||x<0||x>1))throw Error('Invalid learning hyperparameters');
   const q=new Map();
+  let transitions=0;
   if(checkpoint&&fs.existsSync(checkpoint)){
     const saved=JSON.parse(fs.readFileSync(checkpoint,'utf8'));
     if(saved.schemaVersion!==1||JSON.stringify(saved.actions)!==JSON.stringify(RL_ACTIONS))throw Error('Incompatible RL checkpoint');
+    transitions=Number.isSafeInteger(saved.transitions)&&saved.transitions>=0?saved.transitions:0;
     for(const [state,values] of Object.entries(saved.q))if(/^([0-3]{4})$/.test(state)&&Array.isArray(values)&&values.length===RL_ACTIONS.length&&values.every(Number.isFinite))q.set(state,values);
   }
   const scores=s=>{if(!q.has(s))q.set(s,RL_ACTIONS.map(()=>0));return q.get(s);};
   const sampleIndex=n=>Math.min(n-1,Math.max(0,Math.floor(random()*n)));
-  let transitions=0;
   return {
     choose(state){
       if(!/^[0-3]{4}$/.test(state))throw Error('Invalid visual state');
