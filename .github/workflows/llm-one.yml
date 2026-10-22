@@ -54,6 +54,8 @@ jobs:
           grep -q '"action":"craft"' recordings/llm-smoke/agent.log
           grep -q '"action":"equip"' recordings/llm-smoke/agent.log
           test -s recordings/llm-smoke/memory.json
+          test -s recordings/llm-smoke/episode-report.json
+          grep -q '"type":"llm_action_effect"' recordings/llm-smoke/agent.log
       - name: Retain evidence
         if: always()
         run: |
