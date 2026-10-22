@@ -45,6 +45,7 @@ jobs:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: ${{ inputs.treatment || 'visual_online_rl' }}
           CRAFTLE_RL_ACTION_MS: '350'
+          CRAFTLE_RL_EPSILON: '0.3'
           CRAFTLE_RL_CHECKPOINT: recordings/online-rl/agent-q.json
           CRAFTLE_RECORD_FRAMES: '200'
           LIBGL_ALWAYS_SOFTWARE: '1'
