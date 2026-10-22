@@ -8,6 +8,8 @@ import {startLiveObservationServer} from './live-pov.js';
 import {evaluateVisualPolicy,applyVisualAction} from './visual-policy.js';
 import {createVisualDatasetWriter} from './visual-dataset.js';
 import {openTorchPolicy} from './torch-policy.js';
+import {createVisionClient} from './llm-client.js';
+import {createLlmAgent} from './llm-agent.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -59,6 +61,36 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'capture_released',{agent_id:profile.id,releaseTime:fs.readFileSync(barrier,'utf8').trim()});
      }
      if(stopping)return;
+   if(process.env.CRAFTLE_BEHAVIOR==='llm_agent'){
+     if(activeProfiles.length!==1)throw Error('LLM MVP requires exactly one agent');
+     const agent=createLlmAgent({
+       infer:createVisionClient(),
+       memoryFile:process.env.CRAFTLE_LLM_MEMORY_FILE??'recordings/llm/agent-memory.json',
+       maxSteps:Number(process.env.CRAFTLE_LLM_MAX_STEPS??100),
+       log:entry=>log(profile.name,entry.type,{agent_id:profile.id,...entry})
+     });
+     const size=Number(process.env.CRAFTLE_LIVE_SIZE??128);
+     let busy=false,lastDecision=0;
+     const intervalMs=Math.max(1000,Number(process.env.CRAFTLE_LLM_INTERVAL_MS??5000));
+     const server=await startLiveObservationServer({width:size,height:size,onObservation:async frame=>{
+       if(stopping||busy||Date.now()-lastDecision<intervalMs)return;
+       busy=true;
+       try{
+         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food});
+         await applyVisualAction(bot,decision.action);
+         lastDecision=Date.now();
+         log(profile.name,'llm_action_applied',{agent_id:profile.id,frameId:frame.frameId,action:decision.action});
+       }catch(error){
+         bot.clearControlStates();
+         lastDecision=Date.now();
+         log(profile.name,'llm_agent_error',{agent_id:profile.id,message:error.message});
+       }finally{busy=false;}
+     }});
+     bot.once('end',()=>{server.close().catch(()=>{});bot.clearControlStates();});
+     const headless=await prepareRecorder();
+     headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1000),width:size,height:size});
+     log(profile.name,'llm_agent_started',{agent_id:profile.id,size,source:'first_person_rgb',model:process.env.CRAFTLE_LLM_MODEL});
+   }
    if(['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR)){
      // Test-only vision policy: brightness heuristic, NOT a learned intelligent agent.
      // Receives only RGB and cannot access Mineflayer block state.
@@ -164,7 +196,7 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(timer));
    }
-     if(!['vision_probe','vision_learned'].includes(process.env.CRAFTLE_BEHAVIOR))await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
+     if(!['vision_probe','vision_learned','llm_agent'].includes(process.env.CRAFTLE_BEHAVIOR))await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
    };
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
