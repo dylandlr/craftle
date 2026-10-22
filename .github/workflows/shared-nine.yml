@@ -37,7 +37,8 @@ jobs:
           CRAFTLE_RECORD_FRAMES: '120'
           CRAFTLE_RECORD_SIZE: '384'
           CRAFTLE_RECORD_DIRECTORY: recordings/shared/pov
-          CRAFTLE_CAMERA_SWEEP: '1'
+          CRAFTLE_CAMERA_SWEEP: '0'
+          CRAFTLE_BEHAVIOR: 'explore'
           CRAFTLE_CAPTURE_TELEMETRY: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
           CRAFTLE_CAPTURE_BARRIER: recordings/shared/capture-start.txt
