@@ -37,6 +37,21 @@ for(const [index,profile] of activeProfiles.entries()){
      },1000);
      bot.once('end',()=>clearInterval(sweep));
    }
+   const startRecorder=async()=>{
+     const barrier=process.env.CRAFTLE_CAPTURE_BARRIER;
+     if(barrier){
+       await prepareRecorder();
+       log(profile.name,'capture_waiting',{agent_id:profile.id,barrier});
+       const deadline=Date.now()+180000;
+       while(!stopping && !fs.existsSync(barrier) && Date.now()<deadline)
+         await new Promise(resolve=>setTimeout(resolve,100));
+       if(stopping || !fs.existsSync(barrier)){
+         log(profile.name,'recording_error',{message:'Capture barrier timed out'});
+         return;
+       }
+       log(profile.name,'capture_released',{agent_id:profile.id,releaseTime:fs.readFileSync(barrier,'utf8').trim()});
+     }
+     if(stopping)return;
    if(process.env.CRAFTLE_BEHAVIOR==='explore'){
      // Simple deterministic, non-LLM baseline: short walks and occasional turns.
      // Preserve action telemetry and avoid random behavior confounding cognition comparisons.
@@ -54,21 +69,6 @@ for(const [index,profile] of activeProfiles.entries()){
      },1500);
      bot.once('end',()=>clearInterval(timer));
    }
-   const startRecorder=async()=>{
-     const barrier=process.env.CRAFTLE_CAPTURE_BARRIER;
-     if(barrier){
-       await prepareRecorder();
-       log(profile.name,'capture_waiting',{agent_id:profile.id,barrier});
-       const deadline=Date.now()+180000;
-       while(!stopping && !fs.existsSync(barrier) && Date.now()<deadline)
-         await new Promise(resolve=>setTimeout(resolve,100));
-       if(stopping || !fs.existsSync(barrier)){
-         log(profile.name,'recording_error',{message:'Capture barrier timed out'});
-         return;
-       }
-       log(profile.name,'capture_released',{agent_id:profile.id,releaseTime:fs.readFileSync(barrier,'utf8').trim()});
-     }
-     if(stopping)return;
      await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
    };
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
