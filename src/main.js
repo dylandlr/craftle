@@ -220,6 +220,18 @@ for(const [index,profile] of activeProfiles.entries()){
    startRecorder().catch(e=>log(profile.name,'recording_error',{message:e.message}));
  });
  bot.on('health',()=>log(profile.name,'health',{health:bot.health,food:bot.food}));
+ if(process.env.CRAFTLE_BEHAVIOR==='llm_agent'){
+   let lastInventory='';
+   const sampleInventory=()=>{
+     const items=bot.inventory?.items?.().map(({name,count})=>({name,count}))??[];
+     const signature=JSON.stringify(items);
+     if(signature!==lastInventory){lastInventory=signature;log(profile.name,'inventory_snapshot',{agent_id:profile.id,items});}
+   };
+   bot.on('spawn',sampleInventory);
+   bot.inventory?.on('updateSlot',sampleInventory);
+   bot.on('respawn',()=>log(profile.name,'minecraft_dimension',{agent_id:profile.id,dimension:String(bot.game?.dimension??'unknown')}));
+ }
+
  bot.on('death',()=>log(profile.name,'death'));
  bot.on('kicked',reason=>log(profile.name,'kicked',{reason:String(reason)}));
  bot.on('error',e=>log(profile.name,'error',{message:e.message}));
