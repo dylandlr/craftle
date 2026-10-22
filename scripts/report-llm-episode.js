@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Audit an actual episode without confusing intent with verified game progression.
 import fs from 'node:fs';
+import {verifyMilestones} from '../src/milestone-verifier.js';
 const file=process.argv[2]??'recordings/events.jsonl';
 const events=fs.readFileSync(file,'utf8').split(/\r?\n/).flatMap(line=>{try{return [JSON.parse(line)]}catch{return []}});
 const decisions=events.filter(x=>x.type==='llm_decision');
@@ -24,7 +25,7 @@ const report={
  measuredEffects:{samples:effects.length,moved:effects.filter(e=>e.moved===true).length,stationary:effects.filter(e=>e.moved===false).length,inventoryChanges:effects.filter(e=>Object.keys(e.inventoryDelta??{}).length>0).length},
  deaths:deaths.length,
  durationSeconds:first&&last?Math.round((Date.parse(last.timestamp)-Date.parse(first.timestamp))/1000):null,
- minecraftMilestonesVerified:[],
+ minecraftMilestonesVerified:verifyMilestones(events),
  caveat:'Tool success and self-reported goals do not prove learning or Minecraft milestone completion. A mock LLM is a diagnostic only.'
 };
 console.log(JSON.stringify(report,null,2));
