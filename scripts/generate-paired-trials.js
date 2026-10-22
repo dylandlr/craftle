@@ -2,10 +2,12 @@
 import fs from 'node:fs';
 const seeds=[12091,24083,36187,48109,60217];
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
-const treatments=[
- {id:'scripted_block_control',kind:'scripted',observation:'block_state',behavior:'navigate',agentCore:'goal_directed',policyFamily:'deterministic_rules'},
+const scope=process.argv.includes('--all')?'stretch':'mvp';
+const allTreatments=[
+ {id:'scripted_block_control',kind:'scripted',observation:'block_state',behavior:'scripted_agent',agentCore:'goal_directed',policyFamily:'deterministic_rules'},
  ...config.agents.map(a=>({id:a.id,kind:'learned',observation:'first_person_rgb',behavior:'learned',agentCore:'goal_directed',policyFamily:'learned',cognition:a.cognition}))
 ];
+const treatments=scope==='mvp'?allTreatments.filter(t=>['scripted_block_control','agent_001'].includes(t.id)):allTreatments;
 const trials=seeds.flatMap(seed=>treatments.map(t=>({
  trialId:`seed_${seed}__${t.id}`,seed,treatment:t.id,kind:t.kind,
  observation:t.observation,behavior:t.behavior,agentCore:t.agentCore,policyFamily:t.policyFamily,worldMode:'isolated',
@@ -14,11 +16,12 @@ const trials=seeds.flatMap(seed=>treatments.map(t=>({
  durationSeconds:600,startingInventory:[],cognition:t.cognition??null,
  status:'planned',policyImplementationAvailable:t.kind==='scripted'
 })));
-const manifest={schemaVersion:1,design:'paired_seed_isolated',notes:[
+const manifest={schemaVersion:2,scope,design:'paired_seed_isolated',notes:[
  'Each trial requires a fresh Minecraft world; reusing a modified world invalidates matching.',
  'Seed equality alone does not fix spawn position, mob RNG, weather or terrain changes.',
  'All treatments must implement the same goal-directed agent interface (observe, updateBeliefs, selectGoal, plan, act, reflect).',
  'Learned-policy trials are planned only; no visual learner has been implemented.',
+ 'MVP consists of a single first-person visual agent (agent_001) and separately run scripted control; --all plans the stretch-goal factorial suite.',
  'The scripted control uses privileged block-state observations and must be labeled as such.'
 ],seeds,treatments,trials};
 fs.mkdirSync('experiments',{recursive:true});
