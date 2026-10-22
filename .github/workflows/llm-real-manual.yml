@@ -6,6 +6,14 @@ on:
         description: 'Vision-capable chat model'
         required: true
         type: string
+      agent_configuration:
+        description: 'Isolated cognition treatment'
+        required: true
+        default: agent_001
+        type: choice
+        options:
+          - agent_001
+          - agent_008
       runner:
         description: 'Runner: github-hosted or approved TAMU-VPN-connected self-hosted runner'
         required: true
@@ -30,7 +38,7 @@ jobs:
     runs-on: ${{ inputs.runner == 'tamu-vpn' && fromJSON('["self-hosted","linux","x64","tamu-vpn"]') || fromJSON('["ubuntu-latest"]') }}
     timeout-minutes: 18
     env:
-      CRAFTLE_AGENT_IDS: agent_001
+      CRAFTLE_AGENT_IDS: ${{ inputs.agent_configuration }}
       CRAFTLE_BEHAVIOR: llm_agent
       CRAFTLE_LLM_API_KEY: ${{ secrets.TAMU_API_KEY }}
       TAMU_CF_COOKIE: ${{ secrets.TAMU_CF_COOKIE }}
@@ -41,7 +49,7 @@ jobs:
       CRAFTLE_LLM_INTERVAL_MS: '3000'
       CRAFTLE_LIVE_SIZE: '128'
       CRAFTLE_RECORD_FRAMES: '1200'
-      CRAFTLE_LLM_MEMORY_FILE: recordings/real-llm/memory.json
+      CRAFTLE_LLM_MEMORY_FILE: recordings/real-llm/memory-${{ inputs.agent_configuration }}.json
       LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +69,7 @@ jobs:
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
           npm test
+          node scripts/verify-agent-preset.js config.json "$CRAFTLE_AGENT_IDS"
       - name: Start Minecraft
         run: |
           mkdir -p recordings/real-llm
