@@ -1,4 +1,4 @@
-name: Real POV capture (five paired jobs)
+name: Isolated POV recorder diagnostic (five paired jobs)
 on:
   push:
     branches: [main]
@@ -47,6 +47,8 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
+          node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));c.experiment.worldMode='isolated';c.experiment.scenario='recorder_diagnostic_only';fs.writeFileSync(p,JSON.stringify(c,null,2))"
+          node scripts/validate-world-mode.js isolated
           node -e "const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p));const b=Number(process.env.CRAFTLE_BATCH);c.agents=c.agents.slice(b*2,b*2+2);fs.writeFileSync(p,JSON.stringify(c,null,2))"
         env:
           CRAFTLE_BATCH: ${{ matrix.batch }}
