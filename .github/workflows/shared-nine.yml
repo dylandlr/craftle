@@ -72,6 +72,7 @@ jobs:
           done
           node scripts/verify-pov.js recordings/shared/pov config.json
           python3 scripts/verify-motion.py recordings/shared/pov --min-different-frames 2
+          python3 scripts/verify-capture-timing.py recordings/shared --expected 9 --max-start-skew-ms 500
           python3 scripts/compose-grid.py recordings/shared/pov recordings/shared/grid.mp4 --seconds 5
       - name: Report resource usage
         if: always()
