@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import mineflayer from 'mineflayer';
 import {decideNavigation} from './navigation.js';
+import {createScriptedControl,stepAgent} from './agent-core.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -69,6 +70,36 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'baseline_action',{agent_id:profile.id,phase,yaw,groundBlock:ahead?.name??null});
      },1500);
      bot.once('end',()=>clearInterval(timer));
+   }
+   if(process.env.CRAFTLE_BEHAVIOR==='scripted_agent'){
+     // Explicit privileged-state control, never the first-person learned-policy treatment.
+     const agent=createScriptedControl();
+     let heading=bot.entity?.yaw??0,lastPos=bot.entity?.position?.clone();
+     let busy=false,step=0;
+     const timer=setInterval(async()=>{
+       if(stopping||!bot.entity){clearInterval(timer);return;}
+       if(busy)return;
+       busy=true;
+       try{
+         const pos=bot.entity.position;
+         const ahead=pos.offset(-Math.sin(heading),0,-Math.cos(heading));
+         const feet=bot.blockAt(ahead);
+         const head=bot.blockAt(ahead.offset(0,1,0));
+         const ground=bot.blockAt(ahead.offset(0,-1,0));
+         const displacement=lastPos?Math.hypot(pos.x-lastPos.x,pos.z-lastPos.z):1;
+         const observations={displacement,forwardBlocked:[feet,head].some(b=>b?.boundingBox==='block'),groundAhead:ground?.boundingBox==='block',danger:bot.health<8};
+         const {goal,action}=await stepAgent(agent,observations);
+         if(action.turn)heading=(heading+Math.PI*(0.5+((Number(profile.id.slice(-3))+step)%3)/4))%(Math.PI*2);
+         bot.clearControlStates();
+         await bot.look(heading,0);
+         bot.setControlState('forward',action.forward);
+         bot.setControlState('jump',action.jump);
+         log(profile.name,'agent_decision',{agent_id:profile.id,policy:'scripted_block_control',observationSource:'privileged_block_state',goal,action,observations,heading});
+         lastPos=pos.clone();step++;
+       }catch(error){log(profile.name,'agent_decision_error',{message:error.message});}
+       finally{busy=false;}
+     },1000);
+     bot.once('end',()=>{clearInterval(timer);bot.clearControlStates();});
    }
    if(process.env.CRAFTLE_BEHAVIOR==='navigate'){
      let tick=0, lastPos=bot.entity?.position?.clone(), heading=bot.entity?.yaw??0;
