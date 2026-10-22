@@ -12,7 +12,8 @@ Run one agent at a time in a *fresh isolated world* per trial. Use identical wor
 ## MVP implementation order
 - [x] Shared observe/updateBeliefs/selectGoal/plan/act/reflect interface (contract only).
 - [x] Scripted reference goal selection and live Mineflayer integration (await live behavioral validation).
-- [ ] Expose decoded first-person RGB frames **to the agent observation API**, with frame timestamps and no block-state leakage.
+- [x] Define and unit-test an RGB-only observation contract, plus offline MP4-to-RGB decoding for recorded footage.
+- [ ] **Connect the live first-person renderer stream** to the agent observation API with real frame timestamps and no block-state leakage.
 - [ ] Add allowed proprioception (health, hunger, inventory, own motion), explicit action schema and synchronized observations.
 - [ ] Implement a trainable visual baseline and checkpoint loading.
 - [ ] Add repeatable training and held-out paired-seed evaluation against separately run scripted control.
