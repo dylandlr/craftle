@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import mineflayer from 'mineflayer';
+import {decideNavigation} from './navigation.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
@@ -67,6 +68,29 @@ for(const [index,profile] of activeProfiles.entries()){
        if(phase===11)bot.setControlState('jump',true);
        log(profile.name,'baseline_action',{agent_id:profile.id,phase,yaw,groundBlock:ahead?.name??null});
      },1500);
+     bot.once('end',()=>clearInterval(timer));
+   }
+   if(process.env.CRAFTLE_BEHAVIOR==='navigate'){
+     let tick=0, lastPos=bot.entity?.position?.clone(), heading=bot.entity?.yaw??0;
+     const timer=setInterval(()=>{
+       if(stopping||!bot.entity){clearInterval(timer);return;}
+       const pos=bot.entity.position;
+       const forward=pos.offset(-Math.sin(heading),0,-Math.cos(heading));
+       const obstacle=bot.blockAt(forward.offset(0,1,0));
+       const feet=bot.blockAt(forward);
+       const ground=bot.blockAt(forward.offset(0,-1,0));
+       const blocked=[obstacle,feet].some(b=>b&&b.boundingBox==='block');
+       const moved=lastPos?Math.hypot(pos.x-lastPos.x,pos.z-lastPos.z):0;
+       const action=decideNavigation({forwardBlocked:blocked,groundAhead:ground?.boundingBox==='block',displacement:moved,tick,agentIndex:Number(profile.id.slice(-3))});
+       tick++;
+       if(action.yawDelta)heading=(heading+action.yawDelta)%(Math.PI*2);
+       bot.clearControlStates();
+       bot.look(heading,0).catch(()=>{});
+       bot.setControlState('forward',action.forward);
+       bot.setControlState('jump',action.jump);
+       log(profile.name,'navigation_action',{agent_id:profile.id,...action,heading,displacement:moved});
+       lastPos=pos.clone();
+     },1000);
      bot.once('end',()=>clearInterval(timer));
    }
      await attachRecorder(bot,profile,recordingOptions(),(name,type,data)=>log(name,type,data));
