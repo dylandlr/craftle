@@ -22,7 +22,7 @@ for(const trial of manifest.trials){
      deaths:report.deaths??null,moved:report.measuredEffects?.moved??null,
      stationary:report.measuredEffects?.stationary??null,
      inventoryChanges:report.measuredEffects?.inventoryChanges??null,
-     verifiedMilestones:report.minecraftMilestonesVerified??[]});
+     verifiedMilestones:Array.isArray(report.minecraftMilestonesVerified)?report.minecraftMilestonesVerified.filter(x=>typeof x?.id==='string'&&['inventory_snapshot','client_dimension_event'].includes(x.evidence)).map(x=>x.id):[]});
  }catch(e){invalid.push({trialId:trial.id,error:e.message});}
 }
 const key=(seed,agent)=>String(seed)+':'+agent;
@@ -35,18 +35,22 @@ for(const row of rows){
  paired.push({seed:row.seed,agentId:row.agentId,condition:row.condition,
    deltaAppliedActions:row.appliedActions-baseline.appliedActions,
    deltaDeaths:row.deaths!==null&&baseline.deaths!==null?row.deaths-baseline.deaths:null,
-   deltaMoved:row.moved!==null&&baseline.moved!==null?row.moved-baseline.moved:null});
+   deltaMoved:row.moved!==null&&baseline.moved!==null?row.moved-baseline.moved:null,
+   gainedMilestones:row.verifiedMilestones.filter(id=>!baseline.verifiedMilestones.includes(id)),
+   lostMilestones:baseline.verifiedMilestones.filter(id=>!row.verifiedMilestones.includes(id))});
 }
 const byCondition=Object.groupBy(paired,r=>r.agentId);
 const comparisons=Object.entries(byCondition).map(([agentId,records])=>({
  agentId,condition:records[0].condition,n:records.length,
+ milestoneGains:records.reduce((n,r)=>n+r.gainedMilestones.length,0),
+ milestoneLosses:records.reduce((n,r)=>n+r.lostMilestones.length,0),
  meanDeltaMoved:records.every(r=>r.deltaMoved!==null)?records.reduce((s,r)=>s+r.deltaMoved,0)/records.length:null,
  meanDeltaAppliedActions:records.reduce((s,r)=>s+r.deltaAppliedActions,0)/records.length,
  meanDeltaDeaths:records.every(r=>r.deltaDeaths!==null)?records.reduce((s,r)=>s+r.deltaDeaths,0)/records.length:null
 }));
 const summary={schemaVersion:1,source:'logged_completed_trials_only',totalPlanned:manifest.trials.length,
  completed:rows.length,missing,invalid,rows,paired,comparisons,
- limitations:['Missing/invalid trials are excluded, never imputed as failure or success','Applied actions and motion do not establish intelligence','Only equal-seed comparisons; uncontrolled world randomness persists','No causal claims from sparse or incomplete trial data','No milestones independently verified unless explicit verifier exists']};
+ limitations:['Missing/invalid trials are excluded, never imputed as failure or success','Applied actions and motion do not establish intelligence','Only equal-seed comparisons; uncontrolled world randomness persists','No causal claims from sparse or incomplete trial data','Milestones use conservative inventory/dimension event evidence, not validated causal attribution of acquisition']};
 fs.mkdirSync(path.dirname(out),{recursive:true});
 fs.writeFileSync(out,JSON.stringify(summary,null,2)+'\n');
 console.log(JSON.stringify({completed:rows.length,missing:missing.length,invalid:invalid.length,paired:paired.length,output:out}));
