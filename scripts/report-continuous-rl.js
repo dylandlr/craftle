@@ -14,9 +14,14 @@ const results=episodes.map(name=>{
  return {episode:name,actions:actions.length,transitions:transitions.length,uniqueVisualStates:new Set(actions.map(x=>x.state)).size,
   cumulativeReward:Number(rewards.reduce((a,b)=>a+b,0).toFixed(4)),
   displacement:Number(transitions.reduce((a,x)=>a+(Number.isFinite(x.displacement)?x.displacement:0),0).toFixed(3)),
+  actionCounts:Object.fromEntries([...new Set(actions.map(x=>x.action))].map(action=>[action,actions.filter(x=>x.action===action).length])),
+  forwardShare:actions.length?Number((actions.filter(x=>x.action==='forward').length/actions.length).toFixed(4)):null,
+  meanRewardPerAction:actions.length?Number((rewards.reduce((a,b)=>a+b,0)/actions.length).toFixed(5)):null,
+  loadedLearningUpdates:events.find(x=>x.type==='online_rl_started')?.loadedLearningUpdates??null,
   errors:events.filter(x=>x.type==='rl_error').length,deaths:events.filter(x=>x.type==='death').length};
 });
-const report={schemaVersion:1,worldContinuity:'same server and world across restarted agent sessions',
+const report={schemaVersion:2,worldContinuity:'same server and world across restarted agent sessions',
  treatment:'online visual Q-learning',episodes:results,totalUpdates:results.reduce((a,x)=>a+x.transitions,0),
+ actionShift:results.length>=2?{forwardShareDelta:Number((results.at(-1).forwardShare-results[0].forwardShare).toFixed(4)),meanRewardPerActionDelta:Number((results.at(-1).meanRewardPerAction-results[0].meanRewardPerAction).toFixed(5))}:null,
  caveat:'Training rewards are not held-out success. Saved checkpoint continuity alone does not show improving competence.'};
 console.log(JSON.stringify(report,null,2));
