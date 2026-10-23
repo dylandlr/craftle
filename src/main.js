@@ -122,26 +122,28 @@ for(const [index,profile] of activeProfiles.entries()){
      if(frozen&&!fs.existsSync(checkpoint))throw Error('Frozen evaluation requires trained checkpoint');
      const learner=createOnlineVisualQLearner({checkpoint,training:!frozen,
        epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3)});
-     let busy=false,lastTime=0,previous=null,dead=false;
+     let busy=false,lastTime=0,previous=null,inFlight=null,dead=false,life=0;
      const deathPenalty=Number(process.env.CRAFTLE_RL_DEATH_PENALTY??-5);
      if(!Number.isFinite(deathPenalty)||deathPenalty>=0)throw Error('Death penalty must be finite and negative');
      bot.on('death',()=>{
        dead=true;
        bot.clearControlStates();
-       if(previous&&!randomControl&&!frozen){
-         learner.learn({state:previous.state,index:previous.index,reward:deathPenalty,terminal:true});
+       const terminalAction=inFlight??previous;
+       if(terminalAction&&!randomControl&&!frozen){
+         learner.learn({state:terminalAction.state,index:terminalAction.index,reward:deathPenalty,terminal:true});
          learner.save(checkpoint);
        }
-       log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:previous?.action??null,learningUpdates:learner.stats().transitions});
-       previous=null;
+       log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:terminalAction?.action??null,learningUpdates:learner.stats().transitions});
+       previous=null;inFlight=null;life++;
      });
-     bot.on('respawn',()=>{dead=false;previous=null;});
+     bot.on('respawn',()=>{dead=false;previous=null;inFlight=null;life++;});
      const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
      const server=await startLiveObservationServer({width:128,height:128,onObservation:async frame=>{
        if(busy||dead||stopping||Date.now()-lastTime<700||!bot.entity)return;
        busy=true;
        try{
+         const currentLife=life;
          const state=visualState(frame),now=bot.entity.position.clone();
          let reward=null;
          if(previous){
@@ -155,6 +157,7 @@ for(const [index,profile] of activeProfiles.entries()){
          seen.add(state);
          const choice=randomControl?{state,action:actions[Math.floor(Math.random()*actions.length)],index:-1}:learner.choose(state);
          bot.clearControlStates();
+         inFlight=choice;
          const actionStartedAt=Date.now();
          const startPosition=bot.entity.position.clone(),startHealth=bot.health;
          try{
@@ -163,7 +166,8 @@ for(const [index,profile] of activeProfiles.entries()){
          }finally{bot.clearControlStates();}
          const actionEndedAt=Date.now();
          const actionPosition=bot.entity?.position?.clone()??startPosition;
-         if(dead)return;
+         if(dead||life!==currentLife)return;
+         inFlight=null;
          previous={...choice,frameId:frame.frameId,actionStartedAt,actionEndedAt,
            displacement:actionPosition.distanceTo(startPosition),healthDelta:bot.health-startHealth};
          lastTime=Date.now();
