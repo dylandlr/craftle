@@ -6,7 +6,14 @@ if(a.policy!=='frozen_visual_q'||b.policy!=='random_rgb_control'||a.transitions<
 const hash=name=>fs.readFileSync(path.join(root,name),'utf8').trim();
 const baseline=hash('checkpoint-original.sha256');
 if(hash('visual_frozen_eval.checkpoint.sha256')!==baseline||hash('visual_random_control.checkpoint.sha256')!==baseline)throw Error('Evaluation unexpectedly mutated trained checkpoint');
-console.log(JSON.stringify({schemaVersion:1,design:'one held-out seed, separate freshly initialized worlds; equal target duration',
+const diagnostic=report=>{
+ const counts=Object.values(report.actionsByType??{});
+ const total=counts.reduce((a,b)=>a+b,0);
+ const largest=counts.length?Math.max(...counts):0;
+ const probs=counts.filter(x=>x>0).map(x=>x/total);
+ return {dominantActionFraction:total?largest/total:null,actionEntropyBits:probs.length?-probs.reduce((a,p)=>a+p*Math.log2(p),0):null};
+};
+console.log(JSON.stringify({schemaVersion:2,diagnostics:{frozen:diagnostic(a),random:diagnostic(b)},design:'one held-out seed, separate freshly initialized worlds; equal target duration',
  frozen:a,random:b,
  meanRewardDifference:(a.meanReward??0)-(b.meanReward??0),
  important:'ONE paired seed does not establish statistical improvement; displacement reward can be gamed; checkpoint equality rules out updates during evaluation, not procedural world variance.'},null,2));
