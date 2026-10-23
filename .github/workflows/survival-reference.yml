@@ -1,0 +1,57 @@
+name: Mineflayer scripted survival reference smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/survival-reference.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scripted-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Mineflayer and renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Launch Minecraft server
+        run: |
+          docker run -d --name craftle-reference -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED=20261201 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-reference 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Run privileged scripted controller
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: survival_reference
+          CRAFTLE_RL_MAX_MS: '90000'
+          CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
+          CRAFTLE_RECORD_FRAMES: '1200'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/survival-reference
+          timeout --signal=TERM --kill-after=8s 110s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 || status=$?
+          if [ "${status:-0}" -ne 0 ] && [ "${status:-0}" -ne 124 ]; then exit 1; fi
+          grep -q '"type":"survival_reference_started"' recordings/survival-reference/agent.log
+          test "$(grep -c '"type":"survival_reference_action"' recordings/survival-reference/agent.log)" -ge 3
+          test -s recordings/survival-reference/survival_reference.mp4
+      - name: Archive logs
+        if: always()
+        run: docker logs craftle-reference > recordings/survival-reference/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scripted-survival-reference-${{ github.run_id }}
+          path: recordings/survival-reference
+          retention-days: 30
