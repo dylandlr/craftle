@@ -15,6 +15,7 @@ import {snapshotAgentState,summarizeActionEffect} from './llm-effects.js';
 import {createProgressTracker} from './llm-progress.js';
 import {createOnlineVisualQLearner,visualState,intrinsicVisualReward} from './online-visual-rl.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
+import {createLifeFeedback} from './life-feedback.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -30,6 +31,20 @@ for(const [index,profile] of activeProfiles.entries()){
  log(profile.name,'connecting',{agent_id:profile.id,index});
  const bot=mineflayer.createBot({host:config.host,port:config.port,username:profile.name,version:config.version,hideErrors:true});
  bots.push(bot);
+ const lifeFeedback=createLifeFeedback();
+ bot.on('messagestr',(message,position)=>{
+   const entry=lifeFeedback.chat(message,position??'chat');
+   log(profile.name,'minecraft_text_observed',{agent_id:profile.id,...entry});
+ });
+ bot.on('death',()=>{
+   const position=bot.entity?.position;
+   const entry=lifeFeedback.death({message:'You Died!',position:position?{x:position.x,y:position.y,z:position.z}:null,health:bot.health});
+   log(profile.name,'death_screen_observed',{agent_id:profile.id,...entry,source:'mineflayer_death_event'});
+ });
+ bot.on('respawn',()=>{
+   const entry=lifeFeedback.respawn();
+   log(profile.name,'life_feedback_available',{agent_id:profile.id,...entry,history:lifeFeedback.snapshot({max:16})});
+ });
  // Minecraft time_update packets provide an authoritative but periodic world-age anchor.
  let lastWorldAge=null;
  bot._client.on('update_time',packet=>{const raw=packet.age??packet.worldAge??packet.time; if(raw!==undefined)lastWorldAge=String(raw);});
@@ -83,7 +98,7 @@ for(const [index,profile] of activeProfiles.entries()){
        if(stopping||busy||budgetExhausted||Date.now()-lastDecision<intervalMs)return;
        busy=true;
        try{
-         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),position:bot.entity?.position?{x:bot.entity.position.x,z:bot.entity.position.z}:null,lastOutcome});
+         const decision=await agent.decide(frame,{health:bot.health,hunger:bot.food,inventory:bot.inventory.items().map(({name,count})=>({name,count})),position:bot.entity?.position?{x:bot.entity.position.x,z:bot.entity.position.z}:null,lastOutcome,lifeFeedback:lifeFeedback.snapshot({max:24})});
          const before=snapshotAgentState(bot);
          const outcome=await executeLlmAction(bot,decision.action,{target:decision.target});
          await new Promise(resolve=>setTimeout(resolve,350));
@@ -156,13 +171,14 @@ for(const [index,profile] of activeProfiles.entries()){
        try{
          const currentLife=life;
          const state=visualState(frame),now=bot.entity.position.clone();
+         const feedback=lifeFeedback.snapshot({max:8});
          let reward=null;
          if(previous){
            const displacement=previous.displacement;
            reward=intrinsicVisualReward({displacement,healthDelta:previous.healthDelta,novelState:!seen.has(state)});
            if(!randomControl&&!frozen)learner.learn({...previous,reward,nextState:state});
            log(profile.name,'rl_transition',{agent_id:profile.id,frameId:frame.frameId,previousFrameId:previous.frameId,
-             state:previous.state,action:previous.action,reward,nextState:state,displacement,healthDelta:previous.healthDelta,
+             state:previous.state,action:previous.action,reward,nextState:state,displacement,healthDelta:previous.healthDelta,lifeFeedbackSeq:feedback.latestSeq,life:feedback.life,deathCount:feedback.deathCount,
              actionStartedAt:previous.actionStartedAt,actionEndedAt:previous.actionEndedAt});
          }
          seen.add(state);
