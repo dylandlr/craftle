@@ -22,7 +22,7 @@ export function createLlmAgent({infer,memoryFile,maxSteps=100,cognition={foveate
    if(Array.isArray(stored.memories))memories=stored.memories.filter(x=>typeof x==='string').slice(-20);
  }
  return {
-   async decide(frame,{health=null,hunger=null,inventory=[],position=null,lastOutcome=null}={}){
+   async decide(frame,{health=null,hunger=null,inventory=[],position=null,lastOutcome=null,lifeFeedback=null}={}){
      if(steps>=maxSteps)throw Error('Decision budget exhausted');
      if(!frame||frame.source!=='first_person_rgb'||frame.rgb.length!==frame.width*frame.height*3)throw Error('Actual RGB frame required');
      const rgba=Buffer.alloc(frame.width*frame.height*4);
@@ -30,7 +30,7 @@ export function createLlmAgent({infer,memoryFile,maxSteps=100,cognition={foveate
      const jpegBuffer=jpeg.encode({data:rgba,width:frame.width,height:frame.height},75).data;
      const cognitiveContext=cognitive.observe({position});
      const fovealJpeg=cognitive.fovealImage(frame);
-     const context=`Frame ${frame.frameId}. Self status: health=${health??'unknown'}, hunger=${hunger??'unknown'}, inventory=${JSON.stringify(inventory).slice(0,450)}. Previous action outcome: ${lastOutcome?JSON.stringify(lastOutcome).slice(0,400):'none'}. Known lessons: ${memories.slice(-8).join(' | ')||'none'}. ${cognitiveContext} ${fovealJpeg?'Second image is a central crop of the same frame.':''}`;
+     const context=`Frame ${frame.frameId}. Recent Minecraft chat/system text and death/respawn history (server-provided, may be incomplete or misleading): ${lifeFeedback?JSON.stringify(lifeFeedback).slice(-1400):'none'}. Self status: health=${health??'unknown'}, hunger=${hunger??'unknown'}, inventory=${JSON.stringify(inventory).slice(0,450)}. Previous action outcome: ${lastOutcome?JSON.stringify(lastOutcome).slice(0,400):'none'}. Known lessons: ${memories.slice(-8).join(' | ')||'none'}. ${cognitiveContext} ${fovealJpeg?'Second image is a central crop of the same frame.':''}`;
      const raw=await infer({system:SYSTEM,observation:{text:context,jpeg:jpegBuffer,fovealJpeg},history});
      const decision=parseAgentDecision(raw);
      cognitive.reflect(decision);
