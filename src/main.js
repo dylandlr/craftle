@@ -17,6 +17,7 @@ import {createOnlineVisualQLearner,visualState,intrinsicVisualReward} from './on
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 import {createLifeFeedback} from './life-feedback.js';
 import {createRewardV2} from './reward-v2.js';
+import {startSurvivalReference} from './survival-reference.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -270,6 +271,24 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'baseline_action',{agent_id:profile.id,phase,yaw,groundBlock:ahead?.name??null});
      },1500);
      bot.once('end',()=>clearInterval(timer));
+   }
+   if(process.env.CRAFTLE_BEHAVIOR==='survival_reference'){
+     if(activeProfiles.length!==1)throw Error('Survival reference requires one agent');
+     if(!bot.__survivalReferenceStarted){
+       bot.__survivalReferenceStarted=true;
+       startSurvivalReference(bot,{log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
+       const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
+       if(videoDir){
+         const headless=await prepareRecorder();
+         const output=path.join(videoDir,'survival_reference.mp4');
+         fs.mkdirSync(videoDir,{recursive:true});
+         headless(bot,{output,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1800),width:256,height:256});
+         log(profile.name,'reference_video_capture_started',{output});
+       }
+       const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??60000);
+       if(Number.isFinite(maxMs)&&maxMs>=1000){const t=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(t));}
+       log(profile.name,'survival_reference_started',{agent_id:profile.id,policy:'scripted_privileged_mineflayer',learned:false});
+     }
    }
    if(process.env.CRAFTLE_BEHAVIOR==='scripted_agent'){
      // Explicit privileged-state control, never the first-person learned-policy treatment.
