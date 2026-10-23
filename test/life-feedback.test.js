@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLifeFeedback} from '../src/life-feedback.js';
+import {createLifeFeedback,classifyDeathCause} from '../src/life-feedback.js';
 
 test('retains actual chat, death and respawn text in chronological order',()=>{
  const f=createLifeFeedback({limit:5});
@@ -22,4 +22,25 @@ test('feedback retention is bounded while sequence remains increasing',()=>{
  assert.deepEqual(f.snapshot().entries.map(x=>x.seq),[2,3]);
  assert.equal(f.snapshot().latestSeq,3);
  assert.throws(()=>createLifeFeedback({limit:0}),/limit/);
+});
+
+test('death causes are derived from in-game messages and persist across respawns',()=>{
+ const f=createLifeFeedback();
+ f.chat('Agent tried to swim in lava','system');
+ const death=f.death({health:0});
+ assert.equal(death.cause,'fire_lava');
+ f.respawn();
+ assert.equal(f.snapshot().latestDeathCause,'fire_lava');
+ assert.equal(classifyDeathCause(['Agent fell from a high place']),'fall');
+ assert.equal(classifyDeathCause(['Agent was slain by Zombie']),'combat');
+ assert.equal(classifyDeathCause(['Agent drowned']),'drowning');
+ assert.equal(classifyDeathCause([]),'unknown');
+});
+test('death cause does not falsely reuse chat from earlier life',()=>{
+ const f=createLifeFeedback();
+ f.chat('Agent drowned');
+ f.death();
+ f.respawn();
+ const second=f.death();
+ assert.equal(second.cause,'unknown');
 });
