@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        seed: ['20261119', '20261120', '20261121']
+        seed: ['20261119', '20261120', '20261121', '20261122', '20261123']
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -50,7 +50,7 @@ jobs:
       - name: Prepare Minecraft renderer
         run: |
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
@@ -78,9 +78,15 @@ jobs:
               sleep 3
             done
             test "$ready" -eq 1
-            CRAFTLE_BEHAVIOR="$treatment" timeout --signal=TERM --kill-after=8s 75s xvfb-run -a node src/main.js > "recordings/heldout/$treatment.log" 2>&1 || status=$?
+            mkdir -p "recordings/heldout/$treatment-frames"
+            CRAFTLE_RL_VIDEO_FRAMES_DIR="recordings/heldout/$treatment-frames" CRAFTLE_BEHAVIOR="$treatment" timeout --signal=TERM --kill-after=8s 75s xvfb-run -a node src/main.js > "recordings/heldout/$treatment.log" 2>&1 || status=$?
             if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then echo "Agent failed: $status"; exit 1; fi
             unset status
+            frame_count=$(find "recordings/heldout/$treatment-frames" -name '*.jpg' | wc -l)
+            echo "Captured $frame_count actual first-person frames for $treatment"
+            test "$frame_count" -ge 10
+            ffmpeg -hide_banner -loglevel error -y -framerate 2 -i "recordings/heldout/$treatment-frames/%05d.jpg" -c:v libx264 -pix_fmt yuv420p "recordings/heldout/$treatment.mp4"
+            test -s "recordings/heldout/$treatment.mp4"
             node scripts/report-rl-episode.js "recordings/heldout/$treatment.log" > "recordings/heldout/$treatment.json"
             sha256sum "$CRAFTLE_RL_CHECKPOINT" | cut -d " " -f1 > "recordings/heldout/$treatment.checkpoint.sha256"
             test "$(cat recordings/heldout/checkpoint-original.sha256)" = "$(cat recordings/heldout/$treatment.checkpoint.sha256)"
@@ -95,4 +101,4 @@ jobs:
         with:
           name: heldout-rl-${{ matrix.seed }}-${{ github.run_id }}
           path: recordings/heldout
-          retention-days: 14
+          retention-days: 30
