@@ -2,7 +2,7 @@ name: Held-out frozen Q vs random (manual)
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/heldout-visual-rl.yml']
+    paths: ['.github/workflows/heldout-visual-rl.yml', 'scripts/compare-heldout-rl.js']
   workflow_dispatch:
     inputs:
       training_run_id:
