@@ -9,16 +9,15 @@ on:
         description: 'Successful continuous-training workflow run ID containing the Q checkpoint'
         required: true
         type: string
-      seed:
-        description: 'Held-out Minecraft world seed (must differ from 20261022)'
-        required: true
-        default: '20261119'
-        type: string
 permissions:
   contents: read
   actions: read
 jobs:
   comparison:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ['20261119', '20261120', '20261121']
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -26,7 +25,7 @@ jobs:
       - name: Validate experiment inputs
         env:
           TRAINING_RUN: ${{ inputs.training_run_id || '39866439111' }}
-          SEED: ${{ inputs.seed || '20261119' }}
+          SEED: ${{ matrix.seed }}
         run: |
           [[ "$TRAINING_RUN" =~ ^[0-9]+$ ]]
           [[ "$SEED" =~ ^[0-9]+$ ]] && test "$SEED" != 20261022
@@ -49,7 +48,7 @@ jobs:
           npm test
       - name: Compare each policy on separate fresh worlds with same seed
         env:
-          SEED: ${{ inputs.seed || '20261119' }}
+          SEED: ${{ matrix.seed }}
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_RL_CHECKPOINT: recordings/continuous/agent-q.json
           CRAFTLE_RL_ACTION_MS: '350'
@@ -85,6 +84,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: heldout-rl-${{ github.run_id }}
+          name: heldout-rl-${{ matrix.seed }}-${{ github.run_id }}
           path: recordings/heldout
           retention-days: 14
