@@ -52,8 +52,8 @@ jobs:
       - name: Train continuously with checkpoint persistence
         shell: bash
         env:
-          EPISODES: ${{ inputs.episodes || '2' }}
-          SESSION_DURATION: ${{ inputs.seconds_per_episode || '75' }}
+          EPISODES: '10'
+          SESSION_DURATION: '180'
         run: |
           set -euo pipefail
           for index in $(seq 1 "$EPISODES"); do
@@ -71,6 +71,7 @@ jobs:
             cp "$CRAFTLE_RL_CHECKPOINT" "$episode/q-after.json"
           done
           node scripts/report-continuous-rl.js recordings/retrain-q-30min > recordings/retrain-q-30min/summary.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('recordings/retrain-q-30min/summary.json'));if(x.episodes.length!==10||x.episodes.some(e=>e.transitions<3))process.exit(1);console.log('Validated ten training sessions')"
           cat recordings/retrain-q-30min/summary.json
       - name: Preserve world and logs
         if: always()
