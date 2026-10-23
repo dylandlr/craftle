@@ -126,6 +126,7 @@ for(const [index,profile] of activeProfiles.entries()){
      const deathPenalty=Number(process.env.CRAFTLE_RL_DEATH_PENALTY??-5);
      if(!Number.isFinite(deathPenalty)||deathPenalty>=0)throw Error('Death penalty must be finite and negative');
      bot.on('death',()=>{
+       if(dead)return;
        dead=true;
        bot.clearControlStates();
        const terminalAction=inFlight??previous;
@@ -133,6 +134,7 @@ for(const [index,profile] of activeProfiles.entries()){
          learner.learn({state:terminalAction.state,index:terminalAction.index,reward:deathPenalty,terminal:true});
          learner.save(checkpoint);
        }
+       if(terminalAction)log(profile.name,'rl_terminal_transition',{agent_id:profile.id,state:terminalAction.state,action:terminalAction.action,reward:deathPenalty,terminal:true});
        log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:terminalAction?.action??null,learningUpdates:learner.stats().transitions});
        previous=null;inFlight=null;life++;
      });
