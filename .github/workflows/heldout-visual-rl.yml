@@ -78,6 +78,7 @@ jobs:
           done
           node scripts/compare-heldout-rl.js recordings/heldout > recordings/heldout/comparison.json
           cat recordings/heldout/comparison.json
+          echo "Frozen policy and random baseline completed with unchanged training checkpoint"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
