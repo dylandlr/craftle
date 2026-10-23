@@ -120,7 +120,7 @@ for(const [index,profile] of activeProfiles.entries()){
      if(frozen&&!fs.existsSync(checkpoint))throw Error('Frozen evaluation requires trained checkpoint');
      const learner=createOnlineVisualQLearner({checkpoint,training:!frozen,
        epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3)});
-     let busy=false,lastTime=0,previous=null,previousPos=null,previousHealth=null;
+     let busy=false,lastTime=0,previous=null;
      const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
      const server=await startLiveObservationServer({width:128,height:128,onObservation:async frame=>{
@@ -130,19 +130,26 @@ for(const [index,profile] of activeProfiles.entries()){
          const state=visualState(frame),now=bot.entity.position.clone();
          let reward=null;
          if(previous){
-           const displacement=now.distanceTo(previousPos);
-           reward=intrinsicVisualReward({displacement,healthDelta:bot.health-previousHealth,novelState:!seen.has(state)});
+           const displacement=previous.displacement;
+           reward=intrinsicVisualReward({displacement,healthDelta:previous.healthDelta,novelState:!seen.has(state)});
            if(!randomControl&&!frozen)learner.learn({...previous,reward,nextState:state});
            log(profile.name,'rl_transition',{agent_id:profile.id,frameId:frame.frameId,previousFrameId:previous.frameId,
-             state:previous.state,action:previous.action,reward,nextState:state,displacement});
+             state:previous.state,action:previous.action,reward,nextState:state,displacement,healthDelta:previous.healthDelta,
+             actionStartedAt:previous.actionStartedAt,actionEndedAt:previous.actionEndedAt});
          }
          seen.add(state);
          const choice=randomControl?{state,action:actions[Math.floor(Math.random()*actions.length)],index:-1}:learner.choose(state);
          bot.clearControlStates();
-         await applyVisualAction(bot,choice.action);
-         await new Promise(resolve=>setTimeout(resolve,durationMs));
-         bot.clearControlStates();
-         previous={...choice,frameId:frame.frameId};previousPos=now;previousHealth=bot.health;
+         const actionStartedAt=Date.now();
+         const startPosition=bot.entity.position.clone(),startHealth=bot.health;
+         try{
+           await applyVisualAction(bot,choice.action);
+           await new Promise(resolve=>setTimeout(resolve,durationMs));
+         }finally{bot.clearControlStates();}
+         const actionEndedAt=Date.now();
+         const actionPosition=bot.entity?.position?.clone()??startPosition;
+         previous={...choice,frameId:frame.frameId,actionStartedAt,actionEndedAt,
+           displacement:actionPosition.distanceTo(startPosition),healthDelta:bot.health-startHealth};
          lastTime=Date.now();
          if(!randomControl&&!frozen&&learner.stats().transitions%10===0)learner.save(checkpoint);
          log(profile.name,'rl_action',{agent_id:profile.id,frameId:frame.frameId,state,action:choice.action,reward,policy:randomControl?'random_rgb_control':frozen?'frozen_visual_q':'online_visual_q',actionDurationMs:durationMs});
