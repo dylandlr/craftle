@@ -1,5 +1,8 @@
 name: Held-out frozen Q vs random (manual)
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/heldout-visual-rl.yml']
   workflow_dispatch:
     inputs:
       training_run_id:
@@ -22,15 +25,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate experiment inputs
         env:
-          TRAINING_RUN: ${{ inputs.training_run_id }}
-          SEED: ${{ inputs.seed }}
+          TRAINING_RUN: ${{ inputs.training_run_id || '39866439111' }}
+          SEED: ${{ inputs.seed || '20261119' }}
         run: |
           [[ "$TRAINING_RUN" =~ ^[0-9]+$ ]]
           [[ "$SEED" =~ ^[0-9]+$ ]] && test "$SEED" != 20261022
       - uses: actions/download-artifact@v4
         with:
-          name: continuous-rl-${{ inputs.training_run_id }}
-          run-id: ${{ inputs.training_run_id }}
+          name: continuous-rl-${{ inputs.training_run_id || '39866439111' }}
+          run-id: ${{ inputs.training_run_id || '39866439111' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: recordings/continuous
       - uses: actions/setup-node@v4
@@ -46,7 +49,7 @@ jobs:
           npm test
       - name: Compare each policy on separate fresh worlds with same seed
         env:
-          SEED: ${{ inputs.seed }}
+          SEED: ${{ inputs.seed || '20261119' }}
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_RL_CHECKPOINT: recordings/continuous/agent-q.json
           CRAFTLE_RL_ACTION_MS: '350'
@@ -56,6 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$CRAFTLE_RL_CHECKPOINT"
+          sha256sum "$CRAFTLE_RL_CHECKPOINT" | cut -d " " -f1 > recordings/heldout/checkpoint-original.sha256
           mkdir -p recordings/heldout
           for treatment in visual_frozen_eval visual_random_control; do
             docker run -d --name craftle-eval -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED="$SEED" itzg/minecraft-server:java21
@@ -67,7 +71,8 @@ jobs:
             if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then echo "Agent failed: $status"; exit 1; fi
             unset status
             node scripts/report-rl-episode.js "recordings/heldout/$treatment.log" > "recordings/heldout/$treatment.json"
-            cp "$CRAFTLE_RL_CHECKPOINT" "recordings/heldout/$treatment.checkpoint.json"
+            sha256sum "$CRAFTLE_RL_CHECKPOINT" | cut -d " " -f1 > "recordings/heldout/$treatment.checkpoint.sha256"
+            test "$(cat recordings/heldout/checkpoint-original.sha256)" = "$(cat recordings/heldout/$treatment.checkpoint.sha256)"
             docker stop craftle-eval
             docker rm -v craftle-eval
           done
