@@ -16,6 +16,7 @@ import {createProgressTracker} from './llm-progress.js';
 import {createOnlineVisualQLearner,visualState,intrinsicVisualReward} from './online-visual-rl.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 import {createLifeFeedback} from './life-feedback.js';
+import {createRewardV2} from './reward-v2.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -136,7 +137,12 @@ for(const [index,profile] of activeProfiles.entries()){
      const durationMs=Math.max(100,Math.min(1500,Number(process.env.CRAFTLE_RL_ACTION_MS??350)));
      if(frozen&&!fs.existsSync(checkpoint))throw Error('Frozen evaluation requires trained checkpoint');
      const learner=createOnlineVisualQLearner({checkpoint,training:!frozen,
-       epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3)});
+       epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3),
+       alpha:Number(process.env.CRAFTLE_RL_ALPHA??0.2),
+       gamma:Number(process.env.CRAFTLE_RL_GAMMA??0.9)});
+     const rewardVersion=process.env.CRAFTLE_RL_REWARD_VERSION??'v1';
+     if(!['v1','v2'].includes(rewardVersion))throw Error('Unsupported reward version');
+     const rewardV2=rewardVersion==='v2'?createRewardV2():null;
      let busy=false,lastTime=0,previous=null,inFlight=null,dead=false,life=0;
      const deathPenalty=Number(process.env.CRAFTLE_RL_DEATH_PENALTY??-5);
      if(!Number.isFinite(deathPenalty)||deathPenalty>=0)throw Error('Death penalty must be finite and negative');
@@ -153,7 +159,7 @@ for(const [index,profile] of activeProfiles.entries()){
        log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:terminalAction?.action??null,cause:lifeFeedback.snapshot().latestDeathCause,learningUpdates:learner.stats().transitions});
        previous=null;inFlight=null;life++;
      });
-     bot.on('respawn',()=>{dead=false;previous=null;inFlight=null;life++;});
+     bot.on('respawn',()=>{dead=false;previous=null;inFlight=null;life++;rewardV2?.resetLife();});
      const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
      const videoDirectory=process.env.CRAFTLE_RL_VIDEO_FRAMES_DIR;
@@ -175,10 +181,12 @@ for(const [index,profile] of activeProfiles.entries()){
          let reward=null;
          if(previous){
            const displacement=previous.displacement;
-           reward=intrinsicVisualReward({displacement,healthDelta:previous.healthDelta,novelState:!seen.has(state)});
+           const rewardDetail=rewardV2?rewardV2.observe({position:previous.endPosition,healthDelta:previous.healthDelta})
+             :{reward:intrinsicVisualReward({displacement,healthDelta:previous.healthDelta,novelState:!seen.has(state)}),terms:null};
+           reward=rewardDetail.reward;
            if(!randomControl&&!frozen)learner.learn({...previous,reward,nextState:state});
            log(profile.name,'rl_transition',{agent_id:profile.id,frameId:frame.frameId,previousFrameId:previous.frameId,
-             state:previous.state,action:previous.action,reward,nextState:state,displacement,healthDelta:previous.healthDelta,lifeFeedbackSeq:feedback.latestSeq,life:feedback.life,deathCount:feedback.deathCount,
+             state:previous.state,action:previous.action,reward,nextState:state,rewardVersion,rewardTerms:rewardDetail.terms,displacement,healthDelta:previous.healthDelta,lifeFeedbackSeq:feedback.latestSeq,life:feedback.life,deathCount:feedback.deathCount,
              actionStartedAt:previous.actionStartedAt,actionEndedAt:previous.actionEndedAt});
          }
          seen.add(state);
@@ -196,7 +204,7 @@ for(const [index,profile] of activeProfiles.entries()){
          if(dead||life!==currentLife)return;
          inFlight=null;
          previous={...choice,frameId:frame.frameId,actionStartedAt,actionEndedAt,
-           displacement:actionPosition.distanceTo(startPosition),healthDelta:bot.health-startHealth};
+           displacement:actionPosition.distanceTo(startPosition),endPosition:{x:actionPosition.x,z:actionPosition.z},healthDelta:bot.health-startHealth};
          lastTime=Date.now();
          if(!randomControl&&!frozen&&learner.stats().transitions%10===0)learner.save(checkpoint);
          log(profile.name,'rl_action',{agent_id:profile.id,frameId:frame.frameId,state,action:choice.action,reward,policy:randomControl?'random_rgb_control':frozen?'frozen_visual_q':'online_visual_q',actionDurationMs:durationMs});
@@ -207,7 +215,7 @@ for(const [index,profile] of activeProfiles.entries()){
      rlRuntimeInitialized=true;
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1200),width:128,height:128});
-     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,loadedLearningUpdates:learner.stats().transitions,observationSource:'first_person_rgb',policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
+     log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,loadedLearningUpdates:learner.stats().transitions,observationSource:'first_person_rgb',rewardVersion,alpha:Number(process.env.CRAFTLE_RL_ALPHA??0.2),gamma:Number(process.env.CRAFTLE_RL_GAMMA??0.9),policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
      const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??0);
      if(Number.isFinite(maxMs)&&maxMs>=1000){const timer=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(timer));}
    }
