@@ -42,10 +42,10 @@ jobs:
           npm test
       - name: Launch ONE persistent Minecraft world
         run: |
-          mkdir -p recordings/continuous
+          mkdir -p recordings/retrain-q-30min
           docker run -d --name craftle-retrain-q-30min -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED=20261022 itzg/minecraft-server:java21
           for i in $(seq 1 120); do
-            if docker logs craftle-continuous 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            if docker logs craftle-retrain-q-30min 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
             sleep 3
           done
           exit 1
@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           for index in $(seq 1 "$EPISODES"); do
-            episode="recordings/continuous/episode-$index"
+            episode="recordings/retrain-q-30min/episode-$index"
             mkdir -p "$episode"
             echo "Starting episode $index of $EPISODES (same world; retained Q-table)"
             CRAFTLE_RL_MAX_MS="$((SESSION_DURATION*1000))" timeout --signal=TERM --kill-after=8s "$((SESSION_DURATION+15))" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
@@ -70,15 +70,15 @@ jobs:
             node -e "const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.argv[1]));if(r.transitions<3)process.exit(1)" "$episode/metrics.json"
             cp "$CRAFTLE_RL_CHECKPOINT" "$episode/q-after.json"
           done
-          node scripts/report-continuous-rl.js recordings/continuous > recordings/continuous/summary.json
-          cat recordings/continuous/summary.json
+          node scripts/report-continuous-rl.js recordings/retrain-q-30min > recordings/retrain-q-30min/summary.json
+          cat recordings/retrain-q-30min/summary.json
       - name: Preserve world and logs
         if: always()
         run: |
-          docker logs craftle-continuous > recordings/continuous/server.log 2>&1 || true
+          docker logs craftle-retrain-q-30min > recordings/retrain-q-30min/server.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: retrain-q-30min-${{ github.run_id }}
-          path: recordings/continuous
+          path: recordings/retrain-q-30min
           retention-days: 30
