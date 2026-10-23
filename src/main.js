@@ -141,7 +141,16 @@ for(const [index,profile] of activeProfiles.entries()){
      bot.on('respawn',()=>{dead=false;previous=null;inFlight=null;life++;});
      const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
-     const server=await startLiveObservationServer({width:128,height:128,onObservation:async frame=>{
+     const videoDirectory=process.env.CRAFTLE_RL_VIDEO_FRAMES_DIR;
+     let lastVideoFrameAt=0,videoFrames=0;
+     if(videoDirectory)fs.mkdirSync(videoDirectory,{recursive:true});
+     const onJpeg=videoDirectory?(jpeg)=>{
+       const now=Date.now();
+       if(now-lastVideoFrameAt<500||videoFrames>=180)return;
+       lastVideoFrameAt=now;
+       fs.writeFileSync(path.join(videoDirectory,String(videoFrames++).padStart(5,'0')+'.jpg'),jpeg);
+     }:undefined;
+     const server=await startLiveObservationServer({width:128,height:128,onJpeg,onObservation:async frame=>{
        if(busy||dead||stopping||Date.now()-lastTime<700||!bot.entity)return;
        busy=true;
        try{
@@ -178,7 +187,7 @@ for(const [index,profile] of activeProfiles.entries()){
        }catch(error){bot.clearControlStates();log(profile.name,'rl_error',{message:error.message});}
        finally{busy=false;}
      }});
-     bot.once('end',()=>{bot.clearControlStates();if(!randomControl&&!frozen)learner.save(checkpoint);server.close().catch(()=>{});});
+     bot.once('end',()=>{log(profile.name,'rl_video_frames',{agent_id:profile.id,count:videoFrames,directory:videoDirectory??null});bot.clearControlStates();if(!randomControl&&!frozen)learner.save(checkpoint);server.close().catch(()=>{});});
      rlRuntimeInitialized=true;
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1200),width:128,height:128});
