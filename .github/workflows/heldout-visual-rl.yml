@@ -19,8 +19,8 @@ permissions:
   actions: read
 jobs:
   comparison:
-    runs-on: ubuntu-latest
-    timeout-minutes: 22
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Validate experiment inputs
@@ -42,7 +42,7 @@ jobs:
       - name: Prepare Minecraft renderer
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
           npm install --no-audit --no-fund
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
@@ -63,10 +63,12 @@ jobs:
           mkdir -p recordings/heldout
           for treatment in visual_frozen_eval visual_random_control; do
             docker run -d --name craftle-eval -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED="$SEED" itzg/minecraft-server:java21
+            ready=0
             for i in $(seq 1 120); do
-              if docker logs craftle-eval 2>&1 | grep -Fq 'For help, type "help"'; then break; fi
+              if docker logs craftle-eval 2>&1 | grep -Fq 'For help, type "help"'; then ready=1; break; fi
               sleep 3
             done
+            test "$ready" -eq 1
             CRAFTLE_BEHAVIOR="$treatment" timeout --signal=TERM --kill-after=8s 75s xvfb-run -a node src/main.js > "recordings/heldout/$treatment.log" 2>&1 || status=$?
             if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then echo "Agent failed: $status"; exit 1; fi
             unset status
