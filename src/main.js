@@ -150,7 +150,7 @@ for(const [index,profile] of activeProfiles.entries()){
          learner.save(checkpoint);
        }
        if(terminalAction)log(profile.name,'rl_terminal_transition',{agent_id:profile.id,state:terminalAction.state,action:terminalAction.action,reward:deathPenalty,terminal:true});
-       log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:terminalAction?.action??null,learningUpdates:learner.stats().transitions});
+       log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:terminalAction?.action??null,cause:lifeFeedback.snapshot().latestDeathCause,learningUpdates:learner.stats().transitions});
        previous=null;inFlight=null;life++;
      });
      bot.on('respawn',()=>{dead=false;previous=null;inFlight=null;life++;});
