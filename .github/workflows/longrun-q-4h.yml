@@ -1,0 +1,86 @@
+name: Four-hour death-aware Q-learning training
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/longrun-q-4h.yml']
+permissions:
+  contents: read
+jobs:
+  continuous-rl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    env:
+      CRAFTLE_AGENT_IDS: agent_001
+      CRAFTLE_BEHAVIOR: visual_online_rl
+      CRAFTLE_RL_CHECKPOINT: recordings/longrun-q-4h/agent-q.json
+      CRAFTLE_RL_EPSILON: '0.30'
+      CRAFTLE_RL_ACTION_MS: '350'
+      CRAFTLE_RECORD_FRAMES: '100000'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate experiment limits
+        shell: bash
+        env:
+          EPISODES: '60'
+          SESSION_DURATION: '240'
+        run: |
+          [[ "$EPISODES" =~ ^[0-9]+$ ]] && ((EPISODES>=1 && EPISODES<=60))
+          [[ "$SESSION_DURATION" =~ ^[0-9]+$ ]] && ((SESSION_DURATION>=45 && SESSION_DURATION<=240))
+          [[ "$CRAFTLE_RL_ACTION_MS" =~ ^[0-9]+$ ]] && ((CRAFTLE_RL_ACTION_MS>=100 && CRAFTLE_RL_ACTION_MS<=1500))
+          ((EPISODES*SESSION_DURATION<=14400))
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Launch ONE persistent Minecraft world
+        run: |
+          mkdir -p recordings/longrun-q-4h
+          test ! -e "$CRAFTLE_RL_CHECKPOINT" || { echo 'Refusing unexpected preexisting checkpoint'; exit 1; }
+          docker run -d --name craftle-longrun-q-4h -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED=20261022 itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-longrun-q-4h 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Train continuously with checkpoint persistence
+        shell: bash
+        env:
+          EPISODES: '60'
+          SESSION_DURATION: '240'
+        run: |
+          set -euo pipefail
+          for index in $(seq 1 "$EPISODES"); do
+            episode="recordings/longrun-q-4h/episode-$index"
+            mkdir -p "$episode"
+            echo "Starting episode $index of $EPISODES (same world; retained Q-table)"
+            CRAFTLE_RL_MAX_MS="$((SESSION_DURATION*1000))" timeout --signal=TERM --kill-after=8s "$((SESSION_DURATION+15))" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
+            if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then
+              echo "Agent process failed with status $status"; exit 1
+            fi
+            unset status
+            test -s "$CRAFTLE_RL_CHECKPOINT"
+            node scripts/report-rl-episode.js "$episode/agent.log" > "$episode/metrics.json"
+            node -e "const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.argv[1]));if(r.transitions<3)process.exit(1)" "$episode/metrics.json"
+            cp "$CRAFTLE_RL_CHECKPOINT" "$episode/q-after.json"
+          done
+          node scripts/report-continuous-rl.js recordings/longrun-q-4h > recordings/longrun-q-4h/summary.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('recordings/longrun-q-4h/summary.json'));if(x.episodes.length!==60||x.episodes.some(e=>e.transitions<3))process.exit(1);console.log('Validated sixty four-minute training sessions')"
+          cat recordings/longrun-q-4h/summary.json
+      - name: Preserve world and logs
+        if: always()
+        run: |
+          docker logs craftle-longrun-q-4h > recordings/longrun-q-4h/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: longrun-q-4h-${{ github.run_id }}
+          path: recordings/longrun-q-4h
+          retention-days: 30
