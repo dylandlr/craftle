@@ -40,6 +40,7 @@ for(const [index,profile] of activeProfiles.entries()){
    const p=bot.entity.position;
    log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch});
  });
+ let rlRuntimeInitialized=false;
  bot.on('spawn',()=>{
    log(profile.name,'spawn',{agent_id:profile.id,position:bot.entity?.position});
    if(process.env.CRAFTLE_CAMERA_SWEEP==='1'){
@@ -112,6 +113,7 @@ for(const [index,profile] of activeProfiles.entries()){
      log(profile.name,'llm_agent_started',{agent_id:profile.id,size,source:'first_person_rgb',model:process.env.CRAFTLE_LLM_MODEL,cognition:profile.cognition});
    }
    if(['visual_online_rl','visual_random_control','visual_frozen_eval'].includes(process.env.CRAFTLE_BEHAVIOR)){
+     if(rlRuntimeInitialized){log(profile.name,'rl_respawn_continuity',{agent_id:profile.id,learningRuntimePreserved:true});return;}
      if(activeProfiles.length!==1)throw Error('Online RL treatment requires one agent');
      const checkpoint=process.env.CRAFTLE_RL_CHECKPOINT??'recordings/rl/agent-q.json';
      const randomControl=process.env.CRAFTLE_BEHAVIOR==='visual_random_control';
@@ -120,11 +122,24 @@ for(const [index,profile] of activeProfiles.entries()){
      if(frozen&&!fs.existsSync(checkpoint))throw Error('Frozen evaluation requires trained checkpoint');
      const learner=createOnlineVisualQLearner({checkpoint,training:!frozen,
        epsilon:Number(process.env.CRAFTLE_RL_EPSILON??0.3)});
-     let busy=false,lastTime=0,previous=null;
+     let busy=false,lastTime=0,previous=null,dead=false;
+     const deathPenalty=Number(process.env.CRAFTLE_RL_DEATH_PENALTY??-5);
+     if(!Number.isFinite(deathPenalty)||deathPenalty>=0)throw Error('Death penalty must be finite and negative');
+     bot.on('death',()=>{
+       dead=true;
+       bot.clearControlStates();
+       if(previous&&!randomControl&&!frozen){
+         learner.learn({state:previous.state,index:previous.index,reward:deathPenalty,terminal:true});
+         learner.save(checkpoint);
+       }
+       log(profile.name,'rl_terminal_death',{agent_id:profile.id,penalty:deathPenalty,action:previous?.action??null,learningUpdates:learner.stats().transitions});
+       previous=null;
+     });
+     bot.on('respawn',()=>{dead=false;previous=null;});
      const actions=['forward','left','right','jump','look_left','look_right'];
      const seen=new Set();
      const server=await startLiveObservationServer({width:128,height:128,onObservation:async frame=>{
-       if(busy||stopping||Date.now()-lastTime<700||!bot.entity)return;
+       if(busy||dead||stopping||Date.now()-lastTime<700||!bot.entity)return;
        busy=true;
        try{
          const state=visualState(frame),now=bot.entity.position.clone();
@@ -148,6 +163,7 @@ for(const [index,profile] of activeProfiles.entries()){
          }finally{bot.clearControlStates();}
          const actionEndedAt=Date.now();
          const actionPosition=bot.entity?.position?.clone()??startPosition;
+         if(dead)return;
          previous={...choice,frameId:frame.frameId,actionStartedAt,actionEndedAt,
            displacement:actionPosition.distanceTo(startPosition),healthDelta:bot.health-startHealth};
          lastTime=Date.now();
@@ -157,6 +173,7 @@ for(const [index,profile] of activeProfiles.entries()){
        finally{busy=false;}
      }});
      bot.once('end',()=>{bot.clearControlStates();if(!randomControl&&!frozen)learner.save(checkpoint);server.close().catch(()=>{});});
+     rlRuntimeInitialized=true;
      const headless=await prepareRecorder();
      headless(bot,{output:`${server.host}:${server.port}`,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??1200),width:128,height:128});
      log(profile.name,'online_rl_started',{agent_id:profile.id,checkpoint:randomControl?null:checkpoint,loadedLearningUpdates:learner.stats().transitions,observationSource:'first_person_rgb',policy:randomControl?'random_rgb_control':'online_visual_q',actionDurationMs:durationMs});
