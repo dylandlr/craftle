@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRewardV2} from '../src/reward-v2.js';
 import {intrinsicVisualReward} from '../src/online-visual-rl.js';
 test('v1 baseline reward remains unchanged',()=>{
- assert.equal(intrinsicVisualReward({displacement:1,novelState:true}),0.68);
+ assert.ok(Math.abs(intrinsicVisualReward({displacement:1,novelState:true})-0.68)<1e-12);
 });
 test('v2 only rewards fresh spatial cells, not jumping in place',()=>{
  const r=createRewardV2({cellSize:4});
