@@ -9,8 +9,9 @@ on:
         description: 'Training source workflow'
         required: true
         type: choice
-        default: retrain-q-30min
+        default: longrun-q-4h
         options:
+          - longrun-q-4h
           - retrain-q-30min
           - continuous-rl
       training_run_id:
@@ -32,15 +33,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate experiment inputs
         env:
-          TRAINING_RUN: ${{ inputs.training_run_id || '39898528206' }}
+          TRAINING_RUN: ${{ inputs.training_run_id || '39905600794' }}
           SEED: ${{ matrix.seed }}
         run: |
           [[ "$TRAINING_RUN" =~ ^[0-9]+$ ]]
           [[ "$SEED" =~ ^[0-9]+$ ]] && test "$SEED" != 20261022
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.training_artifact_type || 'retrain-q-30min' }}-${{ inputs.training_run_id || '39898528206' }}
-          run-id: ${{ inputs.training_run_id || '39898528206' }}
+          name: ${{ inputs.training_artifact_type || 'longrun-q-4h' }}-${{ inputs.training_run_id || '39905600794' }}
+          run-id: ${{ inputs.training_run_id || '39905600794' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: recordings/continuous
       - uses: actions/setup-node@v4
