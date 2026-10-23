@@ -18,7 +18,7 @@ export class JpegFrameParser {
     }
   }
 }
-export async function startLiveObservationServer({onObservation,width=84,height=84,port=0}={}){
+export async function startLiveObservationServer({onObservation,onJpeg,width=84,height=84,port=0}={}){
   if(typeof onObservation!=='function')throw Error('onObservation required');
   const {default: jpeg}=await import('jpeg-js');
   let frameId=0,dropped=0;
@@ -31,6 +31,7 @@ export async function startLiveObservationServer({onObservation,width=84,height=
         // RGB pixel size is the renderer size; requested dimensions verified, no implicit resize.
         if(image.width!==width||image.height!==height)throw Error('Renderer dimensions mismatch');
         const observation=makeVisualObservation({rgb,width,height,frameId:frameId++,capturedAt:new Date().toISOString()});
+        if(onJpeg)onJpeg(buffer,observation);
         Promise.resolve(onObservation(observation)).catch(e=>socket.emit('error',e));
       }catch(e){socket.emit('error',e);}
     });
