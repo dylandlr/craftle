@@ -5,6 +5,14 @@ on:
     paths: ['.github/workflows/heldout-visual-rl.yml', 'scripts/compare-heldout-rl.js']
   workflow_dispatch:
     inputs:
+      training_artifact_type:
+        description: 'Training source workflow'
+        required: true
+        type: choice
+        default: retrain-q-30min
+        options:
+          - retrain-q-30min
+          - continuous-rl
       training_run_id:
         description: 'Successful continuous-training workflow run ID containing the Q checkpoint'
         required: true
@@ -31,8 +39,8 @@ jobs:
           [[ "$SEED" =~ ^[0-9]+$ ]] && test "$SEED" != 20261022
       - uses: actions/download-artifact@v4
         with:
-          name: continuous-rl-${{ inputs.training_run_id || '39866439111' }}
-          run-id: ${{ inputs.training_run_id || '39866439111' }}
+          name: ${{ inputs.training_artifact_type || 'retrain-q-30min' }}-${{ inputs.training_run_id || '39889312470' }}
+          run-id: ${{ inputs.training_run_id || '39889312470' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: recordings/continuous
       - uses: actions/setup-node@v4
