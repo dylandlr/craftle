@@ -1,0 +1,96 @@
+name: Reward v2 hyperparameter pilot
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/reward-v2-pilot.yml']
+permissions:
+  contents: read
+jobs:
+  continuous-rl:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {trial: baseline, alpha: '0.20', gamma: '0.90', epsilon: '0.30', reward: 'v1', seed: '20261022'}
+          - {trial: v2-a, alpha: '0.05', gamma: '0.95', epsilon: '0.30', reward: 'v2', seed: '20261022'}
+          - {trial: v2-b, alpha: '0.20', gamma: '0.90', epsilon: '0.30', reward: 'v2', seed: '20261022'}
+          - {trial: v2-c, alpha: '0.10', gamma: '0.99', epsilon: '0.50', reward: 'v2', seed: '20261022'}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CRAFTLE_AGENT_IDS: agent_001
+      CRAFTLE_BEHAVIOR: visual_online_rl
+      CRAFTLE_RL_CHECKPOINT: recordings/reward-v2-pilot/agent-q.json
+      CRAFTLE_RL_EPSILON: ${{ matrix.epsilon }}
+      CRAFTLE_RL_ALPHA: ${{ matrix.alpha }}
+      CRAFTLE_RL_GAMMA: ${{ matrix.gamma }}
+      CRAFTLE_RL_REWARD_VERSION: ${{ matrix.reward }}
+      CRAFTLE_RL_ACTION_MS: '350'
+      CRAFTLE_RECORD_FRAMES: '100000'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate experiment limits
+        shell: bash
+        env:
+          EPISODES: '2'
+          SESSION_DURATION: '90'
+        run: |
+          [[ "$EPISODES" =~ ^[0-9]+$ ]] && ((EPISODES>=1 && EPISODES<=12))
+          [[ "$SESSION_DURATION" =~ ^[0-9]+$ ]] && ((SESSION_DURATION>=45 && SESSION_DURATION<=240))
+          [[ "$CRAFTLE_RL_ACTION_MS" =~ ^[0-9]+$ ]] && ((CRAFTLE_RL_ACTION_MS>=100 && CRAFTLE_RL_ACTION_MS<=1500))
+          ((EPISODES*SESSION_DURATION<=3000))
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Launch ONE persistent Minecraft world
+        run: |
+          mkdir -p recordings/reward-v2-pilot
+          docker run -d --name craftle-reward-v2-pilot -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e SEED=${{ matrix.seed }} itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-reward-v2-pilot 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Train continuously with checkpoint persistence
+        shell: bash
+        env:
+          EPISODES: '2'
+          SESSION_DURATION: '90'
+        run: |
+          set -euo pipefail
+          for index in $(seq 1 "$EPISODES"); do
+            episode="recordings/reward-v2-pilot/episode-$index"
+            mkdir -p "$episode"
+            echo "Starting episode $index of $EPISODES (same world; retained Q-table)"
+            CRAFTLE_RL_MAX_MS="$((SESSION_DURATION*1000))" timeout --signal=TERM --kill-after=8s "$((SESSION_DURATION+15))" xvfb-run -a node src/main.js > "$episode/agent.log" 2>&1 || status=$?
+            if [[ "${status:-0}" -ne 0 && "${status:-0}" -ne 124 ]]; then
+              echo "Agent process failed with status $status"; exit 1
+            fi
+            unset status
+            test -s "$CRAFTLE_RL_CHECKPOINT"
+            node scripts/report-rl-episode.js "$episode/agent.log" > "$episode/metrics.json"
+            node -e "const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.argv[1]));if(r.transitions<3)process.exit(1)" "$episode/metrics.json"
+            cp "$CRAFTLE_RL_CHECKPOINT" "$episode/q-after.json"
+          done
+          node scripts/report-continuous-rl.js recordings/reward-v2-pilot > recordings/reward-v2-pilot/summary.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('recordings/reward-v2-pilot/summary.json'));if(x.episodes.length!==2||x.episodes.some(e=>e.transitions<3))process.exit(1);console.log('Validated two pilot sessions')"
+          cat recordings/reward-v2-pilot/summary.json
+      - name: Preserve world and logs
+        if: always()
+        run: |
+          docker logs craftle-reward-v2-pilot > recordings/reward-v2-pilot/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reward-v2-pilot-${{ matrix.trial }}-${{ github.run_id }}
+          path: recordings/reward-v2-pilot
+          retention-days: 30
