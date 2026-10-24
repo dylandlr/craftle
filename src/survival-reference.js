@@ -57,11 +57,12 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const onGoalReached=()=>{currentGoal=null;};
  const onPathUpdate=result=>{
-   if(result.status==='noPath'){
+   if(result.status==='noPath'&&currentGoal){
      foodTargets.fail();pursuedAnimal=null;lastFoodGoal=null;
      if(currentSearchKey)searchBlocked.set(currentSearchKey,clock()+30000);
      currentSearchKey=null;
      currentGoal=null;
+     bot.pathfinder.setGoal(null);
      record('survival_reference_navigation_outcome',{status:'noPath'});
    }
  };

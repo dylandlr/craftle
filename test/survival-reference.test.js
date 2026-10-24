@@ -189,3 +189,16 @@ test('progress for another entity does not extend the target deadline',()=>{
  let now=0;const m=createFoodTargetMemory({clock:()=>now});m.begin(1);
  now=19000;assert.equal(m.progress(2),false);now=20000;assert.equal(m.expired(),true);
 });
+
+test('no-path cancels the underlying engine goal and ignores duplicate stale notifications',async()=>{
+ const {bot,goals,navigation}=fixture();
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();
+ bot.emit('path_update',{status:'noPath'});
+ bot.emit('path_update',{status:'noPath'});
+ assert.equal(goals.filter(goal=>goal===null).length,1);
+ assert.equal(runtime.events().filter(e=>e.type==='survival_reference_navigation_outcome').length,1);
+ await runtime.step();
+ assert.notEqual(goals.at(-1),null);
+ runtime.stop();
+});
