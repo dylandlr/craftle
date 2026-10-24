@@ -83,3 +83,39 @@ test('stop is idempotent and removes listeners and prevents further actions',asy
  for(const type of ['death','spawn','goal_reached','path_update','end'])assert.equal(bot.listenerCount(type),0);
  assert.equal(runtime.events().length,0);
 });
+
+test('forage pursues edible dropped food before animals',async()=>{
+ const {bot,goals,navigation}=fixture();
+ bot.entities={1:{id:1,name:'item',position:new Position(2,64,0),getDroppedItem:()=>({name:'bread',count:1})}};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();
+ assert.equal(goals.at(-1).x,2);
+ assert.equal(goals.at(-1).range,0);
+ runtime.stop();
+});
+test('hungry reference consumes acquired food and reports measured hunger',async()=>{
+ const {bot,navigation}=fixture();
+ bot.food=10;let count=1;
+ bot.inventory.items=()=>count?[{name:'bread',count}]:[];
+ bot.equip=async()=>{};
+ bot.consume=async()=>{count--;bot.food=15;};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();
+ const outcome=runtime.events().find(e=>e.type==='survival_reference_consumed');
+ assert.equal(outcome.beforeFood,10);
+ assert.equal(outcome.afterFood,15);
+ assert.equal(runtime.events().at(-1).inventoryCount,0);
+ runtime.stop();
+});
+test('forage attacks a nearby food animal through primitive controls',async()=>{
+ const {bot,navigation}=fixture();
+ const p=new Position(1,64,0);p.offset=()=>p;
+ const animal={id:2,name:'sheep',position:p,height:1};
+ bot.entities={2:animal};let attacks=0;
+ bot.lookAt=async()=>{};bot.attack=e=>{assert.equal(e,animal);attacks++;};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();
+ assert.equal(attacks,1);
+ assert.equal(runtime.events().some(e=>e.type==='survival_reference_hunt'),true);
+ runtime.stop();
+});
