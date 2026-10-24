@@ -35,7 +35,7 @@ export function summarizeSurvivalReference(events) {
   const firstDeath=deaths[0]?Date.parse(deaths[0].timestamp):null;
   return {
     schemaVersion:'craftle.survival-reference.v1',
-    policy:'scripted_privileged_mineflayer',learned:false,
+    policy:started?.policy??'scripted_privileged_mineflayer',learned:started?.learned??false,
     completed:Boolean(started&&shutdown&&end>start),
     observedSeconds:Number.isFinite(end-start)?(end-start)/1000:0,
     actions:actions.length,objectives,deaths:deaths.length,

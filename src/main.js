@@ -18,6 +18,7 @@ import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 import {createLifeFeedback} from './life-feedback.js';
 import {createRewardV2} from './reward-v2.js';
 import {startSurvivalReference} from './survival-reference.js';
+import {createLearningOptionController} from './learning-options.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -272,11 +273,12 @@ for(const [index,profile] of activeProfiles.entries()){
      },1500);
      bot.once('end',()=>clearInterval(timer));
    }
-   if(process.env.CRAFTLE_BEHAVIOR==='survival_reference'){
+   if(['survival_reference','learned_survival_options'].includes(process.env.CRAFTLE_BEHAVIOR)){
      if(activeProfiles.length!==1)throw Error('Survival reference requires one agent');
      if(!bot.__survivalReferenceStarted){
        bot.__survivalReferenceStarted=true;
-       startSurvivalReference(bot,{log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
+       const optionController=process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
+       startSurvivalReference(bot,{decisionController:optionController,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
          fs.mkdirSync(path.join(videoDir,'frames'),{recursive:true});
@@ -304,7 +306,7 @@ for(const [index,profile] of activeProfiles.entries()){
        }
        const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??60000);
        if(Number.isFinite(maxMs)&&maxMs>=1000){const t=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(t));}
-       log(profile.name,'survival_reference_started',{agent_id:profile.id,policy:'scripted_privileged_mineflayer',learned:false});
+       log(profile.name,'survival_reference_started',{agent_id:profile.id,policy:optionController?'neural_assisted_option_dqn':'scripted_privileged_mineflayer',learned:Boolean(optionController)});
      }
    }
    if(process.env.CRAFTLE_BEHAVIOR==='scripted_agent'){

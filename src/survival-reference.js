@@ -22,7 +22,7 @@ export function createFoodTargetMemory({clock=Date.now,attemptMs=20000,cooldownM
   reset(){active=null;blocked.clear();}
  };
 }
-export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart=true,navigation=pathfinderPackage,clock=Date.now}={}){
+export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart=true,navigation=pathfinderPackage,clock=Date.now,decisionController=null}={}){
  const {pathfinder,Movements,goals:{GoalNear,GoalXZ}}=navigation;
  bot.loadPlugin(pathfinder);
  const movement=new Movements(bot);
@@ -47,7 +47,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const onDeath=()=>{
    if(ended||dead)return;
-   dead=true;life++;cancel();
+   dead=true;life++;decisionController?.terminal();cancel();
    record('survival_reference_death',{health:bot.health});
  };
  const onSpawn=()=>{
@@ -87,7 +87,8 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const inventory=bot.inventory?.items?.()??[];
      const edible=inventory.find(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name));
      const foodAvailable=Boolean(edible);
-     const objective=chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
+     const observation={health:bot.health,food:bot.food,foodAvailable,hostileDistance:distance,inventoryCount:inventory.length,blocked:stalledIntervals>=3,displacement,position:{x:pos.x,y:pos.y,z:pos.z}};
+     const objective=decisionController?decisionController.choose(observation):chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
        await bot.equip(edible,'hand');
@@ -169,7 +170,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const stop=()=>{
    if(ended)return;
-   ended=true;life++;detachOutcomes();
+   ended=true;life++;decisionController?.stop();detachOutcomes();
    if(timer)clearInterval(timer);
    bot.removeListener('death',onDeath);bot.removeListener('spawn',onSpawn);
    bot.removeListener('goal_reached',onGoalReached);bot.removeListener('path_update',onPathUpdate);
