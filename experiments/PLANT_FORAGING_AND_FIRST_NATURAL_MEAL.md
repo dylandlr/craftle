@@ -19,7 +19,7 @@ The latest plant fixture harvested carrots and ripe berries, recorded three meal
 | --- | --- | --- | --- | --- | --- | --- |
 | 20261202 | 180.003 | 96 | 0 | 2 | 1 / 1 | 0 / 0 |
 | 20261203 | 180.023 | 86 | 0 | 0 | 0 / 0 | 0 / 0 |
-| 20261204 | Pending dependency installation at report time | — | — | — | — | — |
+| 20261204 | Completed; no inventory gain or meals | — | — | 0 | 0 / 0 | 0 / 0 |
 
 In seed 20261202, the bot approached cows/sheep, acquired mutton, and ate it at 16:29:45.932Z on 2026-10-24. Its food meter rose from 18 to 20. No food, animals, terrain or hunger were supplied in that natural trial. [Recorded POV and evidence](https://github.com/dylandlr/craftle/actions/runs/40111516668/artifacts/12567135489).
 
@@ -31,3 +31,9 @@ The previous diagnostic run using fixed-height search goals had 72 path failures
 - Fixture teleportation contaminates movement-distance metrics. Use fixtures to test interactions, not exploration ability.
 - Contact sheets spanning successful plant and natural-meal footage were inspected. Full frame-by-frame review has not been performed.
 - Do not promote another long learning run until the scripted baseline and independent evaluation criteria are adequate.
+
+## Pursuit revision
+
+The completed preceding pilot acquired/consumed food on one of three natural seeds. In revision a169e10e8b491f5ebfea52ecffd4f8db6956c3ac, the scripted controller retains its chosen animal while still prioritizing edible drops/plants, avoids resetting an unchanged pursuit goal, and requires line of sight before melee attacks. All 81 local tests and the new unit CI pass. The regression tests exercise nearest-animal order changes and an occluded nearby target.
+
+[New three-seed pilot](https://github.com/dylandlr/craftle/actions/runs/40116141602) and [live interaction fixtures](https://github.com/dylandlr/craftle/actions/runs/40116141539) were in progress at this update. No improvement in acquisition rate is claimed yet.
