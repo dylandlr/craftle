@@ -178,3 +178,14 @@ test('reference does not attack a nearby animal hidden behind terrain',async()=>
  const runtime=startSurvivalReference(bot,{autoStart:false,navigation});await runtime.step();
  assert.equal(attacks,0);runtime.stop();
 });
+
+test('confirmed progress extends the idle deadline but never the hard attempt cap',()=>{
+ let now=0;const m=createFoodTargetMemory({clock:()=>now});m.begin(1);
+ now=19000;assert.equal(m.progress(1),true);now=21000;assert.equal(m.expired(),false);
+ now=38000;m.progress(1);now=57000;m.progress(1);
+ now=60000;assert.equal(m.expired(),true);
+});
+test('progress for another entity does not extend the target deadline',()=>{
+ let now=0;const m=createFoodTargetMemory({clock:()=>now});m.begin(1);
+ now=19000;assert.equal(m.progress(2),false);now=20000;assert.equal(m.expired(),true);
+});

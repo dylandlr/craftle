@@ -11,12 +11,13 @@ export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,f
  if(blocked)return 'reroute';
  return 'explore';
 }
-export function createFoodTargetMemory({clock=Date.now,attemptMs=20000,cooldownMs=30000}={}){
+export function createFoodTargetMemory({clock=Date.now,attemptMs=20000,cooldownMs=30000,maxAttemptMs=60000}={}){
  const blocked=new Map();let active=null;
  return {
   available(id){return !blocked.has(id)||clock()>=blocked.get(id);},
-  begin(id){if(active?.id!==id)active={id,started:clock()};},
-  expired(){return active!==null&&clock()-active.started>=attemptMs;},
+  begin(id){if(active?.id!==id)active={id,started:clock(),lastProgress:clock()};},
+  progress(id){if(active?.id===id){active.lastProgress=clock();return true;}return false;},
+  expired(){return active!==null&&(clock()-active.lastProgress>=attemptMs||clock()-active.started>=maxAttemptMs);},
   fail(){if(active)blocked.set(active.id,clock()+cooldownMs);active=null;},
   reset(){active=null;blocked.clear();}
  };
@@ -33,7 +34,10 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null;
  const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);};
- const detachOutcomes=attachFoodOutcomes(bot,record);
+ const detachOutcomes=attachFoodOutcomes(bot,(type,data)=>{
+   if(type==='survival_reference_food_damage_observed'&&data.attribution==='self')foodTargets.progress(data.entityId);
+   record(type,data);
+ });
  const cancel=()=>{
    foodTargets.reset();pursuedAnimal=null;lastFoodGoal=null;
    currentGoal=null;positionBefore=null;stalledIntervals=0;

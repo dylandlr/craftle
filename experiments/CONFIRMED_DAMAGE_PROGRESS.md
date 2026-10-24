@@ -1,0 +1,5 @@
+# Confirmed damage and pursuit deadlines
+
+Diagnostic run 40116723996, seed 20261202: raw agent.log records four attack requests on cow entity 2, each followed by a server food_damage_observed event attributed to self, between 17:45:58.784Z and 17:46:09.696Z on 2026-10-24. At 17:46:13.310Z the fixed attempt deadline abandoned the target. No observed death or pickup followed. This is direct evidence of an early deadline during productive pursuit, not proof that it is the only acquisition failure.
+
+The revised controller allows confirmed self-attributed damage on the active target to refresh a 20-second no-progress window. Attempt duration remains capped at 60 seconds. Calling begin repeatedly, observing damage on another entity, or unknown-source damage does not grant extra time. Existing path-failure cooldowns remain. Unit tests cover the progress window, target identity, hard cap, and existing lifecycle behavior. New live validation is required before acquisition improvement can be claimed.
