@@ -277,7 +277,7 @@ for(const [index,profile] of activeProfiles.entries()){
      if(activeProfiles.length!==1)throw Error('Survival reference requires one agent');
      if(!bot.__survivalReferenceStarted){
        bot.__survivalReferenceStarted=true;
-       const optionController=process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
+       const optionController=process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
        startSurvivalReference(bot,{decisionController:optionController,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
@@ -306,7 +306,7 @@ for(const [index,profile] of activeProfiles.entries()){
        }
        const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??60000);
        if(Number.isFinite(maxMs)&&maxMs>=1000){const t=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(t));}
-       log(profile.name,'survival_reference_started',{agent_id:profile.id,policy:optionController?'neural_assisted_option_dqn':'scripted_privileged_mineflayer',learned:Boolean(optionController)});
+       log(profile.name,'survival_reference_started',{agent_id:profile.id,policy:optionController?(process.env.CRAFTLE_OPTION_POLICY??'training')+'_assisted_options':'scripted_privileged_mineflayer',learned:Boolean(optionController)&&['training','frozen'].includes(process.env.CRAFTLE_OPTION_POLICY??'training')});
      }
    }
    if(process.env.CRAFTLE_BEHAVIOR==='scripted_agent'){

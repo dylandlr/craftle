@@ -32,3 +32,21 @@ test('frozen option evaluation neither trains nor modifies checkpoint',()=>{
   assert.equal(evaluator.stats().updates,0);assert.equal(fs.readFileSync(checkpoint,'utf8'),before);
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
 });
+
+test('random and scripted controls neither load nor overwrite a supplied checkpoint',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-options-'));
+ try{
+  const checkpoint=path.join(directory,'policy.json');fs.writeFileSync(checkpoint,'reference sentinel');
+  for(const mode of ['random','scripted']){
+   const p=createLearningOptionController({checkpoint,mode,seed:42});
+   for(let i=0;i<20;i++)assert.notEqual(p.choose(observation),'eat');
+   p.terminal();p.stop();assert.equal(p.stats().updates,0);
+  }
+  assert.equal(fs.readFileSync(checkpoint,'utf8'),'reference sentinel');
+ }finally{fs.rmSync(directory,{recursive:true,force:true});}
+});
+test('random policy is reproducible and frozen policy requires actual weights',()=>{
+ const a=createLearningOptionController({mode:'random',seed:7}),b=createLearningOptionController({mode:'random',seed:7});
+ assert.deepEqual(Array.from({length:20},()=>a.choose(observation)),Array.from({length:20},()=>b.choose(observation)));
+ assert.throws(()=>createLearningOptionController({mode:'frozen'}),/checkpoint/);
+});
