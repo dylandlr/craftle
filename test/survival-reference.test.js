@@ -202,3 +202,13 @@ test('no-path cancels the underlying engine goal and ignores duplicate stale not
  assert.notEqual(goals.at(-1),null);
  runtime.stop();
 });
+
+test('learned controller selects objectives without inheriting scripted goal priorities',async()=>{
+ const {bot,goals,navigation}=fixture();let terminal=0,stopped=0;
+ const controller={choose:()=> 'explore',terminal:()=>terminal++,stop:()=>stopped++};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation,decisionController:controller});
+ await runtime.step();
+ assert.equal(runtime.events().find(e=>e.type==='survival_reference_action').objective,'explore');
+ bot.emit('death');bot.emit('death');assert.equal(terminal,1);
+ runtime.stop();assert.equal(stopped,1);
+});
