@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chooseSurvivalGoal,HOSTILE_MOBS,startSurvivalReference} from '../src/survival-reference.js';
+import {chooseSurvivalGoal,HOSTILE_MOBS,startSurvivalReference,createFoodTargetMemory} from '../src/survival-reference.js';
 test('reference prioritizes threats and critical health over food',()=>{
  assert.equal(chooseSurvivalGoal({hostileDistance:3,food:5,foodAvailable:true}),'retreat');
  assert.equal(chooseSurvivalGoal({health:5,food:20}),'retreat');
@@ -118,4 +118,16 @@ test('forage attacks a nearby food animal through primitive controls',async()=>{
  assert.equal(attacks,1);
  assert.equal(runtime.events().some(e=>e.type==='survival_reference_hunt'),true);
  runtime.stop();
+});
+
+test('unreachable food target expires without repeated choices renewing its deadline',()=>{
+ let now=0;const m=createFoodTargetMemory({clock:()=>now});m.begin(1);
+ now=19000;m.begin(1);assert.equal(m.expired(),false);
+ now=20000;assert.equal(m.expired(),true);m.fail();
+ assert.equal(m.available(1),false);assert.equal(m.available(2),true);
+ now=50000;assert.equal(m.available(1),true);
+});
+test('food target failures and cooldowns are cleared between lives',()=>{
+ const m=createFoodTargetMemory();m.begin(1);m.fail();assert.equal(m.available(1),false);
+ m.reset();assert.equal(m.available(1),true);assert.equal(m.expired(),false);
 });

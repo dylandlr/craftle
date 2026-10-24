@@ -9,17 +9,29 @@ export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,f
  if(blocked)return 'reroute';
  return 'explore';
 }
+export function createFoodTargetMemory({clock=Date.now,attemptMs=20000,cooldownMs=30000}={}){
+ const blocked=new Map();let active=null;
+ return {
+  available(id){return !blocked.has(id)||clock()>=blocked.get(id);},
+  begin(id){if(active?.id!==id)active={id,started:clock()};},
+  expired(){return active!==null&&clock()-active.started>=attemptMs;},
+  fail(){if(active)blocked.set(active.id,clock()+cooldownMs);active=null;},
+  reset(){active=null;blocked.clear();}
+ };
+}
 export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart=true,navigation=pathfinderPackage,clock=Date.now}={}){
  const {pathfinder,Movements,goals:{GoalNear}}=navigation;
  bot.loadPlugin(pathfinder);
  const movement=new Movements(bot);
  movement.canDig=false;movement.allow1by1towers=false;movement.allowParkour=false;movement.maxDropDown=1;
  bot.pathfinder.setMovements(movement);
+ const foodTargets=createFoodTargetMemory({clock});
  const actions=[];
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null;
  const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);};
  const cancel=()=>{
+   foodTargets.reset();
    currentGoal=null;positionBefore=null;stalledIntervals=0;
    bot.pathfinder.setGoal(null);
    bot.clearControlStates();
@@ -38,6 +50,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  const onGoalReached=()=>{currentGoal=null;};
  const onPathUpdate=result=>{
    if(result.status==='noPath'){
+     foodTargets.fail();
      currentGoal=null;
      record('survival_reference_navigation_outcome',{status:'noPath'});
    }
@@ -62,7 +75,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const inventory=bot.inventory?.items?.()??[];
      const edible=inventory.find(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name));
      const foodAvailable=Boolean(edible);
-     const objective=chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:foodAvailable,blocked:stalledIntervals>=3});
+     const objective=chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
        await bot.equip(edible,'hand');
@@ -76,7 +89,8 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
        setGoal(new GoalNear(Math.floor(pos.x+dx/len*12),Math.floor(pos.y),Math.floor(pos.z+dz/len*12),2));
      }else if(objective==='forage'){
        // Scripted reference knowledge only: collect edible drops, then hunt passive food animals.
-       const entities=Object.values(bot.entities).filter(e=>e?.position);
+       if(foodTargets.expired()){foodTargets.fail();currentGoal=null;record('survival_reference_food_target_abandoned');}
+       const entities=Object.values(bot.entities).filter(e=>e?.position&&e.position.distanceTo(pos)<=24&&foodTargets.available(e.id));
        const drops=entities.map(e=>({entity:e,item:e.getDroppedItem?.()}))
          .filter(x=>x.item&&bot.registry?.foodsByName?.[x.item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(x.item.name));
        drops.sort((a,b)=>a.entity.position.distanceTo(pos)-b.entity.position.distanceTo(pos));
@@ -84,6 +98,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
        animals.sort((a,b)=>a.position.distanceTo(pos)-b.position.distanceTo(pos));
        const target=drops[0]?.entity??animals[0];
        if(target){
+         foodTargets.begin(target.id);
          const p=target.position,range=drops.length?0:1;
          setGoal(new GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range));
          if(!drops.length&&p.distanceTo(pos)<3){
