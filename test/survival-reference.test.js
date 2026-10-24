@@ -162,3 +162,19 @@ test('food search uses horizontal navigation instead of requiring the current al
  await runtime.step();assert.equal(goals.at(-1).horizontal,true);assert.equal(goals.at(-1).y,undefined);
  runtime.stop();
 });
+
+test('reference keeps pursuit on one animal when nearest ordering changes',async()=>{
+ const {bot,goals,navigation}=fixture();
+ bot.entities={1:{id:1,name:'sheep',position:new Position(8,64,0)},2:{id:2,name:'cow',position:new Position(9,64,0)}};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();bot.entities[2].position.x=7;await runtime.step();
+ assert.equal(goals.length,1);assert.equal(goals[0].x,8);
+ runtime.stop();
+});
+test('reference does not attack a nearby animal hidden behind terrain',async()=>{
+ const {bot,navigation}=fixture();let attacks=0;
+ bot.entities={1:{id:1,name:'sheep',position:new Position(1,64,0)}};
+ bot.canSeeEntity=()=>false;bot.attack=()=>{attacks++;};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});await runtime.step();
+ assert.equal(attacks,0);runtime.stop();
+});
