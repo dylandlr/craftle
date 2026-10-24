@@ -62,7 +62,7 @@ jobs:
             docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
             docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
             docker exec craftle-reference rcon-cli 'summon sheep -1 81 0 {NoAI:1b}'
-            docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 10 5 true"
+            docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 15 20 true"
           fi
           wait "$agent_pid" || status=$?
           grep -E '"type":"survival_reference_(hunt|consumed|error)"' recordings/survival-reference/agent.log || true
