@@ -2,8 +2,9 @@
 import pathfinderPackage from 'mineflayer-pathfinder';
 export const HOSTILE_MOBS=new Set(['zombie','husk','drowned','skeleton','stray','spider','cave_spider','creeper','witch','pillager','endermite','silverfish']);
 export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,foodAvailable=false,hasFood=false,blocked=false}={}){
- if(hostileDistance<8||health<=7)return 'retreat';
- if(food<=14&&foodAvailable)return 'eat';
+ if(hostileDistance<8)return 'retreat';
+ if(food<=18&&foodAvailable)return 'eat';
+ if(health<=7&&food>=18)return 'retreat';
  if(!hasFood)return 'forage';
  if(blocked)return 'reroute';
  return 'explore';
@@ -59,21 +60,48 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      threats.sort((a,b)=>a.position.distanceTo(pos)-b.position.distanceTo(pos));
      const threat=threats[0],distance=threat?threat.position.distanceTo(pos):Infinity;
      const inventory=bot.inventory?.items?.()??[];
-     const edible=inventory.find(item=>bot.registry?.foodsByName?.[item.name]);
+     const edible=inventory.find(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name));
      const foodAvailable=Boolean(edible);
      const objective=chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:foodAvailable,blocked:stalledIntervals>=3});
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
        await bot.equip(edible,'hand');
        if(!valid())return;
+       const beforeFood=bot.food;
        await bot.consume();
        if(!valid())return;
+       record('survival_reference_consumed',{item:edible.name,beforeFood,afterFood:bot.food});
      }else if(objective==='retreat'&&threat){
        const dx=pos.x-threat.position.x,dz=pos.z-threat.position.z,len=Math.max(0.01,Math.hypot(dx,dz));
        setGoal(new GoalNear(Math.floor(pos.x+dx/len*12),Math.floor(pos.y),Math.floor(pos.z+dz/len*12),2));
+     }else if(objective==='forage'){
+       // Scripted reference knowledge only: collect edible drops, then hunt passive food animals.
+       const entities=Object.values(bot.entities).filter(e=>e?.position);
+       const drops=entities.map(e=>({entity:e,item:e.getDroppedItem?.()}))
+         .filter(x=>x.item&&bot.registry?.foodsByName?.[x.item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(x.item.name));
+       drops.sort((a,b)=>a.entity.position.distanceTo(pos)-b.entity.position.distanceTo(pos));
+       const animals=entities.filter(e=>['pig','cow','sheep','rabbit'].includes(e.name)&&e.position.distanceTo(pos)<=24);
+       animals.sort((a,b)=>a.position.distanceTo(pos)-b.position.distanceTo(pos));
+       const target=drops[0]?.entity??animals[0];
+       if(target){
+         const p=target.position,range=drops.length?0:1;
+         setGoal(new GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range));
+         if(!drops.length&&p.distanceTo(pos)<3){
+           bot.pathfinder.setGoal(null);currentGoal=null;
+           await bot.lookAt(p.offset(0,(target.height??1)/2,0),true);
+           if(!valid())return;
+           bot.attack(target);
+           record('survival_reference_hunt',{entity:target.name,entityId:target.id});
+         }
+       }else if(!currentGoal||stalledIntervals>=3||clock()-goalSince>=15000){
+         const heading=(tick*2.399963229728653)%(Math.PI*2);
+         setGoal(new GoalNear(Math.floor(pos.x+Math.cos(heading)*12),Math.floor(pos.y),Math.floor(pos.z+Math.sin(heading)*12),2));
+       }
+     }else if(objective==='retreat'){
+       bot.pathfinder.setGoal(null);currentGoal=null;
      }else if(!currentGoal||stalledIntervals>=3||clock()-goalSince>=15000){
        // Preserve each waypoint until arrival, a path failure, sustained stall, or timeout.
-       // "Forage" is still exploration; it does not gather food.
+       // Explore when no survival interaction is needed.
        const heading=(tick*2.399963229728653)%(Math.PI*2);
        const radius=8+(tick%3)*4;
        setGoal(new GoalNear(Math.floor(pos.x+Math.cos(heading)*radius),Math.floor(pos.y),Math.floor(pos.z+Math.sin(heading)*radius),2));
