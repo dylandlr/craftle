@@ -1,5 +1,6 @@
 // Privileged-state scripted survival reference, not a vision-only or learned policy.
 import pathfinderPackage from 'mineflayer-pathfinder';
+import {attachFoodOutcomes} from './food-outcomes.js';
 import {foodPlantAction,plantKey,findFoodPlant,foodSearchCell,chooseFoodSearchWaypoint} from './food-foraging.js';
 export const HOSTILE_MOBS=new Set(['zombie','husk','drowned','skeleton','stray','spider','cave_spider','creeper','witch','pillager','endermite','silverfish']);
 export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,foodAvailable=false,hasFood=false,blocked=false}={}){
@@ -32,6 +33,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null;
  const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);};
+ const detachOutcomes=attachFoodOutcomes(bot,record);
  const cancel=()=>{
    foodTargets.reset();pursuedAnimal=null;lastFoodGoal=null;
    currentGoal=null;positionBefore=null;stalledIntervals=0;
@@ -162,7 +164,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const stop=()=>{
    if(ended)return;
-   ended=true;life++;
+   ended=true;life++;detachOutcomes();
    if(timer)clearInterval(timer);
    bot.removeListener('death',onDeath);bot.removeListener('spawn',onSpawn);
    bot.removeListener('goal_reached',onGoalReached);bot.removeListener('path_update',onPathUpdate);
