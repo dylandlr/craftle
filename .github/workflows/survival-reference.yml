@@ -55,6 +55,8 @@ jobs:
               if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
               sleep 1
             done
+            docker exec craftle-reference rcon-cli "forceload add -16 -16 16 16"
+            sleep 3
             docker exec craftle-reference rcon-cli "fill -6 80 -6 6 80 6 stone"
             docker exec craftle-reference rcon-cli "fill -6 81 -6 6 86 6 air"
             docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
@@ -63,6 +65,7 @@ jobs:
             docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 10 5 true"
           fi
           wait "$agent_pid" || status=$?
+          grep -E '"type":"survival_reference_(hunt|consumed|error)"' recordings/survival-reference/agent.log || true
           if [ "$SCENARIO" = food-fixture ]; then
             grep -q '"type":"survival_reference_hunt"' recordings/survival-reference/agent.log
             grep -q '"type":"survival_reference_consumed"' recordings/survival-reference/agent.log
@@ -73,6 +76,7 @@ jobs:
           node scripts/report-survival-reference.js recordings/survival-reference/agent.log > recordings/survival-reference/summary.json
           cat recordings/survival-reference/summary.json
       - name: Encode full sampled POV using capture timestamps
+        if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
       - name: Archive logs
         if: always()
