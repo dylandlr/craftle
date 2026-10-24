@@ -8,6 +8,10 @@ permissions:
   contents: read
 jobs:
   scripted-reference:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [natural, food-fixture]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -41,9 +45,28 @@ jobs:
           CRAFTLE_RECORD_FRAMES: '20000'
           CRAFTLE_CAPTURE_TELEMETRY: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
+          SCENARIO: ${{ matrix.scenario }}
         run: |
           mkdir -p recordings/survival-reference
-          timeout --signal=TERM --kill-after=8s 110s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 || status=$?
+          timeout --signal=TERM --kill-after=8s 110s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 &
+          agent_pid=$!
+          if [ "$SCENARIO" = food-fixture ]; then
+            for i in $(seq 1 40); do
+              if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
+              sleep 1
+            done
+            docker exec craftle-reference rcon-cli "fill -6 80 -6 6 80 6 stone"
+            docker exec craftle-reference rcon-cli "fill -6 81 -6 6 86 6 air"
+            docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
+            docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
+            docker exec craftle-reference rcon-cli 'summon sheep -1 81 0 {NoAI:1b}'
+            docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 10 5 true"
+          fi
+          wait "$agent_pid" || status=$?
+          if [ "$SCENARIO" = food-fixture ]; then
+            grep -q '"type":"survival_reference_hunt"' recordings/survival-reference/agent.log
+            grep -q '"type":"survival_reference_consumed"' recordings/survival-reference/agent.log
+          fi
           if [ "${status:-0}" -ne 0 ] && [ "${status:-0}" -ne 124 ]; then exit 1; fi
           grep -q '"type":"survival_reference_started"' recordings/survival-reference/agent.log
           test "$(grep -c '"type":"survival_reference_action"' recordings/survival-reference/agent.log)" -ge 3
@@ -59,6 +82,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: scripted-survival-reference-${{ github.run_id }}
+          name: scripted-survival-reference-${{ matrix.scenario }}-${{ github.run_id }}
           path: recordings/survival-reference
           retention-days: 30
