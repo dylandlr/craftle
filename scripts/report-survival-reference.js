@@ -39,6 +39,12 @@ export function summarizeSurvivalReference(events) {
     completed:Boolean(started&&shutdown&&end>start),
     observedSeconds:Number.isFinite(end-start)?(end-start)/1000:0,
     actions:actions.length,objectives,deaths:deaths.length,
+    foodSearches:events.filter(e=>e.type==='survival_reference_food_search').length,
+    noTargetSearches:events.filter(e=>e.type==='survival_reference_food_search'&&e.status==='no_target').length,
+    harvestActions:events.filter(e=>e.type==='survival_reference_plant_harvest').length,
+    meals:events.filter(e=>e.type==='survival_reference_consumed').length,
+    measuredHungerRecoveries:events.filter(e=>e.type==='survival_reference_consumed'&&Number.isFinite(e.beforeFood)&&Number.isFinite(e.afterFood)&&e.afterFood>e.beforeFood).length,
+    noPathEvents:events.filter(e=>e.type==='survival_reference_navigation_outcome'&&e.status==='noPath').length,
     firstLifeSeconds:Number.isFinite(start)?((firstDeath??end)-start)/1000:null,
     firstLifeRightCensored:firstDeath===null,
     uniqueHorizontalCells4Blocks:cells.size,
@@ -48,7 +54,7 @@ export function summarizeSurvivalReference(events) {
       'Scripted controller has privileged block and entity state.',
       'Path length is sampled and resets at life boundaries; it is not unique coverage.',
       'Inventory stack count does not establish gathering or progression.',
-      'Forage currently selects waypoints and does not collect food.',
+      'Food acquisition is scripted; command completion alone does not prove inventory gain.',
       'A short smoke test does not establish long-term survival competence.'
     ]
   };

@@ -131,3 +131,27 @@ test('food target failures and cooldowns are cleared between lives',()=>{
  const m=createFoodTargetMemory();m.begin(1);m.fail();assert.equal(m.available(1),false);
  m.reset();assert.equal(m.available(1),true);assert.equal(m.expired(),false);
 });
+
+test('reference harvests a mature crop and leaves immature crops alone',async()=>{
+ const {bot,navigation}=fixture();let digs=0;
+ const crop={name:'carrots',position:new Position(2,64,0),getProperties:()=>({age:7})};
+ bot.registry.blocksByName={carrots:{id:1}};
+ bot.findBlock=options=>options.useExtraInfo(crop)?crop:null;
+ bot.blockAt=()=>crop;bot.dig=async block=>{assert.equal(block,crop);digs++;};
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();assert.equal(digs,1);
+ assert.equal(runtime.events().some(e=>e.type==='survival_reference_plant_harvest'),true);
+ crop.getProperties=()=>({age:2});await runtime.step();assert.equal(digs,1);
+ runtime.stop();
+});
+test('pending plant harvest cannot record a success after death',async()=>{
+ const {bot,navigation}=fixture();let release;
+ const crop={name:'carrots',position:new Position(2,64,0),getProperties:()=>({age:7})};
+ bot.registry.blocksByName={carrots:{id:1}};
+ bot.findBlock=()=>crop;bot.blockAt=()=>crop;
+ bot.dig=()=>new Promise(resolve=>{release=resolve;});
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ const pending=runtime.step();bot.emit('death');release();await pending;
+ assert.equal(runtime.events().some(e=>e.type==='survival_reference_plant_harvest'),false);
+ runtime.stop();
+});

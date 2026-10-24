@@ -1,5 +1,6 @@
 // Privileged-state scripted survival reference, not a vision-only or learned policy.
 import pathfinderPackage from 'mineflayer-pathfinder';
+import {foodPlantAction,plantKey,findFoodPlant,foodSearchCell,chooseFoodSearchWaypoint} from './food-foraging.js';
 export const HOSTILE_MOBS=new Set(['zombie','husk','drowned','skeleton','stray','spider','cave_spider','creeper','witch','pillager','endermite','silverfish']);
 export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,foodAvailable=false,hasFood=false,blocked=false}={}){
  if(hostileDistance<8)return 'retreat';
@@ -26,6 +27,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  movement.canDig=false;movement.allow1by1towers=false;movement.allowParkour=false;movement.maxDropDown=1;
  bot.pathfinder.setMovements(movement);
  const foodTargets=createFoodTargetMemory({clock});
+ const searchVisits=new Map(),searchBlocked=new Map();let currentSearchKey=null;
  const actions=[];
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null;
@@ -51,6 +53,8 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  const onPathUpdate=result=>{
    if(result.status==='noPath'){
      foodTargets.fail();
+     if(currentSearchKey)searchBlocked.set(currentSearchKey,clock()+30000);
+     currentSearchKey=null;
      currentGoal=null;
      record('survival_reference_navigation_outcome',{status:'noPath'});
    }
@@ -67,6 +71,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
    const valid=()=>!ended&&!dead&&life===currentLife;
    try{
      const pos=bot.entity.position;
+     const cell=foodSearchCell(pos);searchVisits.set(cell,(searchVisits.get(cell)??0)+1);
      const displacement=positionBefore?Math.hypot(pos.x-positionBefore.x,pos.z-positionBefore.z):null;
      stalledIntervals=displacement!==null&&displacement<0.3?stalledIntervals+1:0;
      const threats=Object.values(bot.entities).filter(e=>e&&HOSTILE_MOBS.has(e.name)&&e.position);
@@ -96,12 +101,24 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
        drops.sort((a,b)=>a.entity.position.distanceTo(pos)-b.entity.position.distanceTo(pos));
        const animals=entities.filter(e=>['pig','cow','sheep','rabbit'].includes(e.name)&&e.position.distanceTo(pos)<=24);
        animals.sort((a,b)=>a.position.distanceTo(pos)-b.position.distanceTo(pos));
-       const target=drops[0]?.entity??animals[0];
+       const plant=findFoodPlant(bot,id=>foodTargets.available(id));
+       const target=drops[0]?.entity??plant??animals[0];
+       const targetKind=drops.length?'drop':plant?'plant':animals.length?'animal':null;
+       record('survival_reference_food_search',{status:target?'target_found':'no_target',targetKind,edibleDrops:drops.length,foodAnimals:animals.length,harvestablePlant:plant?.name??null});
        if(target){
-         foodTargets.begin(target.id);
-         const p=target.position,range=drops.length?0:1;
+         currentSearchKey=null;
+         foodTargets.begin(targetKind==='plant'?plantKey(target):target.id);
+         const p=target.position,range=targetKind==='drop'?0:1;
          setGoal(new GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range));
-         if(!drops.length&&p.distanceTo(pos)<3){
+         if(targetKind==='plant'&&p.distanceTo(pos)<4.2){
+           bot.pathfinder.setGoal(null);currentGoal=null;
+           const block=bot.blockAt(p),action=foodPlantAction(block);
+           if(action){
+             if(action==='activate')await bot.activateBlock(block);else await bot.dig(block);
+             if(!valid())return;
+             record('survival_reference_plant_harvest',{plant:block.name,action,position:{x:p.x,y:p.y,z:p.z}});
+           }
+         }else if(targetKind==='animal'&&p.distanceTo(pos)<3){
            bot.pathfinder.setGoal(null);currentGoal=null;
            await bot.lookAt(p.offset(0,(target.height??1)/2,0),true);
            if(!valid())return;
@@ -109,8 +126,12 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
            record('survival_reference_hunt',{entity:target.name,entityId:target.id});
          }
        }else if(!currentGoal||stalledIntervals>=3||clock()-goalSince>=15000){
-         const heading=(tick*2.399963229728653)%(Math.PI*2);
-         setGoal(new GoalNear(Math.floor(pos.x+Math.cos(heading)*12),Math.floor(pos.y),Math.floor(pos.z+Math.sin(heading)*12),2));
+         const waypoint=chooseFoodSearchWaypoint(pos,searchVisits,tick,key=>(searchBlocked.get(key)??0)<=clock());
+         if(waypoint){
+           currentSearchKey=foodSearchCell(waypoint);
+           setGoal(new GoalNear(waypoint.x,waypoint.y,waypoint.z,2));
+           record('survival_reference_food_search_waypoint',{position:waypoint,previousVisits:searchVisits.get(currentSearchKey)??0});
+         }
        }
      }else if(objective==='retreat'){
        bot.pathfinder.setGoal(null);currentGoal=null;

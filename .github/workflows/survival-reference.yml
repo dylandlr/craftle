@@ -2,7 +2,7 @@ name: Mineflayer scripted survival reference smoke
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/survival-reference.yml', 'src/survival-reference.js', 'scripts/report-survival-reference.js', 'scripts/encode-reference-video.py']
+    paths: ['.github/workflows/survival-reference.yml', 'src/survival-reference.js', 'src/food-foraging.js', 'scripts/report-survival-reference.js', 'scripts/encode-reference-video.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [natural, food-fixture]
+        scenario: [natural, food-fixture, plant-fixture]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -50,7 +50,7 @@ jobs:
           mkdir -p recordings/survival-reference
           timeout --signal=TERM --kill-after=8s 110s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 &
           agent_pid=$!
-          if [ "$SCENARIO" = food-fixture ]; then
+          if [ "$SCENARIO" != natural ]; then
             for i in $(seq 1 40); do
               if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
               sleep 1
@@ -60,14 +60,25 @@ jobs:
             docker exec craftle-reference rcon-cli "fill -6 80 -6 6 80 6 stone"
             docker exec craftle-reference rcon-cli "fill -6 81 -6 6 86 6 air"
             docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
-            docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
-            docker exec craftle-reference rcon-cli 'summon sheep -1 81 0 {NoAI:1b}'
+            if [ "$SCENARIO" = food-fixture ]; then
+              docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
+              docker exec craftle-reference rcon-cli 'summon sheep -1 81 0 {NoAI:1b}'
+            else
+              docker exec craftle-reference rcon-cli 'setblock 2 80 0 farmland[moisture=7]'
+              docker exec craftle-reference rcon-cli 'setblock 2 81 0 carrots[age=7]'
+              docker exec craftle-reference rcon-cli 'setblock -2 80 0 grass_block'
+              docker exec craftle-reference rcon-cli 'setblock -2 81 0 sweet_berry_bush[age=3]'
+            fi
             docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 15 20 true"
           fi
           wait "$agent_pid" || status=$?
-          grep -E '"type":"survival_reference_(hunt|consumed|error)"' recordings/survival-reference/agent.log || true
+          grep -E '"type":"survival_reference_(hunt|consumed|plant_harvest|error)"' recordings/survival-reference/agent.log || true
           if [ "$SCENARIO" = food-fixture ]; then
             grep -q '"type":"survival_reference_hunt"' recordings/survival-reference/agent.log
+            grep -q '"type":"survival_reference_consumed"' recordings/survival-reference/agent.log
+          fi
+          if [ "$SCENARIO" = plant-fixture ]; then
+            grep -q '"type":"survival_reference_plant_harvest"' recordings/survival-reference/agent.log
             grep -q '"type":"survival_reference_consumed"' recordings/survival-reference/agent.log
           fi
           if [ "${status:-0}" -ne 0 ] && [ "${status:-0}" -ne 124 ]; then exit 1; fi
