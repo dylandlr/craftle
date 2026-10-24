@@ -32,7 +32,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  const searchVisits=new Map(),searchBlocked=new Map();let currentSearchKey=null;
  const actions=[];
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
- let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null;
+ let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null,lastObjective=null;
  const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);};
  const detachOutcomes=attachFoodOutcomes(bot,(type,data)=>{
    if(type==='survival_reference_food_damage_observed'&&data.attribution==='self')foodTargets.progress(data.entityId);
@@ -89,6 +89,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const foodAvailable=Boolean(edible);
      const observation={health:bot.health,food:bot.food,foodAvailable,hostileDistance:distance,inventoryCount:inventory.length,blocked:stalledIntervals>=3,displacement,position:{x:pos.x,y:pos.y,z:pos.z}};
      const objective=decisionController?decisionController.choose(observation):chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
+     if(decisionController&&lastObjective!==objective){bot.pathfinder.setGoal(null);currentGoal=null;lastFoodGoal=null;lastObjective=objective;}
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
        await bot.equip(edible,'hand');
