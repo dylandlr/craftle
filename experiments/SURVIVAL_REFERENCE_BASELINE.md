@@ -54,3 +54,20 @@ Do not interpret comparisons between these short runs as causal evidence: action
 5. Give non-LLM policies the same declared observation/action contract; keep assisted actions and scripted/imported knowledge labeled.
 
 [Mineflayer and Voyager reference boundaries](MINEFLAYER_VOYAGER_REFERENCES.md) remain in force.
+
+## Food loop verified (2026-10-24)
+
+Code and fixture revision: b3c3b0c7964d44c3a653a5ea7cd7c110aafc665f.
+[Passing live matrix](https://github.com/dylandlr/craftle/actions/runs/40109583728).
+All 71 unit tests pass.
+
+The scripted reference now pursues edible item drops, hunts nearby passive food animals through bounded melee actions, and consumes food when hungry. Hazardous food items are excluded from its selection. Threat avoidance still takes priority, and pending actions remain invalidated across death/respawn.
+
+In the labeled food fixture, the agent hunted a sheep, acquired mutton (and wool), and consumed mutton. The recorded food meter changed from **17 to 19**. The 90.217-second fixture recorded zero deaths, two maximum inventory stacks and zero reported runtime errors. The fixture deliberately supplies sheep and induced hunger, so it tests the interaction loop rather than natural food-discovery competence.
+
+The natural-world treatment also passed its runtime/recording checks. Short natural runs have not established reliable food discovery or long-term survival.
+
+[Fixture video, original frames and logs](https://github.com/dylandlr/craftle/actions/runs/40109583728/artifacts/12566216872).
+The historical reporter caveat stating that forage does not collect food predates this implementation; the explicit hunt, inventory and consumption events provide the food-loop evidence.
+
+This is programmed reference behavior, not learned skill discovery. Next research gate: longer multi-seed natural survival trials, food-search failures and reachability handling, followed by bounded material gathering/crafting and matched-interface learned control.
