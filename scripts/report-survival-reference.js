@@ -9,12 +9,12 @@ export function summarizeSurvivalReference(events) {
   const deaths=events.filter(e=>e.type==='survival_reference_death');
   const cells=new Set();
   const objectives={};
-  let previous=null,distance=0,maxStacks=0,invalidPositions=0,lastTime=-Infinity;
+  let previous=null,previousAction=null,distance=0,stalledActionIntervals=0,maxStacks=0,invalidPositions=0,lastTime=-Infinity;
   for(const e of events) {
     const time=Date.parse(e.timestamp);
     if(!Number.isFinite(time)||time<lastTime)throw Error('Invalid or out-of-order event timestamp');
     lastTime=time;
-    if(['death','survival_reference_death','respawn','spawn','life_feedback_available'].includes(e.type))previous=null;
+    if(['death','survival_reference_death','respawn','spawn','life_feedback_available'].includes(e.type)){previous=null;previousAction=null;}
     if(e.type==='survival_reference_action') {
       objectives[e.objective]=(objectives[e.objective]??0)+1;
       maxStacks=Math.max(maxStacks,e.inventoryCount??0);
@@ -22,6 +22,10 @@ export function summarizeSurvivalReference(events) {
     if(!['pose_sample','survival_reference_action'].includes(e.type))continue;
     const p=e.position;
     if(!p||![p.x,p.y,p.z].every(Number.isFinite)){invalidPositions++;continue;}
+    if(e.type==='survival_reference_action'){
+      if(previousAction&&e.objective!=='eat'&&Math.hypot(p.x-previousAction.x,p.z-previousAction.z)<0.3)stalledActionIntervals++;
+      previousAction=p;
+    }
     cells.add(Math.floor(p.x/4)+','+Math.floor(p.z/4));
     if(previous)distance+=Math.hypot(p.x-previous.x,p.z-previous.z);
     previous=p;
@@ -38,7 +42,7 @@ export function summarizeSurvivalReference(events) {
     firstLifeSeconds:Number.isFinite(start)?((firstDeath??end)-start)/1000:null,
     firstLifeRightCensored:firstDeath===null,
     uniqueHorizontalCells4Blocks:cells.size,
-    sampledHorizontalPathBlocks:distance,maxInventoryStacks:maxStacks,
+    sampledHorizontalPathBlocks:distance,stalledActionIntervals,maxInventoryStacks:maxStacks,
     invalidPositions,runtimeErrors:errors.map(e=>({type:e.type,message:e.message??e.reason??null})),
     limitations:[
       'Scripted controller has privileged block and entity state.',

@@ -37,3 +37,17 @@ test('missing completion and corrupt telemetry cannot pass the report',()=>{
   assert.equal(result.runtimeErrors.length,1);
   assert.throws(()=>summarizeSurvivalReference([event(2,'spawn'),event(1,'spawn')]),/out-of-order/);
 });
+
+test('stalls count stationary action intervals and reset across lives',()=>{
+ const p={x:0,y:64,z:0};
+ const result=summarizeSurvivalReference([
+   event(0,'survival_reference_started'),
+   event(1,'survival_reference_action',{objective:'forage',position:p}),
+   event(2,'survival_reference_action',{objective:'forage',position:p}),
+   event(3,'survival_reference_death'),
+   event(4,'spawn'),
+   event(5,'survival_reference_action',{objective:'forage',position:p}),
+   event(6,'shutdown')
+ ]);
+ assert.equal(result.stalledActionIntervals,1);
+});
