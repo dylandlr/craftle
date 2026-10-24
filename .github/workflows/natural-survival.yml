@@ -2,7 +2,7 @@ name: Natural survival three-seed pilot
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/natural-survival.yml', 'src/food-foraging.js']
+    paths: ['.github/workflows/natural-survival.yml', 'src/food-foraging.js', 'src/survival-reference.js']
   workflow_dispatch:
 permissions:
   contents: read

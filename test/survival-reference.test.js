@@ -28,7 +28,7 @@ function fixture(){
    registry:{foodsByName:{bread:{}}},inventory:{items:()=>[]},
    loadPlugin(){},clearControlStates(){},deactivateItem(){},
    pathfinder:{setMovements(){},setGoal(goal){goals.push(goal);}}});
- const navigation={pathfinder(){},Movements:class {},goals:{GoalNear:class {constructor(x,y,z,range){Object.assign(this,{x,y,z,range});}}}};
+ const navigation={pathfinder(){},Movements:class {},goals:{GoalXZ:class {constructor(x,z){Object.assign(this,{x,z,horizontal:true});}},GoalNear:class {constructor(x,y,z,range){Object.assign(this,{x,y,z,range});}}}};
  return {bot,goals,navigation};
 }
 test('reference preserves navigation goals while making progress and replans after arrival',async()=>{
@@ -153,5 +153,12 @@ test('pending plant harvest cannot record a success after death',async()=>{
  const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
  const pending=runtime.step();bot.emit('death');release();await pending;
  assert.equal(runtime.events().some(e=>e.type==='survival_reference_plant_harvest'),false);
+ runtime.stop();
+});
+
+test('food search uses horizontal navigation instead of requiring the current altitude',async()=>{
+ const {bot,goals,navigation}=fixture();
+ const runtime=startSurvivalReference(bot,{autoStart:false,navigation});
+ await runtime.step();assert.equal(goals.at(-1).horizontal,true);assert.equal(goals.at(-1).y,undefined);
  runtime.stop();
 });

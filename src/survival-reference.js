@@ -21,7 +21,7 @@ export function createFoodTargetMemory({clock=Date.now,attemptMs=20000,cooldownM
  };
 }
 export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart=true,navigation=pathfinderPackage,clock=Date.now}={}){
- const {pathfinder,Movements,goals:{GoalNear}}=navigation;
+ const {pathfinder,Movements,goals:{GoalNear,GoalXZ}}=navigation;
  bot.loadPlugin(pathfinder);
  const movement=new Movements(bot);
  movement.canDig=false;movement.allow1by1towers=false;movement.allowParkour=false;movement.maxDropDown=1;
@@ -129,7 +129,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
          const waypoint=chooseFoodSearchWaypoint(pos,searchVisits,tick,key=>(searchBlocked.get(key)??0)<=clock());
          if(waypoint){
            currentSearchKey=foodSearchCell(waypoint);
-           setGoal(new GoalNear(waypoint.x,waypoint.y,waypoint.z,2));
+           setGoal(new GoalXZ(waypoint.x,waypoint.z));
            record('survival_reference_food_search_waypoint',{position:waypoint,previousVisits:searchVisits.get(currentSearchKey)??0});
          }
        }
