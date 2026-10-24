@@ -19,12 +19,13 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
   observe(t){
    if(!training)throw Error('Frozen option policy cannot train');
    validate(t.state);if(!Number.isInteger(t.index)||t.index<0||t.index>=outputs||!Number.isFinite(t.reward))throw Error('Invalid option transition');
+   if(t.steps!==undefined&&(!Number.isInteger(t.steps)||t.steps<0))throw Error('Invalid option duration');
    if(!t.terminal){validate(t.nextState);eligible(t.nextMask);}
    replay.push(structuredClone(t));if(replay.length>512)replay.shift();
    for(let n=0;n<4;n++){
     const e=replay[sample(replay.length)],f=forward(e.state);
     const future=e.terminal?0:Math.max(...eligible(e.nextMask).map(i=>forward(e.nextState,tw,tv).q[i]));
-    const error=Math.max(-5,Math.min(5,e.reward+gamma*future-f.q[e.index]));
+    const error=Math.max(-5,Math.min(5,e.reward+Math.pow(gamma,e.steps??1)*future-f.q[e.index]));
     const old=v[e.index].slice();
     for(let j=0;j<hidden;j++){
      v[e.index][j]+=alpha*error*f.h[j];

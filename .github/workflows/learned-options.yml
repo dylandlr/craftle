@@ -41,6 +41,7 @@ jobs:
         env:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: learned_survival_options
+          CRAFTLE_OPTION_COMMITMENT_STEPS: '4'
           CRAFTLE_RL_MAX_MS: '180000'
           CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
           CRAFTLE_RECORD_FRAMES: '20000'

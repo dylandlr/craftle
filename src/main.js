@@ -277,7 +277,7 @@ for(const [index,profile] of activeProfiles.entries()){
      if(activeProfiles.length!==1)throw Error('Survival reference requires one agent');
      if(!bot.__survivalReferenceStarted){
        bot.__survivalReferenceStarted=true;
-       const optionController=process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
+       const optionController=process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({commitmentSteps:Number(process.env.CRAFTLE_OPTION_COMMITMENT_STEPS??1),mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
        startSurvivalReference(bot,{decisionController:optionController,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
