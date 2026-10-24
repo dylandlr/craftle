@@ -25,7 +25,25 @@ A nine-frame contact sheet spanning the trial was inspected. It shows coastal fo
 
 The next revision preserves a navigation goal until arrival, path failure, sustained lack of progress, or timeout; pauses actions while dead; and invalidates pending asynchronous commands across life boundaries. Regression tests exercise the lifecycle with delayed consumption. Inventory snapshots are now included in action telemetry, and the report counts stationary action intervals.
 
-Those changes require their own CI/live run results before performance claims. Do not interpret comparisons between these short runs as causal evidence: action selection and world timing are not controlled replicates.
+The revised code `3cd7223124d9d32ccc3fd6c24d200483e5b8597d` passed [all 68 unit tests](https://github.com/dylandlr/craftle/actions/runs/40078258178) and [a fresh recorded Minecraft smoke trial](https://github.com/dylandlr/craftle/actions/runs/40078258182).
+
+| Revised trial measurement | Result |
+| --- | --- |
+| Observed duration | 90.001 seconds |
+| Controller actions | 49 |
+| Deaths / reported runtime errors | 0 / 0 |
+| Unique horizontal 4-block cells | 12 |
+| Sampled horizontal path | 267.83 blocks |
+| Stationary action intervals (<0.3 blocks) | 0 |
+| Maximum inventory stacks | 0 |
+| Saved frames / captured span | 684 / 88.729 seconds |
+| MP4 duration / largest frame gap | 88.88 / 0.945 seconds |
+
+[Download the revised trial artifact](https://github.com/dylandlr/craftle/actions/runs/40078258182/artifacts/12554520926).
+
+A second nine-frame contact sheet spanning the revised trial was inspected. It shows changing views among forest canopies and coastline. Full-frame-by-frame video inspection has not been performed. No natural death or eating event occurred, so live lifecycle and hunger-management claims remain unproven; the asynchronous death-boundary behavior is covered by regression tests.
+
+Do not interpret comparisons between these short runs as causal evidence: action selection and world timing are not controlled replicates.
 
 ## Next competence gate
 
