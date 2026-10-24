@@ -13,10 +13,19 @@ if len(frames) < 10:
 from datetime import datetime
 
 times = [datetime.fromisoformat(frame["capturedAt"].replace("Z", "+00:00")).timestamp() for frame in frames]
-if any(b <= a for a, b in zip(times, times[1:])):
-    raise SystemExit("Capture timestamps are not strictly increasing")
+if any(b < a for a, b in zip(times, times[1:])):
+    raise SystemExit("Capture timestamps move backwards")
 if any(frame["frameId"] >= frames[i + 1]["frameId"] for i, frame in enumerate(frames[:-1])):
     raise SystemExit("Frame identifiers are not strictly increasing")
+# TCP can deliver multiple frames in one millisecond. Keep the last frame at that
+# receive timestamp instead of inventing capture times or rejecting the recording.
+received_frames = len(frames)
+unique = {}
+for timestamp, frame in zip(times, frames):
+    unique[timestamp] = frame
+times, frames = list(unique), list(unique.values())
+if len(frames) < 10:
+    raise SystemExit("Insufficient distinct capture timestamps")
 
 concat = ["ffconcat version 1.0"]
 for index, frame in enumerate(frames):
@@ -37,6 +46,7 @@ duration = float(probe["format"]["duration"])
 span = times[-1] - times[0]
 gaps = sorted(b - a for a, b in zip(times, times[1:]))
 timing = {"frames": len(frames), "capturedSpanSeconds": span, "encodedSeconds": duration,
+          "receivedFrames": received_frames, "sameTimestampFramesOmitted": received_frames-len(frames),
           "maxFrameGapSeconds": max(b - a for a, b in zip(times, times[1:])),
           "capturedFps": (len(frames)-1)/span,
           "p95FrameGapSeconds": gaps[min(len(gaps)-1, int(len(gaps)*0.95))],
@@ -50,7 +60,7 @@ if span < 70 or abs(duration - span) > 2:
 if import_module("demo-captions").write_captions(directory, times[0], span):
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(output),
                     "-vf", "scale=768:768,subtitles=demo-overlay.srt:force_style='Fontsize=11,Alignment=8,MarginV=8'",
-                    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags",
+                    "-fps_mode", "vfr", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-movflags",
                     "+faststart", str(directory / "annotated_demo.mp4")], cwd=directory, check=True)
 
 from PIL import Image, ImageDraw
