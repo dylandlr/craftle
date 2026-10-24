@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import {JpegFrameParser,startLiveObservationServer} from '../src/live-pov.js';
 import net from 'node:net';
 import jpeg from 'jpeg-js';
+test('recording-only TCP path forwards compressed JPEG with monotonic identity',async()=>{
+ const frames=[];
+ const server=await startLiveObservationServer({onJpeg:(bytes,meta)=>frames.push({bytes:Buffer.from(bytes),meta})});
+ try{
+  const encoded=jpeg.encode({data:Buffer.alloc(16,255),width:2,height:2},80).data;
+  const packet=Buffer.alloc(4+encoded.length);packet.writeUInt32LE(encoded.length,0);encoded.copy(packet,4);
+  await new Promise((resolve,reject)=>{
+   const client=net.connect(server.port,server.host,()=>client.end(Buffer.concat([packet,packet])));
+   client.on('end',resolve);client.on('error',reject);
+  });
+  assert.equal(frames.length,2);
+  assert.deepEqual(frames[0].bytes,encoded);
+  assert.deepEqual(frames.map(f=>f.meta.frameId),[0,1]);
+  assert.equal(frames[0].meta.rgb,undefined);
+  assert.equal(server.stats().errors,0);
+ }finally{await server.close();}
+});
 test('parses fragmented and multiple length-prefixed JPEG payloads',()=>{
  const frames=[];
  const parser=new JpegFrameParser(x=>frames.push(Buffer.from(x)));

@@ -19,12 +19,17 @@ export class JpegFrameParser {
   }
 }
 export async function startLiveObservationServer({onObservation,onJpeg,width=84,height=84,port=0}={}){
-  if(typeof onObservation!=='function')throw Error('onObservation required');
-  const {default: jpeg}=await import('jpeg-js');
+  if(typeof onObservation!=='function'&&typeof onJpeg!=='function')throw Error('onObservation or onJpeg required');
+  const jpeg=typeof onObservation==='function'?(await import('jpeg-js')).default:null;
   let frameId=0,dropped=0;
   const server=net.createServer(socket=>{
     const parser=new JpegFrameParser(buffer=>{
       try{
+        // Recording-only callers retain compressed frames without paying for RGB decoding.
+        if(!jpeg){
+          onJpeg(buffer,{frameId:frameId++,capturedAt:new Date().toISOString(),source:'rendered_jpeg'});
+          return;
+        }
         const image=jpeg.decode(buffer,{useTArray:true,formatAsRGBA:true});
         const rgb=new Uint8Array(image.width*image.height*3);
         for(let src=0,dst=0;dst<rgb.length;src+=4,dst+=3){rgb[dst]=image.data[src];rgb[dst+1]=image.data[src+1];rgb[dst+2]=image.data[src+2];}

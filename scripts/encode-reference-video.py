@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from importlib import import_module
 
 directory = Path(sys.argv[1]).resolve()
 frames = [json.loads(line) for line in (directory / "frames.jsonl").read_text().splitlines()]
@@ -34,13 +35,23 @@ subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-safe", "
 probe = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-show_format", "-of", "json", str(output)]))
 duration = float(probe["format"]["duration"])
 span = times[-1] - times[0]
+gaps = sorted(b - a for a, b in zip(times, times[1:]))
 timing = {"frames": len(frames), "capturedSpanSeconds": span, "encodedSeconds": duration,
           "maxFrameGapSeconds": max(b - a for a, b in zip(times, times[1:])),
-          "source": "rendered_first_person_rgb", "maxSampleFps": 10}
+          "capturedFps": (len(frames)-1)/span,
+          "p95FrameGapSeconds": gaps[min(len(gaps)-1, int(len(gaps)*0.95))],
+          "source": "rendered_first_person_rgb", "sampling": "timestamped_manifest_frames"}
 (directory / "video-timing.json").write_text(json.dumps(timing, indent=2) + "\n")
 print(json.dumps(timing))
 if span < 70 or abs(duration - span) > 2:
     raise SystemExit("Video does not cover the smoke trial with correct timing")
+
+# Overlay is a separate artifact; preserve the original timestamped recording.
+if import_module("demo-captions").write_captions(directory, times[0], span):
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(output),
+                    "-vf", "scale=768:768,subtitles=demo-overlay.srt:force_style='Fontsize=11,Alignment=8,MarginV=8'",
+                    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags",
+                    "+faststart", str(directory / "annotated_demo.mp4")], cwd=directory, check=True)
 
 from PIL import Image, ImageDraw
 sheet = Image.new("RGB", (768, 828), "#171717")

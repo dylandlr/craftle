@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [natural]
+        scenario: [natural, food-fixture]
         seed: ['20261205']
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -37,7 +37,7 @@ jobs:
             sleep 3
           done
           exit 1
-      - name: Run privileged scripted controller
+      - name: Run neural options over scripted primitives
         env:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: learned_survival_options
@@ -59,7 +59,7 @@ jobs:
             done
             docker exec craftle-reference rcon-cli "forceload add -16 -16 16 16"
             sleep 3
-            docker exec craftle-reference rcon-cli "fill -6 80 -6 6 80 6 stone"
+            docker exec craftle-reference rcon-cli "fill -7 80 -7 7 85 7 stone hollow"
             docker exec craftle-reference rcon-cli "fill -6 81 -6 6 86 6 air"
             docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
             docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
@@ -101,6 +101,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: neural-options-${{ matrix.seed }}-${{ github.run_id }}
+          name: neural-options-${{ matrix.scenario }}-${{ matrix.seed }}-${{ github.run_id }}
           path: recordings
           retention-days: 30

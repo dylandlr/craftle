@@ -282,15 +282,11 @@ for(const [index,profile] of activeProfiles.entries()){
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
          fs.mkdirSync(path.join(videoDir,'frames'),{recursive:true});
-         let captureCount=0,lastCapture=0;
+         let captureCount=0;
          const manifest=path.join(videoDir,'frames.jsonl');
          fs.writeFileSync(manifest,'');
          const server=await startLiveObservationServer({width:256,height:256,
-           onObservation:()=>{},
            onJpeg:(jpeg,frame)=>{
-             const now=Date.parse(frame.capturedAt);
-             if(now-lastCapture<100)return;
-             lastCapture=now;
              const file=String(captureCount++).padStart(6,'0')+'.jpg';
              fs.writeFileSync(path.join(videoDir,'frames',file),jpeg);
              fs.appendFileSync(manifest,JSON.stringify({file,frameId:frame.frameId,capturedAt:frame.capturedAt})+'\n');
@@ -301,8 +297,8 @@ for(const [index,profile] of activeProfiles.entries()){
          });
          const headless=await prepareRecorder();
          const output=server.host+':'+server.port;
-         headless(bot,{output,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??20000),width:256,height:256});
-         log(profile.name,'reference_video_capture_started',{directory:videoDir,manifest,width:256,height:256,maxSampleFps:10,source:'rendered_first_person_rgb'});
+         headless(bot,{output,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??20000),width:256,height:256,viewDistance:3,jpegOptions:{quality:0.8}});
+         log(profile.name,'reference_video_capture_started',{directory:videoDir,manifest,width:256,height:256,sampling:'all_received_frames',viewDistance:3,jpegQuality:0.8,source:'rendered_first_person_rgb'});
        }
        const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??60000);
        if(Number.isFinite(maxMs)&&maxMs>=1000){const t=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(t));}
