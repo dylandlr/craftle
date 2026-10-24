@@ -1,6 +1,7 @@
 // Privileged-state scripted survival reference: NOT a vision-only or learned agent.
 // Purpose: reproducible competence anchor and future Mineflayer-action interface.
-import {pathfinder,Movements,goals} from 'mineflayer-pathfinder';
+import pathfinderPackage from 'mineflayer-pathfinder';
+const {pathfinder,Movements,goals}=pathfinderPackage;
 const {GoalNear}=goals;
 export const HOSTILE_MOBS=new Set(['zombie','husk','drowned','skeleton','stray','spider','cave_spider','creeper','witch','pillager','endermite','silverfish']);
 export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,foodAvailable=false,hasFood=false,blocked=false}={}){
