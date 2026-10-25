@@ -2,7 +2,7 @@ name: Neural assisted-option learning pilot
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/learned-options.yml', 'src/option-dqn.js', 'src/learning-options.js', 'src/survival-reference.js']
+    paths: ['.github/workflows/learned-options.yml', 'src/option-dqn.js', 'src/learning-options.js', 'src/survival-reference.js', 'src/recording.js', 'scripts/encode-reference-video.py', 'src/recorded-frame-decoder.js']
   workflow_dispatch:
 permissions:
   contents: read
