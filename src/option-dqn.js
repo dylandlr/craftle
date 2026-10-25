@@ -21,7 +21,7 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
    replay.push(structuredClone(e));
   }
   tw=t.tw.map(r=>r.slice());tv=t.tv.map(r=>r.slice());
-  if(t.rngState!==null&&t.rngState!==undefined){if(typeof random.setState!=='function')throw Error('Checkpoint requires stateful RNG');random.setState(t.rngState);}
+  if(t.rngState!==null&&t.rngState!==undefined){if(typeof random.setState==='function')random.setState(t.rngState);else if(training)throw Error('Training resume requires stateful RNG');}
  }
  const validate=x=>{if(!Array.isArray(x)||x.length!==inputs||!x.every(Number.isFinite))throw Error('Invalid option observation');};
  const forward=(x,a=w,b=v)=>{const h=a.map(row=>Math.tanh(row[inputs]+x.reduce((sum,value,i)=>sum+value*row[i],0)));return {h,q:b.map(row=>row[hidden]+h.reduce((sum,value,i)=>sum+value*row[i],0))};};
