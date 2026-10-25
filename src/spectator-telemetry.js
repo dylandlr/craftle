@@ -22,9 +22,10 @@ export function parseAgentTelemetry(lines, now=Date.now()){
       if(Number.isFinite(event.health))health=event.health;
       if(Number.isFinite(event.food))food=event.food;
     }
-    if(['agent_decision','navigation_action','targeted_skill_action','option_decision','rl_action','llm_action_applied'].includes(event.type)){
+    if(['agent_decision','navigation_action','target_decision','targeted_skill_action','option_decision','rl_action','llm_action_applied'].includes(event.type)){
       lastAction={type:event.type,timestamp:event.timestamp,
         action:typeof event.action==='string'?event.action:
+          typeof event.option==='string'?event.option:
           typeof event.action?.type==='string'?event.action.type:
           typeof event.goal==='string'?event.goal:null};
     }
