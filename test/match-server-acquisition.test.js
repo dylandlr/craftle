@@ -31,3 +31,19 @@ test('rejects multiple drop-event candidates from same location and tick window'
  const rows=[e('block_break_event',1,{x:2,y:81,z:0}),e('block_drops_event',2,{x:2,y:81,z:0,drops:[{entityUuid:'a'}]}),e('block_drops_event',3,{x:2,y:81,z:0,drops:[{entityUuid:'b'}]}),e('item_pickup_event',4,{itemEntityUuid:'a'})];
  assert.equal(matchServerAcquisition(a,rows).completeAcquisitionCandidates,0);
 });
+
+test('requires post-tick inventory increase for verified acquisition, not merely pickup callback',()=>{
+ const a=[{agent:'Turesla',type:'target_harvest_intent',decisionId:12,targetId:'plant:2,81,0',timestampMs:1900}];
+ const rows=[
+  e('block_break_event',1,{x:2,y:81,z:0,playerUuid:'self',playerName:'Turesla'}),
+  e('block_drops_event',2,{x:2,y:81,z:0,playerUuid:'self',drops:[{entityUuid:'food-1'}]}),
+  e('item_pickup_event',3,{playerUuid:'self',itemEntityUuid:'food-1',item:'minecraft:carrot'}),
+ ];
+ assert.equal(matchServerAcquisition(a,rows).completeAcquisitionCandidates,1);
+ assert.equal(matchServerAcquisition(a,rows).verifiedAcquisitionCandidates,0);
+ const observation=e('pickup_post_tick_inventory',4,{playerUuid:'self',itemEntityUuid:'food-1',item:'minecraft:carrot',beforeCount:0,afterCount:1});
+ assert.equal(matchServerAcquisition(a,[...rows,observation]).verifiedAcquisitionCandidates,1);
+ assert.equal(matchServerAcquisition(a,[...rows,{...observation,afterCount:0}]).verifiedAcquisitionCandidates,0);
+ assert.equal(matchServerAcquisition(a,[...rows,{...observation,playerUuid:'other'}]).verifiedAcquisitionCandidates,0);
+ assert.equal(matchServerAcquisition(a,[...rows,{...observation,itemEntityUuid:'wrong'}]).verifiedAcquisitionCandidates,0);
+});
