@@ -1,3 +1,26 @@
+## Experimental continuous Mineflayer agent (opt-in)
+
+The default runner still uses validated three-minute training sessions. To keep the **same Mineflayer connection** active across training checkpoints and retain a stable third-person viewer, enable experimental continuous mode:
+
+```powershell
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+Browse the raw viewer at `http://127.0.0.1:3000` or the spectator/inspector at `http://127.0.0.1:3001`. Continuous mode connects one agent without the usual 180-second shutdown. It writes decision events and pose telemetry to `state/agent/continuous/agent.log`. The existing targeted controller periodically saves weights atomically to `state/agent/continuous-policy.json`, initially copied from `state/agent/accepted-policy.json`. **It never promotes or overwrites the accepted baseline.** Checkpoint cadence is based on policy updates; uninterrupted runtime does not yet mean full optimizer/replay/RNG state is durable across process failures.
+
+**Tradeoff:** this first continuous implementation disables the three-minute reference-frame/video capture and per-session promotion. It is for stable long-lived viewing/training, not a validated equivalent replacement for the benchmark runner. Production-grade rolling 720p video segments, checkpoint transaction validation, exact resumed learner state, reconnect health checks, and isolated failure tests remain to be built. A genuine client crash exits and restarts the process (up to five consecutive exits); camera pauses then, unlike routine checkpoint saves. The normal restart policy still governs the Docker container.
+
+To return to the validated session runner:
+
+```powershell
+$env:CRAFTLE_CONTINUOUS_AGENT = "0"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --force-recreate agent
+```
+
+The world in `state/server`, accepted baseline and separate continuous checkpoint persist. To make consistent backups, stop both services and copy state and secrets before changing deployments.
+
 ## Watch-only browser spectator monitor (first implemented slice)
 
 Pull the latest main branch and recreate the agent (your persistent state directory is untouched):
