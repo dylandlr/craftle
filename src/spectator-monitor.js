@@ -43,9 +43,23 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
-let connected=null;
+const viewport=document.getElementById('viewport'),take=document.getElementById('take-camera');
+const back=document.getElementById('return-auto'),mode=document.getElementById('mode');
+const help=document.getElementById('camera-help');
+let connected=null,manual=false;
 function resetCamera(){frame.src='http://127.0.0.1:3000/?camera_reset='+Date.now();}
-document.getElementById('return-auto').addEventListener('click',resetCamera);
+function setManual(enabled){
+ manual=enabled;
+ viewport.dataset.cameraMode=manual?'manual':'auto';
+ mode.textContent=manual?'MANUAL CAMERA':'AUTO VIEW';
+ take.disabled=manual;
+ back.disabled=!manual;
+ help.textContent=manual?'Manual mode: click inside the viewer to focus its controls. Escape returns to Auto.':'Auto mode: the existing Prismarine camera follows the agent. Camera controls are watch-only.';
+ if(manual)frame.focus();else{take.focus();resetCamera();}
+}
+take.addEventListener('click',()=>setManual(true));
+back.addEventListener('click',()=>setManual(false));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&manual)setManual(false);});
 async function check(){
  try{
   const response=await fetch('/api/status',{cache:'no-store'});
