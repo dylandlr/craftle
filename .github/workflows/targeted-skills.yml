@@ -1,4 +1,5 @@
 name: Targeted skill contract pilot
+# Audits observed eating separately from once-only credited decision reward.
 on:
   push:
     branches: [main]
