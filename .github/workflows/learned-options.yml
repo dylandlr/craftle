@@ -13,6 +13,7 @@ jobs:
       matrix:
         scenario: [natural, food-fixture]
         seed: ['20261205']
+        epsilon: ['0.30', '0.70']
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -43,6 +44,7 @@ jobs:
           CRAFTLE_BEHAVIOR: learned_survival_options
           CRAFTLE_OPTION_COMMITMENT_STEPS: '4'
           CRAFTLE_OPTION_REWARD_VERSION: 'v2'
+          CRAFTLE_OPTION_EPSILON: ${{ matrix.epsilon }}
           CRAFTLE_RL_MAX_MS: '180000'
           CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
           CRAFTLE_RECORD_FRAMES: '20000'
@@ -109,6 +111,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: neural-options-${{ matrix.scenario }}-${{ matrix.seed }}-${{ github.run_id }}
+          name: neural-options-${{ matrix.scenario }}-${{ matrix.seed }}-eps${{ matrix.epsilon }}-${{ github.run_id }}
           path: recordings
           retention-days: 30
