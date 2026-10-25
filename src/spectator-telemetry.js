@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {directorShot} from './spectator-director.js';
 
 // Read the tail only; never expose raw logs, environment, or checkpoint contents.
 export function parseAgentTelemetry(lines, now=Date.now()){
   let position=null, yaw=null, pitch=null, health=null, food=null, lastAction=null, lastEvent=null, timestamp=null;
   let agent='Turesla', id='agent_001';
+  let motion=null;const effects=[];
   for(const line of lines){
     if(!line.startsWith('{"timestamp":'))continue;
     let event;try{event=JSON.parse(line);}catch{continue;}
@@ -17,6 +19,16 @@ export function parseAgentTelemetry(lines, now=Date.now()){
       if([p.x,p.y,p.z].every(Number.isFinite))position={x:p.x,y:p.y,z:p.z};
       if(Number.isFinite(event.yaw))yaw=event.yaw;
       if(Number.isFinite(event.pitch))pitch=event.pitch;
+    }
+    if(event.type==='spectator_effect'){
+      if(event.kind==='motion'){
+        motion={position:event.position,velocity:event.velocity,yaw:event.yaw,
+          onGround:event.onGround,isInWater:event.isInWater,timestamp:event.timestamp};
+      }else if(['particle','sound','swing','hurt','entity_death'].includes(event.kind)){
+        effects.push({kind:event.kind,name:typeof event.name==='string'?event.name:null,
+          timestamp:event.timestamp,position:event.position??null});
+        if(effects.length>16)effects.shift();
+      }
     }
     if(event.type==='health'){
       if(Number.isFinite(event.health))health=event.health;
@@ -33,7 +45,9 @@ export function parseAgentTelemetry(lines, now=Date.now()){
       lastEvent={type:event.type,timestamp:event.timestamp};
   }
   return {id,name:agent,position,yaw,pitch,health,food,lastAction,lastEvent,
-    lastObservedAt:timestamp,stale:!timestamp||now-Date.parse(timestamp)>10000};
+    lastObservedAt:timestamp,stale:!timestamp||now-Date.parse(timestamp)>10000,
+    motion:motion?.timestamp&&now-Date.parse(motion.timestamp)<=10000?motion:null,
+    effects,shot:motion?.position?directorShot({...motion,action:lastAction?.action}):null};
 }
 
 export function readAgentTelemetry(root,{tailBytes=262144}={}){
