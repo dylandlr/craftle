@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOptionDQN} from '../src/option-dqn.js';
+import {seededOptionRandom} from '../src/learning-options.js';
 test('longer options discount bootstrap by their duration',()=>{
  const snapshot=createOptionDQN({random:()=>0.5}).snapshot();
  snapshot.v[2][16]=2;
+ snapshot.trainingState.tv[2][16]=2;
  const train=steps=>{
-  const p=createOptionDQN({random:()=>0.5,snapshot:structuredClone(snapshot)});
+  const p=createOptionDQN({random:seededOptionRandom(5),snapshot:structuredClone(snapshot)});
   p.observe({state:[0,0,0,0,0,0,0],index:1,reward:0,steps,nextState:[0,0,0,0,0,0,0],nextMask:[false,false,true,false]});
   return p.snapshot().v[1][16];
  };
