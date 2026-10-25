@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {preparePersistentSession,promotePersistentSession} from '../src/persistent-session.js';
+import {startSpectatorMonitor} from '../src/spectator-monitor.js';
+const monitor=startSpectatorMonitor();
+monitor.on('error',error=>console.error(JSON.stringify({type:'spectator_monitor_error',message:error.message})));
 const root=path.resolve(process.env.CRAFTLE_PERSISTENT_ROOT??'deploy/persistent/state/agent');
 const duration=Number(process.env.CRAFTLE_PERSISTENT_SESSION_MS??180000);
 if(!Number.isInteger(duration)||duration<80000||duration>300000)throw Error('Persistent session must be 80000..300000 ms');
@@ -40,4 +43,4 @@ try{
   }
   if(!stopping)await new Promise(resolve=>setTimeout(resolve,5000));
  }
-}finally{terminate();}
+}finally{terminate();monitor.close();}
