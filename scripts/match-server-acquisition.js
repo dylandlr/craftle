@@ -32,9 +32,23 @@ export function matchServerAcquisition(agent,server,{windowMs=6000}={}){
     c.itemEntityUuid===p.itemEntityUuid&&compatibleServerActor(p,c)&&
     c.sequence>p.sequence&&c.serverTick>=p.serverTick&&c.serverTick<=p.serverTick+3&&
     c.item===p.item&&Number.isFinite(c.beforeCount)&&Number.isFinite(c.afterCount)&&c.afterCount>c.beforeCount));
-  records.push({verifiedInventoryGains:verifiedPickups.length,serverBreakSequence:b.sequence,serverTick:b.serverTick,block:[b.x,b.y,b.z],association:status,decisionId:candidates.length===1?candidates[0].decisionId:null,matchedDropEvents:matchingDrops.length,matchedPickupEvents:matchingPickups.length,completedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&matchingPickups.length>0,verifiedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&verifiedPickups.length>0});
+  records.push({linkedItemUuids:[...itemIds.keys()],verifiedInventoryGains:verifiedPickups.length,serverBreakSequence:b.sequence,serverTick:b.serverTick,block:[b.x,b.y,b.z],association:status,decisionId:candidates.length===1?candidates[0].decisionId:null,matchedDropEvents:matchingDrops.length,matchedPickupEvents:matchingPickups.length,completedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&matchingPickups.length>0,verifiedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&verifiedPickups.length>0});
  }
- return {schema:'craftle.server-acquisition-match.v1',serverBootId:ordered[0]?.serverBootId??null,serverEvents:ordered.length,serverBlockBreaks:breaks.length,serverPickups:pickups.length,serverConsumptionEvents:meals.length,singleCommandCandidates:unique,ambiguousBreaks:ambiguous,unmatchedBreaks:unmatched,completeAcquisitionCandidates:records.filter(r=>r.completedAcquisitionCandidate).length,verifiedAcquisitionCandidates:records.filter(r=>r.verifiedAcquisitionCandidate).length,records,limitations:'Only candidate association; actor mismatch rejects matches, absent actor identity is not confirmation, and one linked drop event is required. Event timestamps originate in different processes; no calibrated clock uncertainty or server-acknowledged decision token. Drop and pickup UUIDs are authoritative when present; post-tick inventory gains strengthen evidence but may be confounded by concurrent inventory changes. No reward credit.'};
+ // A single decision or item entity cannot be credited to multiple harvest breaks.
+ const duplicateDecisions=new Set();
+ const decisionCounts=new Map();
+ const uuidCounts=new Map();
+ for(const r of records){
+  if(r.decisionId!==null)decisionCounts.set(r.decisionId,(decisionCounts.get(r.decisionId)??0)+1);
+  for(const uuid of r.linkedItemUuids)uuidCounts.set(uuid,(uuidCounts.get(uuid)??0)+1);
+ }
+ for(const r of records){
+  const collision=(r.decisionId!==null&&decisionCounts.get(r.decisionId)>1)||
+    r.linkedItemUuids.some(uuid=>uuidCounts.get(uuid)>1);
+  if(collision){r.duplicateAssociation=true;r.completedAcquisitionCandidate=false;r.verifiedAcquisitionCandidate=false;if(r.decisionId!==null)duplicateDecisions.add(r.decisionId);}
+  else r.duplicateAssociation=false;
+ }
+ return {schema:'craftle.server-acquisition-match.v1',duplicateDecisionIds:[...duplicateDecisions],duplicateItemEntityUuids:[...uuidCounts].filter(([,count])=>count>1).map(([uuid])=>uuid),serverBootId:ordered[0]?.serverBootId??null,serverEvents:ordered.length,serverBlockBreaks:breaks.length,serverPickups:pickups.length,serverConsumptionEvents:meals.length,singleCommandCandidates:unique,ambiguousBreaks:ambiguous,unmatchedBreaks:unmatched,completeAcquisitionCandidates:records.filter(r=>r.completedAcquisitionCandidate).length,verifiedAcquisitionCandidates:records.filter(r=>r.verifiedAcquisitionCandidate).length,records,limitations:'Only candidate association; actor mismatch rejects matches, absent actor identity is not confirmation, and one linked drop event is required. Event timestamps originate in different processes; no calibrated clock uncertainty or server-acknowledged decision token. Drop and pickup UUIDs are authoritative when present; post-tick inventory gains strengthen evidence but may be confounded by concurrent inventory changes. No reward credit.'};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const agent=fs.readFileSync(process.argv[2],'utf8').split('\n').filter(s=>s.startsWith('{"timestamp":')).map(JSON.parse);
