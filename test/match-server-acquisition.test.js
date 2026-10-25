@@ -91,3 +91,16 @@ test('strict verification requires complete matching server actor identities',()
   assert.equal(matchServerAcquisition(agent,altered).strictVerifiedAcquisitionCandidates,0);
  }
 });
+
+test('strict evidence cannot stitch one actors pickup to another actors inventory gain',()=>{
+ const agent=[{agent:'Turesla',type:'target_harvest_intent',decisionId:88,targetId:'plant:2,81,0',timestampMs:1900}];
+ const rows=[
+  e('block_break_event',1,{x:2,y:81,z:0,playerName:'Turesla',playerUuid:'self'}),
+  e('block_drops_event',2,{x:2,y:81,z:0,playerUuid:'self',drops:[{entityUuid:'a'},{entityUuid:'b'}]}),
+  e('item_pickup_event',3,{playerUuid:'self',itemEntityUuid:'a',item:'minecraft:carrot'}),
+  e('item_pickup_event',4,{playerUuid:'other',itemEntityUuid:'b',item:'minecraft:carrot'}),
+  e('pickup_post_tick_inventory',5,{playerUuid:'self',itemEntityUuid:'b',item:'minecraft:carrot',beforeCount:0,afterCount:1})
+ ];
+ const r=matchServerAcquisition(agent,rows);
+ assert.equal(r.strictVerifiedAcquisitionCandidates,0);
+});
