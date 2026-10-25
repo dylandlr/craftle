@@ -82,6 +82,8 @@ jobs:
           grep -q '"type":"survival_reference_started"' recordings/survival-reference/agent.log
           test "$(grep -c '"type":"survival_reference_action"' recordings/survival-reference/agent.log)" -ge 3
           node scripts/report-survival-reference.js recordings/survival-reference/agent.log > recordings/survival-reference/summary.json
+          node scripts/report-option-behavior.js recordings/survival-reference/agent.log > recordings/survival-reference/option-behavior.json
+          cat recordings/survival-reference/option-behavior.json
           cat recordings/survival-reference/summary.json
           grep -q '"type":"option_decision"' recordings/survival-reference/agent.log
           grep -q '"type":"option_transition"' recordings/survival-reference/agent.log
