@@ -100,6 +100,14 @@ jobs:
           if(checkpoint.updates<=0||checkpoint.updates!==4*(transitions+terminals))throw Error('Neural update/checkpoint accounting failed');
           console.log(JSON.stringify({type:'neural_learning_audit',schema:checkpoint.schema,updates:checkpoint.updates,transitions,terminals,decisions:decisions.length,actions:Object.fromEntries(checkpoint.options.map(action=>[action,decisions.filter(e=>e.action===action).length]))}));
           NODE
+      - name: Audit verified-outcome reward links
+        if: always()
+        run: |
+          if [ -s recordings/survival-reference/agent.log ]; then
+            node scripts/audit-v3-rewards.js recordings/survival-reference/agent.log | tee recordings/survival-reference/reward-v3-audit.json
+          else
+            echo '{"status":"missing_live_agent_log"}' > recordings/survival-reference/reward-v3-audit.json
+          fi
       - name: Summarize verified reward evidence
         if: always()
         run: |
