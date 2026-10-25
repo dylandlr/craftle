@@ -25,9 +25,9 @@ export function matchServerAcquisition(agent,server,{windowMs=6000}={}){
   const candidates=intents.filter(a=>sameBlock(a,b)&&sameActor(a,b)&&epoch(a)<=b.unixTimeMs&&b.unixTimeMs-epoch(a)<=windowMs);
   const status=candidates.length===1?'single_command_candidate':candidates.length>1?'ambiguous':'unmatched';
   if(candidates.length===1)unique++;else if(candidates.length>1)ambiguous++;else unmatched++;
-  const matchingDrops=drops.filter(d=>d.x===b.x&&d.y===b.y&&d.z===b.z&&compatibleServerActor(b,d)&&d.serverTick>=b.serverTick&&d.serverTick<=b.serverTick+2);
-  const itemIds=new Set(matchingDrops.flatMap(d=>(d.drops??[]).map(x=>x.entityUuid)));
-  const matchingPickups=pickups.filter(p=>itemIds.has(p.itemEntityUuid)&&compatibleServerActor(b,p)&&p.serverTick>=b.serverTick);
+  const matchingDrops=drops.filter(d=>d.x===b.x&&d.y===b.y&&d.z===b.z&&compatibleServerActor(b,d)&&d.sequence>b.sequence&&d.serverTick>=b.serverTick&&d.serverTick<=b.serverTick+2);
+  const itemIds=new Map(matchingDrops.flatMap(d=>(d.drops??[]).filter(x=>typeof x.entityUuid==='string').map(x=>[x.entityUuid,d.sequence])));
+  const matchingPickups=pickups.filter(p=>itemIds.has(p.itemEntityUuid)&&p.sequence>itemIds.get(p.itemEntityUuid)&&compatibleServerActor(b,p)&&p.serverTick>=b.serverTick);
   const verifiedPickups=matchingPickups.filter(p=>confirmations.some(c=>
     c.itemEntityUuid===p.itemEntityUuid&&compatibleServerActor(p,c)&&
     c.sequence>p.sequence&&c.serverTick>=p.serverTick&&c.serverTick<=p.serverTick+3&&
