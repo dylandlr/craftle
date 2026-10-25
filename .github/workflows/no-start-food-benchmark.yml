@@ -63,10 +63,10 @@ jobs:
           docker run -d --name craftle-targeted -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MEMORY=2G -v "$PWD/plugins:/data/plugins" -e TYPE=PAPER -e VERSION=1.21.1 -e MODE=survival -e SPAWN_PROTECTION=0 -e DIFFICULTY=normal -e SEED=20261205 itzg/minecraft-server:java21
           ready=false
           for i in $(seq 1 120); do
-            if docker logs craftle-targeted 2>&1 | grep -Fq 'For help, type "help"'; then ready=true; break; fi
+            if docker exec craftle-targeted rcon-cli 'time query gametime' >/dev/null 2>&1; then ready=true; break; fi
             sleep 3
           done
-          test "$ready" = true
+          if [ "$ready" != true ]; then echo 'Minecraft readiness failed; container logs:'; docker logs --tail 100 craftle-targeted; docker inspect craftle-targeted --format '{{.State.Status}} {{.State.ExitCode}}'; exit 1; fi
           docker exec craftle-targeted rcon-cli 'forceload add -16 -16 16 16'
           docker exec craftle-targeted rcon-cli 'fill -7 80 -7 7 85 7 stone hollow'
           docker exec craftle-targeted rcon-cli 'fill -6 81 -6 6 86 6 air'
