@@ -17,6 +17,20 @@ docker compose -f deploy/persistent/compose.yml --profile learning up -d --build
 
 Connect Minecraft Java **1.21.1** to `localhost:25565`. This is the actual Mojang vanilla server; Prismarine Viewer recordings are separate from the official client view. The containerized bot connects as Turesla. The local server uses offline player authentication for that bot and publishes only on the PC's loopback interface; RCON is not published. Remote exposure and authenticated multiplayer require a separate configuration. Do not turn this into a public offline-authentication server by changing the bind address.
 
+## HD recording without changing the Minecraft server
+
+The persistent deployment already runs **Mojang vanilla 1.21.1** (TYPE=VANILLA). Paper is used only in separate experimental GitHub Actions benchmark jobs; it is not required to record in HD. Rendering resolution is a viewer/client setting, not a server implementation setting.
+
+To opt into a **1280×720 capture** in Windows PowerShell, from the repository root:
+
+```powershell
+$env:CRAFTLE_REFERENCE_WIDTH = "1280"
+$env:CRAFTLE_REFERENCE_HEIGHT = "720"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --no-deps --force-recreate agent
+```
+
+For 1920×1080, use width 1920 and height 1080. This only affects subsequent recordings, not the accepted DQN checkpoint, survival policy observation space or existing server world. Raw POV JPEGs and `survival_reference.mp4` retain the selected dimensions; `annotated_demo.mp4` remains an intentionally downscaled 768×768 preview. High resolution can slow the CPU-based Prismarine Viewer and increase storage significantly, so benchmark capture FPS and session promotion before committing to extended runs. The rendered POV is not identical to the official Minecraft Java client with shaders or resource packs. For highest-fidelity cinematic footage, join the same local vanilla server from the official Minecraft Java client and record with OBS at 1080p or higher. Do not delete `state/server` or `state/agent` during this change.
+
 ## What persists
 
 | Location | Contents |
