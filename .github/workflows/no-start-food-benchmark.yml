@@ -3,7 +3,7 @@ name: No-starting-food acquisition benchmark
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/no-start-food-benchmark.yml', 'observer/**', 'scripts/sample-minecraft-server.js']
+    paths: ['.github/workflows/no-start-food-benchmark.yml', 'observer/**', 'scripts/sample-minecraft-server.js', 'scripts/match-server-acquisition.js', 'test/match-server-acquisition.test.js']
   workflow_dispatch:
 permissions:
   contents: read
@@ -140,6 +140,10 @@ jobs:
           console.log(JSON.stringify({events:rows.length,serverPickups:rows.filter(r=>r.event==='item_pickup_event').length,serverBlockBreaks:rows.filter(r=>r.event==='block_break_event').length,serverMeals:rows.filter(r=>r.event==='item_consume_event').length}));
           NODE
           sha256sum recordings/server-observer/events.jsonl > recordings/server-observer/events.sha256
+      - name: Correlate server acquisition and agent decisions
+        run: |
+          node scripts/match-server-acquisition.js recordings/survival-reference/agent.log recordings/server-observer/events.jsonl > recordings/server-observer/acquisition-match.json
+          cat recordings/server-observer/acquisition-match.json
       - name: Audit targeted controller execution
         env:
           TARGET_MODE: ${{ matrix.mode }}
