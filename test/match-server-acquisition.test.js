@@ -58,3 +58,21 @@ test('pickup event cannot precede the originating drop event even in same tick',
  assert.equal(r.completeAcquisitionCandidates,0);
  assert.equal(r.verifiedAcquisitionCandidates,0);
 });
+
+test('one decision must not receive two acquisitions for separate breaks',()=>{
+ const a=[{type:'target_harvest_intent',decisionId:42,targetId:'plant:2,81,0',timestampMs:1900}];
+ const rows=[
+  e('block_break_event',1,{x:2,y:81,z:0}),
+  e('block_drops_event',2,{x:2,y:81,z:0,drops:[{entityUuid:'u1'}]}),
+  e('item_pickup_event',3,{itemEntityUuid:'u1',item:'minecraft:carrot'}),
+  e('pickup_post_tick_inventory',4,{itemEntityUuid:'u1',item:'minecraft:carrot',beforeCount:0,afterCount:1}),
+  e('block_break_event',5,{x:2,y:81,z:0}),
+  e('block_drops_event',6,{x:2,y:81,z:0,drops:[{entityUuid:'u2'}]}),
+  e('item_pickup_event',7,{itemEntityUuid:'u2',item:'minecraft:carrot'}),
+  e('pickup_post_tick_inventory',8,{itemEntityUuid:'u2',item:'minecraft:carrot',beforeCount:1,afterCount:2})
+ ];
+ const r=matchServerAcquisition(a,rows);
+ assert.equal(r.verifiedAcquisitionCandidates,0);
+ assert.deepEqual(r.duplicateDecisionIds,[42]);
+ assert.ok(r.records.every(x=>x.duplicateAssociation));
+});
