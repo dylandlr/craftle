@@ -20,15 +20,15 @@ export function spectatorHtml(){
 :root{color-scheme:dark;font-family:Inter,system-ui,Arial;background:#10151d;color:#eff5fc}
 *{box-sizing:border-box}body{margin:0}header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:#17202c;border-bottom:1px solid #314052}
 h1{font-size:17px;margin:0}small{color:#a9b7c8}main{max-width:1600px;margin:0 auto;padding:16px}.viewport{position:relative;background:#080c12;aspect-ratio:16/9;border:1px solid #35465c;border-radius:12px;overflow:hidden}
-iframe{display:block;width:100%;height:100%;border:0}#offline{position:absolute;inset:0;display:none;place-content:center;text-align:center;background:#10151dee;pointer-events:none}
+iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode='auto'] iframe{pointer-events:none}.viewport[data-camera-mode='manual'] iframe{pointer-events:auto}.camera-shield{position:absolute;inset:0;z-index:2;pointer-events:none}.viewport[data-camera-mode='manual'] .camera-shield{display:none}#offline{position:absolute;inset:0;display:none;place-content:center;text-align:center;background:#10151dee;pointer-events:none}
 .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0}button,a{background:#27394e;color:#f0f7ff;border:1px solid #547397;border-radius:8px;padding:10px 14px;font:inherit;text-decoration:none;cursor:pointer}button:hover,a:hover{background:#334e6b}button:focus-visible,a:focus-visible{outline:2px solid #9bc7ff} .status{margin-left:auto;font-size:13px;color:#bed0df}
 .inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:14px;background:#17202c;border:1px solid #314052;border-radius:10px}.metric{display:flex;flex-direction:column;gap:4px;font-size:14px}.metric strong{font-weight:600}.metric small{font-size:12px}.note{color:#b0c0ce;font-size:13px;line-height:1.5}.green{color:#7be1ae}.amber{color:#e7c17a}
 </style></head><body><header><div><h1>Craftle · Spectator Monitor</h1><small>Watch-only by default · observer commands never control the learning agent</small></div><small id="mode">AUTO VIEW</small></header>
-<main><section class="viewport" aria-label="Live Minecraft spectator viewer">
+<main><section class="viewport" id="viewport" data-camera-mode="auto" aria-label="Live Minecraft spectator viewer">
 <iframe id="viewer" title="Live third-person Prismarine Viewer" src="http://127.0.0.1:3000/" allowfullscreen></iframe>
-<div id="offline"><h2>Waiting for camera</h2><p>Agent session is reconnecting. The monitor remains available.</p></div></section>
+<div class="camera-shield" id="camera-shield" aria-hidden="true"></div>\n<div id="offline"><h2>Waiting for camera</h2><p>Agent session is reconnecting. The monitor remains available.</p></div></section>
 <div class="controls">
-<button id="return-auto" type="button">↺ Return to Auto</button>
+<button id="take-camera" type="button">Take Camera · WASD</button>\n<button id="return-auto" type="button" disabled>↺ Return to Auto</button>
 <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener noreferrer">Open raw camera ↗</a>
 <span class="status" id="status" role="status" aria-live="polite">Checking camera…</span>
 </div>
@@ -40,7 +40,7 @@ iframe{display:block;width:100%;height:100%;border:0}#offline{position:absolute;
 <div class="metric"><small>Latest event</small><strong id="last-event">—</strong></div>
 <div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>
 </section>
-<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: independent continuous Auto Director recording and shared WASD takeover are not implemented yet.</p>
+<p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: independent continuous Auto Director recording and shared WASD takeover are not implemented yet.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
 let connected=null;
@@ -52,7 +52,7 @@ async function check(){
   if(!response.ok)throw Error('monitor status unavailable');
   const data=await response.json();
   const online=!!data.cameraReachable;
-  if(connected===false&&online)resetCamera();
+  if(connected===false&&online)resetCamera();\n  if(!online&&manual)setManual(false);
   connected=online;offline.style.display=online?'none':'grid';
   status.textContent=online?'● Camera server connected':'● Camera offline / reconnecting';
   status.className='status '+(online?'green':'amber');
