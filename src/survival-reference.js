@@ -91,7 +91,8 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const foodAvailable=Boolean(edible);
      const observation={health:bot.health,food:bot.food,foodAvailable,hostileDistance:distance,inventoryCount:inventory.length,blocked:stalledIntervals>=3,displacement,position:{x:pos.x,y:pos.y,z:pos.z}};
      const objective=decisionController?decisionController.choose(observation):chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
-     attribution.begin(objective==='reroute'?'explore':objective);
+     const optionId=attribution.begin(objective==='reroute'?'explore':objective);
+     decisionController?.bindOutcomeOption?.(optionId);
      if(decisionController&&lastObjective!==objective){bot.pathfinder.setGoal(null);currentGoal=null;lastFoodGoal=null;lastObjective=objective;}
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
