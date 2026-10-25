@@ -32,10 +32,15 @@ export function matchServerAcquisition(agent,server,{windowMs=6000}={}){
     c.itemEntityUuid===p.itemEntityUuid&&compatibleServerActor(p,c)&&
     c.sequence>p.sequence&&c.serverTick>=p.serverTick&&c.serverTick<=p.serverTick+3&&
     c.item===p.item&&Number.isFinite(c.beforeCount)&&Number.isFinite(c.afterCount)&&c.afterCount>c.beforeCount));
+  // The same pickup must be the one that gained inventory; a different
+  // player's valid pickup must not satisfy the strict identity chain.
   const actorIdentityComplete=Boolean(b.playerUuid&&b.playerName)&&matchingDrops.length===1&&
     Boolean(matchingDrops[0].playerUuid)&&matchingDrops[0].playerUuid===b.playerUuid&&
-    matchingPickups.some(p=>p.playerUuid===b.playerUuid)&&
-    verifiedPickups.some(p=>confirmations.some(c=>c.itemEntityUuid===p.itemEntityUuid&&c.playerUuid===b.playerUuid));
+    verifiedPickups.some(p=>p.playerUuid===b.playerUuid&&confirmations.some(c=>
+      c.itemEntityUuid===p.itemEntityUuid&&c.playerUuid===b.playerUuid&&
+      c.sequence>p.sequence&&c.serverTick>=p.serverTick&&c.serverTick<=p.serverTick+3&&
+      c.item===p.item&&Number.isFinite(c.beforeCount)&&Number.isFinite(c.afterCount)&&
+      c.afterCount>c.beforeCount));
   records.push({actorIdentityComplete,linkedItemUuids:[...itemIds.keys()],verifiedInventoryGains:verifiedPickups.length,serverBreakSequence:b.sequence,serverTick:b.serverTick,block:[b.x,b.y,b.z],association:status,decisionId:candidates.length===1?candidates[0].decisionId:null,matchedDropEvents:matchingDrops.length,matchedPickupEvents:matchingPickups.length,completedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&matchingPickups.length>0,verifiedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&verifiedPickups.length>0,strictVerifiedAcquisitionCandidate:candidates.length===1&&actorIdentityComplete&&verifiedPickups.length>0});
  }
  // A single decision or item entity cannot be credited to multiple harvest breaks.
