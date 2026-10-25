@@ -22,6 +22,46 @@ function execute(command,args,{timeoutMs=0,...options}={}){
   processChild.on('exit',(code,signal)=>{clean();resolve({code,signal});});
  });
 }
+const continuous=process.env.CRAFTLE_CONTINUOUS_AGENT==='1';
+if(continuous){
+ // Continuous training is intentionally separate from validated session promotion.
+ // Seed once; never overwrite or silently promote the accepted baseline.
+ fs.mkdirSync(root,{recursive:true});
+ const source=path.join(root,'accepted-policy.json');
+ const target=path.join(root,'continuous-policy.json');
+ if(!fs.existsSync(target)&&fs.existsSync(source))fs.copyFileSync(source,target);
+ if(!fs.existsSync(target))throw Error('Continuous mode requires an existing accepted or continuous checkpoint');
+ const continuousDir=path.join(root,'continuous');
+ fs.mkdirSync(continuousDir,{recursive:true});
+ console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,validatedBaselineUntouched:true,referenceVideo:false}));
+ let errors=0;
+ try{
+  while(!stopping){
+   const stream=fs.openSync(path.join(continuousDir,'agent.log'),'a');
+   let result;
+   try{
+    result=await execute('xvfb-run',['-a','node','src/main.js'],{
+      // No session timeout; Mineflayer reconnects only when the process actually exits.
+      stdio:['ignore',stream,stream],
+      env:{...process.env,CRAFTLE_BEHAVIOR:'targeted_survival_options',
+        CRAFTLE_OPTION_POLICY:'training',CRAFTLE_OPTION_SEED:'17',
+        CRAFTLE_TARGET_CHECKPOINT:target,
+        CRAFTLE_RL_MAX_MS:'0',CRAFTLE_REFERENCE_VIDEO_DIR:'',
+        CRAFTLE_CAPTURE_TELEMETRY:'1',CRAFTLE_RECORD_POV:'0'}
+    });
+   }finally{fs.closeSync(stream);}
+   if(stopping)break;
+   errors++;
+   console.error(JSON.stringify({type:'continuous_agent_exit',code:result.code,signal:result.signal,consecutiveExits:errors}));
+   if(errors>=5){
+    console.error(JSON.stringify({type:'continuous_agent_paused',reason:'five unexpected exits; inspect agent.log'}));
+    while(!stopping)await new Promise(resolve=>setTimeout(resolve,5000));
+    break;
+   }
+   await new Promise(resolve=>setTimeout(resolve,5000));
+  }
+ }finally{terminate();monitor.close();}
+}else{
 let failures=0;
 try{
  while(!stopping){
@@ -44,3 +84,5 @@ try{
   if(!stopping)await new Promise(resolve=>setTimeout(resolve,5000));
  }
 }finally{terminate();monitor.close();}
+
+}
