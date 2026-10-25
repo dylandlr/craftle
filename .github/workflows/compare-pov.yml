@@ -1,0 +1,64 @@
+name: Side-by-side Minecraft POV comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/compare-pov.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [natural, food-fixture]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 40150588618
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: neural-options-${{ matrix.scenario }}-20261205-eps0.30-40150588618
+          path: left
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 40150588618
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: neural-options-${{ matrix.scenario }}-20261205-eps0.70-40150588618
+          path: right
+      - name: Install video encoder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg python3-pil
+      - name: Validate original POV recordings
+        run: |
+          test -s left/survival-reference/frames.jsonl
+          test -s right/survival-reference/frames.jsonl
+          test -s left/survival-reference/video-timing.json
+          test -s right/survival-reference/video-timing.json
+      - name: Encode aligned split-screen gameplay
+        run: |
+          mkdir -p comparison
+          python3 scripts/compare-pov.py left/survival-reference right/survival-reference comparison/${{ matrix.scenario }}-eps030-vs-eps070.mp4
+          test -s comparison/${{ matrix.scenario }}-eps030-vs-eps070.mp4
+          cp left/survival-reference/option-behavior.json comparison/eps030-behavior.json
+          cp right/survival-reference/option-behavior.json comparison/eps070-behavior.json
+          cp left/survival-reference/video-timing.json comparison/eps030-timing.json
+          cp right/survival-reference/video-timing.json comparison/eps070-timing.json
+      - uses: actions/upload-artifact@v4
+        id: playback
+        with:
+          name: side-by-side-${{ matrix.scenario }}-${{ github.run_id }}
+          path: comparison
+          retention-days: 30
+      - name: Share comparison recording
+        env:
+          ARTIFACT_ID: ${{ steps.playback.outputs.artifact-id }}
+        run: |
+          echo "### ${{ matrix.scenario }} full side-by-side POV" >> "$GITHUB_STEP_SUMMARY"
+          echo "Left: epsilon 0.30 | Right: epsilon 0.70" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download synchronized comparison MP4](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$ARTIFACT_ID)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Alignment is elapsed time from each independently captured episode; it does not imply simultaneous shared-world events." >> "$GITHUB_STEP_SUMMARY"
