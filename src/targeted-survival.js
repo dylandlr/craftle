@@ -3,6 +3,7 @@ import pathfinderPackage from 'mineflayer-pathfinder';
 import {HOSTILE_MOBS} from './survival-reference.js';
 import {observeTargets,edible} from './target-opportunities.js';
 import {foodPlantAction} from './food-foraging.js';
+import {attachFoodProvenance} from './food-provenance.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -17,7 +18,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  }
  bot.loadPlugin(pathfinder);const movements=new Movements(bot);
  Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:1});bot.pathfinder.setMovements(movements);
- let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer;
+ let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer,activeDecision=null;
+ const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
  const death=()=>{if(ended||dead)return;dead=true;life++;decisionController.terminal();cancel();};
@@ -37,6 +39,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const choice=decisionController.choose(observation);
+   activeDecision={decisionId:choice.decisionId,skill:choice.skill,targetId:choice.targetId};
    const target=observation.targets.find(t=>t.id===choice.targetId);
    if(choice.skill==='approach'&&target){setGoal(target.id,target.position,target.kind==='drop'?0:1);}
    else if(choice.skill==='explore'){
@@ -59,11 +62,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     }
    }
    if(!valid())return;
-   lastPosition={x:p.x,z:p.z};tick++;
+   provenance.sample();lastPosition={x:p.x,z:p.z};tick++;
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
+ const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
