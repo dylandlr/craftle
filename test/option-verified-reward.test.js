@@ -6,9 +6,11 @@ test('v3 only credits a verified recovery once, never attempts or unknown-source
  const events=[],ctl=createLearningOptionController({mode:'training',rewardVersion:'v3',epsilon:0,seed:3,log:e=>events.push(e)});
  ctl.choose(observed());
  const action=events.find(e=>e.type==='option_decision').action;
+ ctl.bindOutcomeOption('0:2');
  const recovery={kind:'option_outcome',evidence:'verified_hunger_recovery',option:action,life:0,optionId:'0:2',sequence:8};
  assert.equal(ctl.creditOutcome({...recovery,evidence:'attempt_only'}),false);
  assert.equal(ctl.creditOutcome({...recovery,option:'unrelated'}),false);
+ assert.equal(ctl.creditOutcome({...recovery,optionId:'0:1'}),false);
  assert.equal(ctl.creditOutcome(recovery),true);
  assert.equal(ctl.creditOutcome(recovery),false);
  ctl.choose(observed());
