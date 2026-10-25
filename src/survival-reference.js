@@ -94,7 +94,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const optionId=attribution.begin(objective==='reroute'?'explore':objective,decisionController?.currentDecisionId?.()??null);
      decisionController?.bindOutcomeOption?.(optionId);
      if(decisionController&&lastObjective!==objective){bot.pathfinder.setGoal(null);currentGoal=null;lastFoodGoal=null;lastObjective=objective;}
-     if(objective==='eat'&&edible){
+     if(objective==='eat'&&edible&&bot.food<20){
        bot.pathfinder.setGoal(null);currentGoal=null;
        await bot.equip(edible,'hand');
        if(!valid())return;
