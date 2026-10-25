@@ -4,7 +4,10 @@ import {createOptionDQN,OPTIONS} from './option-dqn.js';
 export function seededOptionRandom(seed=1){
  if(!Number.isSafeInteger(seed))throw Error('Invalid option seed');
  let state=(seed>>>0)||1;
- return ()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return (state>>>0)/4294967296;};
+ const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return (state>>>0)/4294967296;};
+ next.getState=()=>state>>>0;
+ next.setState=value=>{if(!Number.isSafeInteger(value)||value<=0||value>0xffffffff)throw Error('Invalid option RNG state');state=value>>>0;};
+ return next;
 }
 export function createLearningOptionController({checkpoint,log=()=>{},training=true,mode=training?'training':'frozen',seed=1,commitmentSteps=1,rewardVersion='v1',epsilon=0.3}={}){
  if(!['training','frozen','random','scripted'].includes(mode))throw Error('Unknown option policy');
