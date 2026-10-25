@@ -32,7 +32,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  const foodTargets=createFoodTargetMemory({clock});
  const searchVisits=new Map(),searchBlocked=new Map();let currentSearchKey=null;
  const actions=[];
- const attribution=createOutcomeLedger({emit:e=>log({type:'deterministic_outcome',...e})});
+ const attribution=createOutcomeLedger({emit:e=>{log({type:'deterministic_outcome',...e});decisionController?.creditOutcome?.(e);}});
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null,lastObjective=null;
  const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);attribution.observe(type,data);};
