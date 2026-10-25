@@ -31,6 +31,21 @@ docker compose -f deploy/persistent/compose.yml --profile learning up -d --no-de
 
 For 1920×1080, use width 1920 and height 1080. This only affects subsequent recordings, not the accepted DQN checkpoint, survival policy observation space or existing server world. Raw POV JPEGs and `survival_reference.mp4` retain the selected dimensions; `annotated_demo.mp4` remains an intentionally downscaled 768×768 preview. High resolution can slow the CPU-based Prismarine Viewer and increase storage significantly, so benchmark capture FPS and session promotion before committing to extended runs. The rendered POV is not identical to the official Minecraft Java client with shaders or resource packs. For highest-fidelity cinematic footage, join the same local vanilla server from the official Minecraft Java client and record with OBS at 1080p or higher. Do not delete `state/server` or `state/agent` during this change.
 
+## Optional third-person spectator camera
+
+The default learning and recording setup remains first-person. For an optional **live third-person web spectator** at 720p recording settings, set:
+
+```powershell
+$env:CRAFTLE_REFERENCE_WIDTH = "1280"
+$env:CRAFTLE_REFERENCE_HEIGHT = "720"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --no-deps agent
+```
+
+Open **http://localhost:3000** to view the spectator camera while the bot is connected. The web viewer is separate from the saved headless 720p first-person MP4, and it does **not** become the policy's visual input. Only port 3000 on the local Windows host is published, not the public network. The viewer will briefly disappear between learning sessions as the bot reconnects. Use `$env:CRAFTLE_CAMERA_MODE = "first_person"` (or remove that environment variable) and recreate the agent to disable it.
+
+**Third-person 720p video** is not yet provided by this web-view option: Prismarine Viewer's headless API does not document a configurable third-person camera. For third-person footage now, join `localhost:25565` using the official Minecraft Java 1.21.1 client, press **F5** to cycle perspective, and capture with OBS. That footage is a camera on the player you control, not a follow-camera locked to the bot; filming the AI avatar requires positioning a separate camera/player near it. Do not mistake the spectator video for agent sensory input.
+
 ## What persists
 
 | Location | Contents |
