@@ -5,12 +5,12 @@ export function createOutcomeLedger({emit=()=>{}}={}){
  const seen=new Set();
  const report=(kind,details)=>{const event={schema:'craftle.outcome.v1',kind,life,sequence:++sequence,...details};emit(event);return event;};
  return {
-  begin(option){
+  begin(option,decisionId=null){
    if(!['eat','forage','explore','retreat'].includes(option))throw Error('Invalid option');
-   if(active?.option===option)return active.id;
+   if(active?.option===option&&active.decisionId===decisionId)return active.id;
    if(active)report('option_ended',{optionId:active.id,option:active.option,reason:'switched'});
-   active={id:`${life}:${++sequence}`,option};
-   report('option_started',{optionId:active.id,option});
+   active={id:`${life}:${++sequence}`,option,decisionId};
+   report('option_started',{optionId:active.id,option,decisionId});
    return active.id;
   },
   observe(type,data={}){
