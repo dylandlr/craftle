@@ -1,0 +1,5 @@
+name: CraftleObserver
+version: 0.1.0
+main: org.craftle.observer.CraftleObserver
+api-version: '1.21'
+description: Read-only experiment telemetry observer for Craftle
