@@ -80,6 +80,14 @@ public final class CraftleObserver extends JavaPlugin implements Listener {
     return sb.append(']').toString();
   }
 
+  private int inventoryCount(Player p, String key) {
+    int total = 0;
+    for (ItemStack stack : p.getInventory().getStorageContents()) {
+      if (stack != null && stack.getType().getKey().toString().equals(key)) total += stack.getAmount();
+    }
+    return total;
+  }
+
   @Override public void onEnable() {
     bootNano = System.nanoTime();
     experimentId = System.getenv().getOrDefault("CRAFTLE_EXPERIMENT_ID", "unspecified");
@@ -129,6 +137,9 @@ public final class CraftleObserver extends JavaPlugin implements Listener {
   public void onPickup(EntityPickupItemEvent e) {
     if(!(e.getEntity() instanceof Player p)) return;
     Item item=e.getItem();
+    final String pickupUuid = item.getUniqueId().toString();
+    final String pickedItem = item.getItemStack().getType().getKey().toString();
+    final int beforeCount = inventoryCount(p, pickedItem);
     write("item_pickup_event",p,",\"itemEntityUuid\":" + quote(item.getUniqueId().toString()) +
       ",\"item\":" + quote(item.getItemStack().getType().getKey().toString()) +
       ",\"count\":" + item.getItemStack().getAmount() +
