@@ -140,7 +140,7 @@ jobs:
         if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
       - name: Save updated training checkpoint
-        if: always()
+        if: always() && hashFiles('recordings/options/policy.json') != ''
         uses: actions/cache/save@v4
         with:
           path: recordings/options/policy.json
