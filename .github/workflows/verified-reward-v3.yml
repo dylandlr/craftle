@@ -100,6 +100,14 @@ jobs:
           if(checkpoint.updates<=0||checkpoint.updates!==4*(transitions+terminals))throw Error('Neural update/checkpoint accounting failed');
           console.log(JSON.stringify({type:'neural_learning_audit',schema:checkpoint.schema,updates:checkpoint.updates,transitions,terminals,decisions:decisions.length,actions:Object.fromEntries(checkpoint.options.map(action=>[action,decisions.filter(e=>e.action===action).length]))}));
           NODE
+      - name: Summarize verified reward evidence
+        if: always()
+        run: |
+          if [ -f recordings/survival-reference/agent.log ]; then
+            echo '### Verified outcome reward evidence' >> "$GITHUB_STEP_SUMMARY"
+            grep -c '"type":"option_verified_reward"' recordings/survival-reference/agent.log >> "$GITHUB_STEP_SUMMARY" || true
+            echo 'Events above are credited only when a matching option-instance ledger event is verified; zero is a valid negative outcome.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Encode full sampled POV using capture timestamps
         if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
