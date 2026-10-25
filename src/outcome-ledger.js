@@ -8,6 +8,7 @@ export function createOutcomeLedger({emit=()=>{}}={}){
   begin(option){
    if(!['eat','forage','explore','retreat'].includes(option))throw Error('Invalid option');
    if(active?.option===option)return active.id;
+   if(active)report('option_ended',{optionId:active.id,option:active.option,reason:'switched'});
    active={id:`${life}:${++sequence}`,option};
    report('option_started',{optionId:active.id,option});
    return active.id;
