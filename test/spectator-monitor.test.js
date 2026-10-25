@@ -11,6 +11,11 @@ test('spectator monitor serves watch-only UI and does not expose agent controls'
     assert.equal(page.status,200);
     const html=await page.text();
     assert.match(html,/Return to Auto/);
+    assert.match(html,/Take Camera/);
+    assert.match(html,/data-camera-mode="auto"/);
+    assert.match(html,/setManual\(true\)/);
+    assert.match(html,/frame\.focus\(\)/);
+    assert.match(html,/setManual\(false\)/);
     assert.match(html,/iframe/);
     assert.match(html,/watch-only/i);
     const status=await fetch(address+'/api/status');
