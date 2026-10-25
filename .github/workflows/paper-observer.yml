@@ -24,6 +24,8 @@ jobs:
         run: |
           mkdir -p recordings/server-observer plugins
           cp observer/target/craftle-observer-0.1.0.jar plugins/
+          sudo chown -R 1000:1000 plugins
+          sudo chmod u+rwx plugins
           docker run -d --name craftle-observer -p 25565:25565 \
             -v "$PWD/plugins:/data/plugins" \
             -e EULA=TRUE -e TYPE=PAPER -e VERSION=1.21.1 \
