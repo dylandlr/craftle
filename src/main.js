@@ -60,6 +60,42 @@ for(const [index,profile] of activeProfiles.entries()){
    const p=bot.entity.position;
    log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch});
  });
+ // Observer-only event telemetry. This never sends commands or enters policy inputs.
+ const observerEvent=(kind,payload={})=>log(profile.name,'spectator_effect',{
+   agent_id:profile.id,kind,...payload
+ });
+ const finitePosition=p=>p&&[p.x,p.y,p.z].every(Number.isFinite)?{x:p.x,y:p.y,z:p.z}:null;
+ bot.on('particle',particle=>{
+   if(process.env.CRAFTLE_SPECTATOR_EFFECTS!=='1')return;
+   observerEvent('particle',{name:String(particle?.name??'unknown').slice(0,96),
+     position:finitePosition(particle?.position),count:Math.max(0,Math.min(10000,Number(particle?.count)||0))});
+ });
+ bot.on('soundEffectHeard',(soundName,position,volume,pitch)=>{
+   if(process.env.CRAFTLE_SPECTATOR_EFFECTS!=='1')return;
+   observerEvent('sound',{name:String(soundName).slice(0,128),position:finitePosition(position),
+     volume:Number.isFinite(volume)?volume:null,pitch:Number.isFinite(pitch)?pitch:null});
+ });
+ for(const [event,kind] of [['entitySwingArm','swing'],['entityHurt','hurt'],['entityDead','entity_death']]){
+   bot.on(event,entity=>{
+     if(process.env.CRAFTLE_SPECTATOR_EFFECTS!=='1')return;
+     observerEvent(kind,{entityId:Number.isInteger(entity?.id)?entity.id:null,
+       position:finitePosition(entity?.position),entityName:String(entity?.name??'unknown').slice(0,64)});
+   });
+ }
+ let previousObserverPosition=null,previousObserverAt=null,observerLastSample=0;
+ bot.on('physicsTick',()=>{
+   if(process.env.CRAFTLE_SPECTATOR_EFFECTS!=='1'||!bot.entity)return;
+   const at=Date.now();if(at-observerLastSample<100)return;observerLastSample=at;
+   const position=finitePosition(bot.entity.position);if(!position)return;
+   const seconds=previousObserverAt?(at-previousObserverAt)/1000:0;
+   const velocity=seconds>0&&previousObserverPosition?
+     {x:(position.x-previousObserverPosition.x)/seconds,y:(position.y-previousObserverPosition.y)/seconds,
+       z:(position.z-previousObserverPosition.z)/seconds}:null;
+   observerEvent('motion',{position,velocity,yaw:bot.entity.yaw,pitch:bot.entity.pitch,
+     onGround:typeof bot.entity.onGround==='boolean'?bot.entity.onGround:null,
+     isInWater:Boolean(bot.entity.isInWater)});
+   previousObserverPosition=position;previousObserverAt=at;
+ });
  let rlRuntimeInitialized=false;
  bot.on('spawn',()=>{
    log(profile.name,'spawn',{agent_id:profile.id,position:bot.entity?.position});
