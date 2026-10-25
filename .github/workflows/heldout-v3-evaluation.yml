@@ -1,4 +1,5 @@
 name: Held-out frozen v3 policy evaluation
+# Action eligibility hotfix: full-hunger eating is invalid; frozen weights remain SHA-pinned.
 on:
   push:
     branches: [main]
