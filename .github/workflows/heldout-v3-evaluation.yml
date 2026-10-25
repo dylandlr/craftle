@@ -194,7 +194,11 @@ jobs:
           }
           console.log('Both held-out seeds paired; pinned neural checkpoint unchanged');
           NODE
+          node scripts/summarize-heldout.js comparison.json > heldout-summary.json
+          cat heldout-summary.json
       - uses: actions/upload-artifact@v4
         with:
           name: heldout-v3-comparison-${{ github.run_id }}
-          path: comparison.json
+          path: |
+            comparison.json
+            heldout-summary.json
