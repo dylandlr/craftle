@@ -25,11 +25,11 @@ export function auditTargetedEvidence(events){
   }
  }
  for(const r of recoveries){
-  const matching=consumptions.filter(c=>c.decisionId===r.decisionId&&c.beforeFood===r.beforeFood&&c.afterFood===r.afterFood);
+  const matching=consumptions.filter(c=>c.credited!==false&&c.decisionId===r.decisionId&&c.beforeFood===r.beforeFood&&c.afterFood===r.afterFood);
   if(matching.length!==1)throw Error('Verified recovery requires one matching consumption event');
  }
- for(const c of consumptions){if(!decisions.has(c.decisionId)||c.afterFood<=c.beforeFood||recoveries.filter(r=>r.decisionId===c.decisionId).length!==1)throw Error('Consumption has no valid verified recovery');}
- return {schema:'craftle.target-evidence-audit.v1',decisions:decisions.size,actions:[...actions.values()].reduce((a,b)=>a+b,0),foodInventoryIncreases:foodDeltas.filter(x=>x.deltaFoodUnits>0).length,verifiedHungerRecoveries:recoveries.length,limitations:'Food inventory changes are temporal correlations, not verified causes. Agent-reported hunger recovery requires independent server verification for stronger evidence.'};
+ for(const c of consumptions){if(!decisions.has(c.decisionId)||!Number.isFinite(c.beforeFood)||!Number.isFinite(c.afterFood)||c.afterFood<=c.beforeFood)throw Error('Invalid observed consumption');if(c.credited!==false&&recoveries.filter(r=>r.decisionId===c.decisionId).length!==1)throw Error('Credited consumption has no verified recovery');}
+ return {schema:'craftle.target-evidence-audit.v1',decisions:decisions.size,actions:[...actions.values()].reduce((a,b)=>a+b,0),foodInventoryIncreases:foodDeltas.filter(x=>x.deltaFoodUnits>0).length,verifiedHungerRecoveries:recoveries.length,observedConsumptions:consumptions.length,uncreditedConsumptions:consumptions.filter(c=>c.credited===false).length,limitations:'Food inventory changes are temporal correlations, not verified causes. Agent-reported hunger recovery requires independent server verification for stronger evidence.'};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const events=fs.readFileSync(process.argv[2],'utf8').split('\n').filter(s=>s.startsWith('{"timestamp":')).map(s=>JSON.parse(s));
