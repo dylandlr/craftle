@@ -2,7 +2,7 @@
 export function summarizeFoodProvenance(events,{windowMs=6000}={}){
  const commands=[],pickups=[],gains=[],meals=[];
  for(const e of events){
-  if(e.type==='target_harvest_attempt'||e.type==='target_attack_attempt'){
+  if(e.type==='target_harvest_intent'||e.type==='target_attack_intent'){
    commands.push(e);
   }else if(e.type==='food_provenance_pickup_event')pickups.push(e);
   else if(e.type==='food_provenance_inventory_delta'&&e.delta>0)gains.push(e);
