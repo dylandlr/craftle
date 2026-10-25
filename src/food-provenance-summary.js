@@ -1,7 +1,8 @@
 // Conservative temporal association; never equate correlation with verified causation.
 export function summarizeFoodProvenance(events,{windowMs=6000}={}){
- const commands=[],pickups=[],gains=[],meals=[];
+ const commands=[],pickups=[],gains=[],meals=[],blockObservations=[];
  for(const e of events){
+  if(e.type==='target_harvest_block_observation')blockObservations.push(e);
   if(e.type==='target_harvest_intent'||e.type==='target_attack_intent'){
    commands.push(e);
   }else if(e.type==='food_provenance_pickup_event')pickups.push(e);
@@ -20,5 +21,5 @@ export function summarizeFoodProvenance(events,{windowMs=6000}={}){
   else if(candidates.length>1)ambiguous++;
   else unassociated++;
  }
- return {schema:'craftle.food-provenance-summary.v1',harvestOrAttackCommands:commands.length,pickupEvents:pickups.length,positiveInventoryDeltas:gains.length,mealEvents:meals.length,temporallyAssociatedPickups:associated,ambiguousPickups:ambiguous,unassociatedPickups:unassociated,examples,limitations:'Temporal association only. No block drop identity, server-confirmed chain, or credit-worthy acquisition reward.'};
+ return {schema:'craftle.food-provenance-summary.v1',harvestOrAttackCommands:commands.length,pickupEvents:pickups.length,positiveInventoryDeltas:gains.length,mealEvents:meals.length,observedHarvestBlockChanges:blockObservations.filter(e=>e.changed===true).length,unchangedHarvestBlocks:blockObservations.filter(e=>e.changed===false).length,temporallyAssociatedPickups:associated,ambiguousPickups:ambiguous,unassociatedPickups:unassociated,examples,limitations:'Temporal association only. Client-observed block change is not server-confirmed; no block drop identity, server-confirmed chain, or credit-worthy acquisition reward.'};
 }
