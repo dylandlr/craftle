@@ -1,0 +1,148 @@
+name: Targeted skill two-episode checkpoint pilot
+# Audits observed eating separately from once-only credited decision reward.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/targeted-continuity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [training]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev python3-pil
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start controlled vanilla Minecraft arena
+        run: |
+          mkdir -p recordings/survival-reference
+          docker run -d --name craftle-targeted -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MEMORY=2G -e TYPE=VANILLA -e VERSION=1.21.1 -e MODE=survival -e SPAWN_PROTECTION=0 -e DIFFICULTY=normal -e SEED=20261205 itzg/minecraft-server:java21
+          ready=false
+          for i in $(seq 1 120); do
+            if docker logs craftle-targeted 2>&1 | grep -Fq 'For help, type "help"'; then ready=true; break; fi
+            sleep 3
+          done
+          test "$ready" = true
+          docker exec craftle-targeted rcon-cli 'forceload add -16 -16 16 16'
+          docker exec craftle-targeted rcon-cli 'fill -7 80 -7 7 85 7 stone hollow'
+          docker exec craftle-targeted rcon-cli 'fill -6 81 -6 6 86 6 air'
+          docker exec craftle-targeted rcon-cli 'setworldspawn 0 81 0'
+          docker exec craftle-targeted rcon-cli 'gamerule spawnRadius 0'
+          docker exec craftle-targeted rcon-cli 'time set 1000'
+          docker exec craftle-targeted rcon-cli 'weather clear'
+          docker exec craftle-targeted rcon-cli 'setblock 2 80 0 farmland[moisture=7]'
+          docker exec craftle-targeted rcon-cli 'setblock 2 81 0 carrots[age=7]'
+          docker exec craftle-targeted rcon-cli 'setblock -2 80 0 grass_block'
+          docker exec craftle-targeted rcon-cli 'setblock -2 81 0 sweet_berry_bush[age=3]'
+      - name: Run first targeted training episode
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: targeted_survival_options
+          CRAFTLE_OPTION_POLICY: training
+          CRAFTLE_OPTION_SEED: '17'
+          CRAFTLE_RL_MAX_MS: '30000'
+          CRAFTLE_REFERENCE_VIDEO_DIR: recordings/first-episode
+          CRAFTLE_RECORD_FRAMES: '5000'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          mkdir -p recordings/first-episode recordings/targeted
+          timeout --signal=TERM --kill-after=8s 55s xvfb-run -a node src/main.js > recordings/first-episode/agent.log 2>&1
+          test -s recordings/targeted/policy.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+          if(c.schema!=='craftle.targeted.dqn.v1'||c.updates<4||!c.trainingState?.replay?.length)throw Error('No first episode learning state');
+          fs.writeFileSync('recordings/targeted/episode-one.json',JSON.stringify({updates:c.updates,replaySize:c.trainingState.replay.length})+'\n');
+          NODE
+          docker exec craftle-targeted rcon-cli "kill Turesla" || true
+      - name: Run targetable skills and record server-side observations
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: targeted_survival_options
+          CRAFTLE_OPTION_POLICY: ${{ matrix.mode }}
+          CRAFTLE_OPTION_SEED: '17'
+          CRAFTLE_RL_MAX_MS: '90000'
+          CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
+          CRAFTLE_RECORD_FRAMES: '20000'
+          CRAFTLE_CAPTURE_TELEMETRY: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          timeout --signal=TERM --kill-after=8s 115s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 &
+          agent_pid=$!
+          for i in $(seq 1 40); do
+            if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
+            sleep 1
+          done
+          docker exec craftle-targeted rcon-cli 'effect give Turesla minecraft:hunger 15 20 true'
+          for i in $(seq 1 8); do
+            date -u +'%Y-%m-%dT%H:%M:%SZ' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla foodLevel' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla Health' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla Inventory' >> recordings/survival-reference/server-observations.log
+            sleep 10
+          done
+          wait "$agent_pid" || status=$?
+          test "${status:-0}" -eq 0
+      - name: Assert neural continuation across processes
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const prev=JSON.parse(fs.readFileSync('recordings/targeted/episode-one.json','utf8'));
+          const current=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+          if(current.updates<=prev.updates || current.trainingState.replay.length<=prev.replaySize)throw Error('Targeted DQN did not continue experience across processes');
+          console.log(JSON.stringify({type:'targeted_continuation_audit',before:prev,after:{updates:current.updates,replaySize:current.trainingState.replay.length}}));
+          NODE
+      - name: Audit targeted controller execution
+        env:
+          TARGET_MODE: ${{ matrix.mode }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const events=fs.readFileSync('recordings/survival-reference/agent.log','utf8').split('\n').filter(s=>s.startsWith('{"timestamp":')).map(s=>JSON.parse(s));
+          const decisions=events.filter(e=>e.type==='target_decision'),transitions=events.filter(e=>e.type==='target_transition'),terminals=events.filter(e=>e.type==='target_terminal');
+          if(decisions.length<3||!events.some(e=>e.type==='shutdown')||events.some(e=>['target_runtime_error','recording_error','error'].includes(e.type)))throw Error('Invalid targeted pilot execution');
+          if(decisions.some(e=>e.mode!==process.env.TARGET_MODE||e.contract!=='targeted44-actions15-v1'||!e.mask[e.index]))throw Error('Target contract mismatch');
+          if(process.env.TARGET_MODE==='training'){
+            const p=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+            const initial=JSON.parse(fs.readFileSync('recordings/targeted/episode-one.json','utf8'));
+            if(p.schema!=='craftle.targeted.dqn.v1'||p.updates-initial.updates!==4*(transitions.length+terminals.length))throw Error('Target checkpoint episode-delta accounting mismatch');
+          }else if(fs.existsSync('recordings/targeted/policy.json'))throw Error('Control wrote model weights');
+          console.log(JSON.stringify({mode:process.env.TARGET_MODE,decisions:decisions.length,transitions:transitions.length,meals:events.filter(e=>e.type==='target_consumed'&&e.afterFood>e.beforeFood).length,harvestAttempts:events.filter(e=>e.type==='target_harvest_attempt').length,limitations:'Single development arena. Scripted semantic perception and targetable actuators. No learning advantage established.'}));
+          NODE
+      - name: Audit action-to-observation evidence
+        if: always()
+        run: |
+          if [ -s recordings/survival-reference/agent.log ]; then
+            node scripts/audit-targeted-evidence.js recordings/survival-reference/agent.log > recordings/survival-reference/targeted-evidence-audit.json
+            cat recordings/survival-reference/targeted-evidence-audit.json
+          fi
+      - name: Encode annotated full POV
+        if: always()
+        run: python3 scripts/encode-reference-video.py recordings/survival-reference
+      - name: Archive independent server logs and configuration
+        if: always()
+        run: |
+          mkdir -p recordings/survival-reference
+          docker logs --timestamps craftle-targeted > recordings/survival-reference/server.log 2>&1 || true
+          docker exec craftle-targeted cat /data/server.properties | python3 -c 'import sys,json; pairs=(line.strip().split("=",1) for line in sys.stdin if "=" in line and not line.startswith("#")); allowed={"level-seed","gamemode","difficulty","online-mode","view-distance","simulation-distance","spawn-protection","max-players"}; print(json.dumps({k:v for k,v in pairs if k in allowed},indent=2))' > recordings/survival-reference/server-settings.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: targeted-skills-${{ matrix.mode }}-${{ github.run_id }}
+          path: recordings
+          retention-days: 30
