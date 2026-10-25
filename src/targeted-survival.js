@@ -40,7 +40,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     clearGoal();
     if(choice.skill==='eat'){
      const item=bot.inventory.items().find(item=>edible(bot,item));
-     if(item&&bot.food<20){await bot.equip(item,'hand');if(!valid())return;const before=bot.food;await bot.consume();if(!valid())return;decisionController.consumed(choice.decisionId,before,bot.food);log({type:'target_consumed',decisionId:choice.decisionId,item:item.name,beforeFood:before,afterFood:bot.food});}
+     if(item&&bot.food<20){await bot.equip(item,'hand');if(!valid())return;const before=bot.food;await bot.consume();if(!valid())return;const credited=decisionController.consumed(choice.decisionId,before,bot.food);log({type:'target_consumed',decisionId:choice.decisionId,item:item.name,beforeFood:before,afterFood:bot.food,credited});}
     }else if(choice.skill==='harvest'&&target?.kind==='plant'&&target.reachable){
      const block=bot.blockAt(p.offset(target.position.x-p.x,target.position.y-p.y,target.position.z-p.z)),action=foodPlantAction(block);
      if(action&&bot.canSeeBlock?.(block)){if(action==='dig')await bot.dig(block);else await bot.activateBlock(block);if(!valid())return;log({type:'target_harvest_attempt',decisionId:choice.decisionId,targetId:target.id,plant:block.name});}
