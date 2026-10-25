@@ -1,6 +1,7 @@
 // Privileged-state scripted survival reference, not a vision-only or learned policy.
 import pathfinderPackage from 'mineflayer-pathfinder';
 import {attachFoodOutcomes} from './food-outcomes.js';
+import {createOutcomeLedger} from './outcome-ledger.js';
 import {foodPlantAction,plantKey,findFoodPlant,foodSearchCell,chooseFoodSearchWaypoint} from './food-foraging.js';
 export const HOSTILE_MOBS=new Set(['zombie','husk','drowned','skeleton','stray','spider','cave_spider','creeper','witch','pillager','endermite','silverfish']);
 export function chooseSurvivalGoal({health=20,food=20,hostileDistance=Infinity,foodAvailable=false,hasFood=false,blocked=false}={}){
@@ -31,9 +32,10 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  const foodTargets=createFoodTargetMemory({clock});
  const searchVisits=new Map(),searchBlocked=new Map();let currentSearchKey=null;
  const actions=[];
+ const attribution=createOutcomeLedger({emit:e=>log({type:'deterministic_outcome',...e})});
  let tick=0,busy=false,ended=false,dead=false,life=0,positionBefore=null,stalledIntervals=0;
  let currentGoal=null,goalSince=0,timer=null,pursuedAnimal=null,lastFoodGoal=null,lastObjective=null;
- const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);};
+ const record=(type,data={})=>{const e={type,sequence:actions.length,life,...data};actions.push(e);log(e);attribution.observe(type,data);};
  const detachOutcomes=attachFoodOutcomes(bot,(type,data)=>{
    if(type==='survival_reference_food_damage_observed'&&data.attribution==='self')foodTargets.progress(data.entityId);
    record(type,data);
@@ -47,12 +49,12 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const onDeath=()=>{
    if(ended||dead)return;
-   dead=true;life++;decisionController?.terminal();cancel();
+   dead=true;life++;attribution.death();decisionController?.terminal();cancel();
    record('survival_reference_death',{health:bot.health});
  };
  const onSpawn=()=>{
    if(ended)return;
-   dead=false;life++;cancel();
+   dead=false;life++;attribution.respawn();cancel();
    record('survival_reference_respawn');
  };
  const onGoalReached=()=>{currentGoal=null;};
@@ -89,6 +91,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
      const foodAvailable=Boolean(edible);
      const observation={health:bot.health,food:bot.food,foodAvailable,hostileDistance:distance,inventoryCount:inventory.length,blocked:stalledIntervals>=3,displacement,position:{x:pos.x,y:pos.y,z:pos.z}};
      const objective=decisionController?decisionController.choose(observation):chooseSurvivalGoal({health:bot.health,food:bot.food,hostileDistance:distance,foodAvailable,hasFood:inventory.filter(item=>bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name)).reduce((sum,item)=>sum+(bot.registry.foodsByName[item.name].foodPoints??1)*item.count,0)>=8,blocked:stalledIntervals>=3});
+     attribution.begin(objective==='reroute'?'explore':objective);
      if(decisionController&&lastObjective!==objective){bot.pathfinder.setGoal(null);currentGoal=null;lastFoodGoal=null;lastObjective=objective;}
      if(objective==='eat'&&edible){
        bot.pathfinder.setGoal(null);currentGoal=null;
@@ -171,7 +174,7 @@ export function startSurvivalReference(bot,{log=()=>{},intervalMs=1800,autoStart
  };
  const stop=()=>{
    if(ended)return;
-   ended=true;life++;decisionController?.stop();detachOutcomes();
+   ended=true;life++;attribution.end('shutdown');decisionController?.stop();detachOutcomes();
    if(timer)clearInterval(timer);
    bot.removeListener('death',onDeath);bot.removeListener('spawn',onSpawn);
    bot.removeListener('goal_reached',onGoalReached);bot.removeListener('path_update',onPathUpdate);
