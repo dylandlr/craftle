@@ -1,0 +1,9 @@
+.git
+node_modules
+config.json
+recordings
+deploy/persistent/state
+deploy/persistent/secrets
+**/__pycache__
+**/.env
+**/.env.*

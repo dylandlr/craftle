@@ -1,0 +1,54 @@
+name: craftle-persistent
+services:
+  minecraft:
+    image: itzg/minecraft-server:java21
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:25565:25565'
+    environment:
+      EULA: 'TRUE'
+      TYPE: VANILLA
+      VERSION: '1.21.1'
+      ONLINE_MODE: 'FALSE'
+      MODE: survival
+      DIFFICULTY: normal
+      MEMORY: '${CRAFTLE_MC_MEMORY:-3G}'
+      SEED: '20261205'
+      SPAWN_PROTECTION: '0'
+      ENABLE_RCON: 'true'
+      RCON_PASSWORD_FILE: /run/secrets/rcon_password
+      MAX_PLAYERS: '12'
+    volumes:
+      - ./state/server:/data
+    secrets:
+      - rcon_password
+    healthcheck:
+      test: ['CMD', 'mc-health']
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    stop_grace_period: 60s
+  agent:
+    profiles: [learning]
+    build:
+      context: ../..
+      dockerfile: deploy/persistent/agent.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    environment:
+      CRAFTLE_PERSISTENT_ROOT: /state/agent
+      CRAFTLE_SERVER_HOST: minecraft
+      CRAFTLE_SERVER_PORT: '25565'
+      CRAFTLE_MC_VERSION: '1.21.1'
+      CRAFTLE_PERSISTENT_SESSION_MS: '180000'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    volumes:
+      - ./state/agent:/state/agent
+    init: true
+    stop_grace_period: 60s
+secrets:
+  rcon_password:
+    file: ./secrets/rcon_password.txt

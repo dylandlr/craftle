@@ -35,12 +35,17 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   if(ended||dead||busy||!bot.entity||bot.health<=0)return;
   busy=true;const epoch=life,valid=()=>!ended&&!dead&&epoch===life;
   try{
-   const p=bot.entity.position,displacement=lastPosition?Math.hypot(p.x-lastPosition.x,p.z-lastPosition.z):0;
+   let p=bot.entity.position;const displacement=lastPosition?Math.hypot(p.x-lastPosition.x,p.z-lastPosition.z):0;
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
-   const choice=decisionController.choose(observation);
+   const proposed=decisionController.choose(observation);
+   const choice=typeof proposed?.then==='function'?await proposed:proposed;
+   if(!valid())return;
+   p=bot.entity.position;
    activeDecision={decisionId:choice.decisionId,skill:choice.skill,targetId:choice.targetId};
-   const target=observation.targets.find(t=>t.id===choice.targetId);
+   const current=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
+   const target=current.targets.find(t=>t.id===choice.targetId);
+   if(['approach','harvest','attack'].includes(choice.skill)&&!target){clearGoal();log({type:'target_action_rejected',decisionId:choice.decisionId,reason:'target_no_longer_available'});return;}
    if(choice.skill==='approach'&&target){setGoal(target.id,target.position,target.kind==='drop'?0:1);}
    else if(choice.skill==='explore'){
     if(goal?.key!=='explore'||stalls>=3||clock()-goal.at>=15000){const a=tick*2.399963229728653;setGoal('explore',{x:p.x+Math.cos(a)*16,y:p.y,z:p.z+Math.sin(a)*16},1,true);}
