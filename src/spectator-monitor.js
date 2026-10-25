@@ -1,5 +1,6 @@
 import http from 'node:http';
 import net from 'node:net';
+import {readAgentTelemetry} from './spectator-telemetry.js';
 
 export function cameraReachable({host='127.0.0.1',port=3000,timeoutMs=700}={}){
   return new Promise(resolve=>{
@@ -21,7 +22,7 @@ export function spectatorHtml(){
 h1{font-size:17px;margin:0}small{color:#a9b7c8}main{max-width:1600px;margin:0 auto;padding:16px}.viewport{position:relative;background:#080c12;aspect-ratio:16/9;border:1px solid #35465c;border-radius:12px;overflow:hidden}
 iframe{display:block;width:100%;height:100%;border:0}#offline{position:absolute;inset:0;display:none;place-content:center;text-align:center;background:#10151dee;pointer-events:none}
 .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0}button,a{background:#27394e;color:#f0f7ff;border:1px solid #547397;border-radius:8px;padding:10px 14px;font:inherit;text-decoration:none;cursor:pointer}button:hover,a:hover{background:#334e6b}button:focus-visible,a:focus-visible{outline:2px solid #9bc7ff} .status{margin-left:auto;font-size:13px;color:#bed0df}
-.note{color:#b0c0ce;font-size:13px;line-height:1.5}.green{color:#7be1ae}.amber{color:#e7c17a}
+.inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:14px;background:#17202c;border:1px solid #314052;border-radius:10px}.metric{display:flex;flex-direction:column;gap:4px;font-size:14px}.metric strong{font-weight:600}.metric small{font-size:12px}.note{color:#b0c0ce;font-size:13px;line-height:1.5}.green{color:#7be1ae}.amber{color:#e7c17a}
 </style></head><body><header><div><h1>Craftle · Spectator Monitor</h1><small>Watch-only by default · observer commands never control the learning agent</small></div><small id="mode">AUTO VIEW</small></header>
 <main><section class="viewport" aria-label="Live Minecraft spectator viewer">
 <iframe id="viewer" title="Live third-person Prismarine Viewer" src="http://127.0.0.1:3000/" allowfullscreen></iframe>
@@ -31,6 +32,14 @@ iframe{display:block;width:100%;height:100%;border:0}#offline{position:absolute;
 <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener noreferrer">Open raw camera ↗</a>
 <span class="status" id="status" role="status" aria-live="polite">Checking camera…</span>
 </div>
+<section class="inspector" aria-label="Agent inspector">
+<div class="metric"><small>Agent</small><strong id="agent-name">Waiting for telemetry</strong></div>
+<div class="metric"><small>Health / Hunger</small><strong id="vitals">—</strong></div>
+<div class="metric"><small>Position</small><strong id="position">—</strong></div>
+<div class="metric"><small>Recent action</small><strong id="last-action">—</strong></div>
+<div class="metric"><small>Latest event</small><strong id="last-event">—</strong></div>
+<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>
+</section>
 <p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: independent continuous Auto Director recording and shared WASD takeover are not implemented yet.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
@@ -49,11 +58,26 @@ async function check(){
   status.className='status '+(online?'green':'amber');
  }catch{status.textContent='Monitor connection interrupted';status.className='status amber';}
 }
-check();setInterval(check,3000);
+async function inspect(){
+ try{
+  const response=await fetch('/api/agent',{cache:'no-store'});
+  if(!response.ok)throw Error('telemetry unavailable');
+  const data=await response.json(),a=data.agent;
+  const put=(id,value)=>{document.getElementById(id).textContent=String(value);};
+  if(!a){put('agent-name','Waiting for telemetry');put('freshness','Unavailable');return;}
+  put('agent-name',a.name+' ('+a.id+')');
+  put('vitals',(a.health??'—')+' HP / '+(a.food??'—')+' food');
+  put('position',a.position?[a.position.x,a.position.y,a.position.z].map(n=>n.toFixed(1)).join(', '):'—');
+  put('last-action',a.lastAction?.action??a.lastAction?.type??'—');
+  put('last-event',a.lastEvent?.type??'—');
+  put('freshness',a.stale?'Stale / session gap':'Live · '+new Date(a.lastObservedAt).toLocaleTimeString());
+ }catch{document.getElementById('freshness').textContent='Unavailable';}
+}
+check();inspect();setInterval(check,3000);setInterval(inspect,2000);
 </script></body></html>`;
 }
 
-export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.0.0.1',cameraPort=3000}={}){
+export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.0.0.1',cameraPort=3000,telemetryRoot=null}={}){
   const page=spectatorHtml();
   const server=http.createServer(async(req,res)=>{
     const route=(req.url??'/').split('?')[0];
@@ -61,7 +85,12 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
-    if(route==='/api/status'){
+    if(route==='/api/agent'){
+      let data={available:false,agent:null};
+      if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({schema:'craftle.spectator-agent.v1',...data}));
+    }else if(route==='/api/status'){
       const reachable=await cameraReachable({host:cameraHost,port:cameraPort});
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-status.v1',cameraReachable:reachable,controlMode:'watch_only',time:new Date().toISOString()}));
