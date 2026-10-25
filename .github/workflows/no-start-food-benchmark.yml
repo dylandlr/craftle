@@ -44,6 +44,8 @@ jobs:
           mvn -B -f observer/pom.xml package
           mkdir -p plugins
           cp observer/target/craftle-observer-0.1.0.jar plugins/
+          sudo chown -R 1000:1000 plugins
+          sudo chmod u+rwx plugins
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
