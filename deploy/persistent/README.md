@@ -1,3 +1,11 @@
+## Spectator effects and cinematic-drone groundwork
+
+When the agent is running, the observation-only event bridge (`CRAFTLE_SPECTATOR_EFFECTS=1` by default) records genuine Mineflayer movement, entity swings/hurts, received particles and sound-effect *metadata* to its regular session or continuous agent log. The inspector at `http://127.0.0.1:3001` displays the most recent particles/sounds, motion type and a calculated trailing-drone shot intention (behind heading, elevated, with tighter zoom for observed attack/harvest decisions). The shot planner `src/spectator-director.js` has deterministic unit tests.
+
+**Do not mistake this for complete cinematic rendering.** The desired camera pose is **not applied** to Prismarine Viewer yet. Particle/sound metadata are not graphical particles or audible Minecraft sound. Similarly, derived walk/jump labels are not avatar skeletal animation. Proper avatar poses, rendered effects, asset-backed positional audio and continuous drone camera need renderer integration or a full Minecraft client capture; vanilla Minecraft resource packs and sound assets must be handled appropriately. The spectator remains invisible as no additional Minecraft protocol client is spawned by these new features. Existing first-person/third-person viewer, model checkpoints, server state and training loop are otherwise unchanged.
+
+For film-grade results, a separate Minecraft client with authenticated spectator privileges plus explicit visibility/interaction isolation might be an alternative renderer, but it is **not** intrinsically invisible to agents and must be audited before being used in experiments. Our preferred path retains the virtual observer and develops a renderer with external camera transforms, correct model animations, particle playback and positional audio without registering an entity.
+
 ## Experimental continuous Mineflayer agent (opt-in)
 
 The default runner still uses validated three-minute training sessions. To keep the **same Mineflayer connection** active across training checkpoints and retain a stable third-person viewer, enable experimental continuous mode:
