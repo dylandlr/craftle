@@ -36,37 +36,37 @@ jobs:
           npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
           npm run configure
           npm test
-      - name: Restore latest training checkpoint
-        id: restore_training
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            recordings/options/policy.json
-            recordings/options/lineage.json
-          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            craftle-options-v3-structured7-assisted4-commit4-audited-v1-
-      - name: Recover promoted checkpoint artifact if cache unavailable
-        if: steps.restore_training.outputs.cache-matched-key == ''
-        uses: actions/download-artifact@v4
-        with:
-          name: continuous-v3-natural-20261205-eps0.30-40173712413
-          run-id: 40173712413
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: recordings
-      - name: Identify checkpoint source
+      - name: Restore latest validated continuous experiment artifact
         id: checkpoint_source
         env:
-          CACHE_KEY: ${{ steps.restore_training.outputs.cache-matched-key }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_RUN: ${{ github.run_id }}
         run: |
-          if [ -n "$CACHE_KEY" ]; then
-            echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
-            echo "source=cache" >> "$GITHUB_OUTPUT"
-          else
-            test -s recordings/options/policy.json
-            test -s recordings/options/lineage.json
-            echo "key=craftle-options-v3-structured7-assisted4-commit4-audited-v1-40173712413-1" >> "$GITHUB_OUTPUT"
-            echo "source=pinned-promoted-artifact-40173712413" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          mkdir -p recordings/options
+          runs=$(gh api "repos/$GH_REPO/actions/workflows/continuous-learning.yml/runs?status=success&per_page=30")
+          previous=$(echo "$runs" | jq -r --arg current "$CURRENT_RUN" '[.workflow_runs[] | select((.id|tostring)!=$current)] | sort_by(.created_at,.id) | reverse | .[].id' )
+          recovered=0
+          for run in $previous; do
+            artifacts=$(gh api "repos/$GH_REPO/actions/runs/$run/artifacts?per_page=100")
+            artifact=$(echo "$artifacts" | jq -r --arg run "$run" '.artifacts[] | select(.expired==false and (.name|startswith("continuous-v3-natural-")) and (.name|endswith("-"+$run))) | .name' | head -1)
+            if [ -z "$artifact" ]; then continue; fi
+            mkdir -p "recordings/recovery/$run"
+            if ! gh run download "$run" --repo "$GH_REPO" --name "$artifact" --dir "recordings/recovery/$run"; then continue; fi
+            candidate="recordings/recovery/$run/options/policy.json"
+            lineage="recordings/recovery/$run/options/lineage.json"
+            if [ ! -s "$candidate" ] || [ ! -s "$lineage" ]; then continue; fi
+            cp "$candidate" recordings/options/policy.json
+            cp "$lineage" recordings/options/lineage.json
+            echo "key=craftle-options-v3-structured7-assisted4-commit4-audited-v1-$run-1" >> "$GITHUB_OUTPUT"
+            echo "source=verified-artifact-$run" >> "$GITHUB_OUTPUT"
+            recovered=1
+            break
+          done
+          if [ "$recovered" -ne 1 ]; then
+            echo "No validated predecessor artifact available. Failing closed rather than silently cold-starting." >&2
+            exit 1
           fi
       - name: Verify predecessor checkpoint identity
         env:
