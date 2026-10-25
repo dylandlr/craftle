@@ -3,7 +3,7 @@ name: No-starting-food acquisition benchmark
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/no-start-food-benchmark.yml', 'scripts/sample-minecraft-server.js']
+    paths: ['.github/workflows/no-start-food-benchmark.yml', 'observer/**', 'scripts/sample-minecraft-server.js']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,6 +35,15 @@ jobs:
           const c=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
           if(c.schema!=='craftle.targeted.dqn.v1'||c.updates!==236||c.trainingState?.replay?.length!==59)throw Error('Wrong pinned targeted checkpoint');
           NODE
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build server observer
+        run: |
+          mvn -B -f observer/pom.xml package
+          mkdir -p plugins
+          cp observer/target/craftle-observer-0.1.0.jar plugins/
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -49,7 +58,7 @@ jobs:
       - name: Start controlled vanilla Minecraft arena
         run: |
           mkdir -p recordings/survival-reference
-          docker run -d --name craftle-targeted -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MEMORY=2G -e TYPE=VANILLA -e VERSION=1.21.1 -e MODE=survival -e SPAWN_PROTECTION=0 -e DIFFICULTY=normal -e SEED=20261205 itzg/minecraft-server:java21
+          docker run -d --name craftle-targeted -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MEMORY=2G -v "$PWD/plugins:/data/plugins" -e TYPE=PAPER -e VERSION=1.21.1 -e MODE=survival -e SPAWN_PROTECTION=0 -e DIFFICULTY=normal -e SEED=20261205 itzg/minecraft-server:java21
           ready=false
           for i in $(seq 1 120); do
             if docker logs craftle-targeted 2>&1 | grep -Fq 'For help, type "help"'; then ready=true; break; fi
@@ -116,6 +125,19 @@ jobs:
             docker exec craftle-targeted rcon-cli 'data get block 2 81 0' || true
             docker exec craftle-targeted rcon-cli 'data get block -2 81 0' || true
           } >> recordings/survival-reference/server-crop-snapshots.log 2>&1
+      - name: Archive authoritative Paper event stream
+        if: always()
+        run: |
+          mkdir -p recordings/server-observer
+          cp plugins/CraftleObserver/events.jsonl recordings/server-observer/events.jsonl
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const rows=fs.readFileSync('recordings/server-observer/events.jsonl','utf8').trim().split('\n').map(JSON.parse);
+          const boot=rows.find(r=>r.event==='observer_boot'),joins=rows.filter(r=>r.event==='player_join');
+          if(!boot||!joins.length)throw Error('No server observer boot/player join evidence');
+          console.log(JSON.stringify({events:rows.length,serverPickups:rows.filter(r=>r.event==='item_pickup_event').length,serverBlockBreaks:rows.filter(r=>r.event==='block_break_event').length,serverMeals:rows.filter(r=>r.event==='item_consume_event').length}));
+          NODE
+          sha256sum recordings/server-observer/events.jsonl > recordings/server-observer/events.sha256
       - name: Audit targeted controller execution
         env:
           TARGET_MODE: ${{ matrix.mode }}
