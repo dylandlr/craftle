@@ -36,9 +36,9 @@ export function parseAgentTelemetry(lines, now=Date.now()){
 }
 
 export function readAgentTelemetry(root,{tailBytes=262144}={}){
-  const entries=fs.readdirSync(root,{withFileTypes:true})
-    .filter(e=>e.isDirectory()&&/^session[-_]/.test(e.name)).map(e=>{
-      const file=path.join(root,e.name,'agent.log');
+  const entries=fs.readdirSync(path.join(root,'sessions'),{withFileTypes:true})
+    .filter(e=>e.isDirectory()).map(e=>{
+      const file=path.join(root,'sessions',e.name,'agent.log');
       try{return {file,mtime:fs.statSync(file).mtimeMs};}catch{return null;}
     }).filter(Boolean).sort((a,b)=>b.mtime-a.mtime);
   if(!entries.length)return {available:false,agent:null};
