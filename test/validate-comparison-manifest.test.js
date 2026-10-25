@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateComparisonManifest} from '../scripts/validate-comparison-manifest.js';
+const base={schema:'craftle.comparison.v1',treatment:'targeted-dqn',runId:'run1',gitSha:'abc',serverType:'VANILLA',minecraftVersion:'1.21.1',observationContract:'target44-v1',actionContract:'target15-v1',worldSeed:'12',startingStateHash:'def',policyProvenance:'random-init',episodeSeconds:180,matchedInterface:true};
+test('valid non-LLM benchmark manifest',()=>assert.equal(validateComparisonManifest(base).comparisonFamily,'matched'));
+test('native Voyager cannot masquerade as matched',()=>assert.throws(()=>validateComparisonManifest({...base,treatment:'voyager-native',modelIdentifier:'gpt',pretrainingDisclosure:'pretrained-language-prior',maxTokens:1000}),/external reference/));
+test('LLM benchmark must disclose prior and bounded tokens',()=>assert.throws(()=>validateComparisonManifest({...base,treatment:'craftle-llm'}),/provenance\/budget/));
+test('adapted Voyager requires port provenance',()=>assert.throws(()=>validateComparisonManifest({...base,treatment:'voyager-adapted',modelIdentifier:'gpt',pretrainingDisclosure:'pretrained-language-prior',maxTokens:1000}),/port provenance/));
