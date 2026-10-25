@@ -19,3 +19,11 @@ test('a recovery requires precisely one corresponding consumption event',()=>{
  assert.throws(()=>auditTargetedEvidence([eat,recovery,consumed,consumed]),/requires one matching consumption/);
  assert.throws(()=>auditTargetedEvidence([eat,recovery,{...consumed,afterFood:19}]),/requires one matching consumption/);
 });
+
+test('legitimate uncredited consumption is reported without inventing a reward',()=>{
+ const eat={type:'target_decision',decisionId:8,skill:'eat',action:'eat',targetId:null};
+ const consumed={type:'target_consumed',decisionId:8,beforeFood:16,afterFood:20,item:'bread',credited:false};
+ const report=auditTargetedEvidence([eat,consumed]);
+ assert.equal(report.observedConsumptions,1);assert.equal(report.uncreditedConsumptions,1);assert.equal(report.verifiedHungerRecoveries,0);
+ assert.throws(()=>auditTargetedEvidence([eat,{...consumed,credited:true}]),/Credited consumption has no verified recovery/);
+});
