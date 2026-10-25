@@ -4,7 +4,7 @@ import {createOptionDQN} from './option-dqn.js';
 import {seededOptionRandom} from './learning-options.js';
 import {TARGET_ACTIONS,TARGET_INPUTS,TARGET_SCHEMA,encodeTargets,decodeTargetAction} from './target-opportunities.js';
 export function createTargetedController({checkpoint,mode='training',seed=1,epsilon=0.3,log=()=>{}}={}){
- if(!['training','frozen','random','scripted'].includes(mode))throw Error('Invalid targeted policy mode');
+ if(!['training','frozen','random','scripted','auto_eat'].includes(mode))throw Error('Invalid targeted policy mode');
  if(!Number.isFinite(epsilon)||epsilon<0||epsilon>1)throw Error('Invalid targeted epsilon');
  if(mode==='frozen'&&(!checkpoint||!fs.existsSync(checkpoint)))throw Error('Frozen targeted policy requires checkpoint');
  const random=seededOptionRandom(seed),neural=['training','frozen'].includes(mode);
@@ -23,10 +23,11 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
    }
    let index;
    if(mode==='random'){const ids=mask.flatMap((yes,i)=>yes?[i]:[]);index=ids[Math.floor(random()*ids.length)];}
-   else if(mode==='scripted'){
-    let action=o.hostileDistance<8?'retreat':mask[0]?'eat':null;
+   else if(mode==='scripted'||mode==='auto_eat'){
+    let action=o.hostileDistance<8?'retreat':mode==='scripted'&&mask[0]?'eat':null;
     if(!action){for(let i=0;i<o.targets.length;i++){const t=o.targets[i];const name=t.reachable&&t.kind==='plant'?`harvest_${i}`:t.reachable&&t.kind==='animal'?`attack_${i}`:`approach_${i}`;if(mask[TARGET_ACTIONS.indexOf(name)]){action=name;break;}}}
     index=TARGET_ACTIONS.indexOf(action??'explore');
+    if(mode==='auto_eat'&&index===0)throw Error('Auto-eat control cannot choose neural eat action');
    }else index=learner.choose(features,mask).index;
    const choice=decodeTargetAction(index,o),decisionId=++serial;
    pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,credit:0,decisionId};
