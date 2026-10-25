@@ -109,8 +109,36 @@ jobs:
           mkdir -p recordings/survival-reference
           docker logs craftle-reference > recordings/survival-reference/server.log 2>&1 || true
       - uses: actions/upload-artifact@v4
+        id: trial_video_artifact
         if: always()
         with:
           name: neural-options-${{ matrix.scenario }}-${{ matrix.seed }}-eps${{ matrix.epsilon }}-${{ github.run_id }}
           path: recordings
           retention-days: 30
+      - name: Add full gameplay links to run summary
+        if: always()
+        env:
+          VIDEO_ARTIFACT_ID: ${{ steps.trial_video_artifact.outputs.artifact-id }}
+          SCENARIO: ${{ matrix.scenario }}
+          EPSILON: ${{ matrix.epsilon }}
+          SEED: ${{ matrix.seed }}
+        run: |
+          {
+            echo "### Full Minecraft POV — $SCENARIO / epsilon $EPSILON / world $SEED"
+            echo ""
+            if [ -n "$VIDEO_ARTIFACT_ID" ]; then
+              echo "[Download full recording, annotated copy, raw frames, and logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$VIDEO_ARTIFACT_ID)"
+            else
+              echo "Artifact upload did not produce a recording link."
+            fi
+            if [ -s recordings/survival-reference/video-timing.json ]; then
+              echo ""
+              echo '#### Capture coverage'
+              echo '~~~json'
+              cat recordings/survival-reference/video-timing.json
+              echo '~~~'
+            else
+              echo ""
+              echo "Video timing unavailable; do not claim complete playback."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
