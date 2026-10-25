@@ -283,6 +283,17 @@ for(const [index,profile] of activeProfiles.entries()){
        const autoEatControl=process.env.CRAFTLE_BEHAVIOR==='auto_eat_control';
        const optionController=targeted?createTargetedController({mode:autoEatControl?'auto_eat':process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),checkpoint:process.env.CRAFTLE_TARGET_CHECKPOINT??'recordings/targeted/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({rewardVersion:process.env.CRAFTLE_OPTION_REWARD_VERSION??'v1',epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),commitmentSteps:Number(process.env.CRAFTLE_OPTION_COMMITMENT_STEPS??1),mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
        (targeted?startTargetedSurvival:startSurvivalReference)(bot,{decisionController:optionController,autoEatControl,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
+       // Optional external observer: this camera never feeds the learning policy.
+       const cameraMode=process.env.CRAFTLE_CAMERA_MODE??'first_person';
+       if(!['first_person','third_person'].includes(cameraMode))throw Error('Invalid CRAFTLE_CAMERA_MODE');
+       if(cameraMode==='third_person'){
+         const {mineflayer:showThirdPerson}=await import('prismarine-viewer');
+         const port=Number(process.env.CRAFTLE_THIRD_PERSON_PORT??3000);
+         if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid CRAFTLE_THIRD_PERSON_PORT');
+         showThirdPerson(bot,{firstPerson:false,port,viewDistance:6});
+         log(profile.name,'third_person_viewer_started',{agent_id:profile.id,port,source:'prismarine-viewer-web',recordedByHeadless:false,learningInputUnchanged:true});
+         bot.once('end',()=>{try{bot.viewer?.close();}catch{}});
+       }
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
          fs.mkdirSync(path.join(videoDir,'frames'),{recursive:true});
