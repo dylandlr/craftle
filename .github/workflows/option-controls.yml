@@ -106,6 +106,20 @@ jobs:
       - name: Encode full sampled POV using capture timestamps
         if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
+      - name: Write reproducibility manifest
+        if: always()
+        env:
+          TREATMENT: ${{ matrix.treatment }}
+          WORLD_SEED: ${{ matrix.seed }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -s recordings/survival-reference/summary.json ] && [ -s recordings/survival-reference/agent.log ]; then
+            video=$(find recordings/survival-reference -maxdepth 1 -name '*.mp4' | head -1)
+            node scripts/experiment-manifest.js recordings/survival-reference/experiment-manifest.json "$TREATMENT" "$WORLD_SEED" 17 "$GIT_SHA" "$RUN_ID" 180 1 recordings/survival-reference/summary.json recordings/survival-reference/agent.log "${video:-}" recordings/pretrained/options/policy.json recordings/survival-reference/frames/manifest.json
+          else
+            echo 'Trial incomplete: insufficient evidence for a reproducibility manifest'
+          fi
       - name: Archive logs
         if: always()
         run: |
