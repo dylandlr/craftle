@@ -126,11 +126,34 @@ jobs:
           mkdir -p recordings/survival-reference
           docker logs craftle-reference > recordings/survival-reference/server.log 2>&1 || true
       - uses: actions/upload-artifact@v4
+        id: control_video_artifact
         if: always()
         with:
           name: option-control-${{ matrix.treatment }}-${{ matrix.seed }}-${{ github.run_id }}
           path: recordings/survival-reference
           retention-days: 30
+      - name: Link complete POV footage in job summary
+        if: always()
+        env:
+          ARCHIVE_ID: ${{ steps.control_video_artifact.outputs.artifact-id }}
+          TREATMENT: ${{ matrix.treatment }}
+          WORLD_SEED: ${{ matrix.seed }}
+        run: |
+          {
+            echo "### Full Minecraft POV — $TREATMENT / world $WORLD_SEED"
+            if [ -n "$ARCHIVE_ID" ]; then
+              echo "[Download full video and experiment evidence](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$ARCHIVE_ID)"
+            else
+              echo "Recording archive unavailable."
+            fi
+            if [ -s recordings/survival-reference/video-timing.json ]; then
+              echo '~~~json'
+              cat recordings/survival-reference/video-timing.json
+              echo '~~~'
+            else
+              echo "No validated video timing report."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   compare:
     needs: scripted-reference
