@@ -34,15 +34,20 @@ def write_captions(directory, start, span):
     cues = [(0, "Telemetry overlay | latest logged state\nScripted survival primitives; no discovered skills")]
     for timestamp, event in events:
         kind = event.get("type")
-        if kind == "option_decision":
+        if kind == "target_decision":
+            policy = event.get("mode", "unknown").upper() + " TARGETED SKILLS"
+            action = event.get("skill", "?") + " " + (event.get("targetId") or "")
+        elif kind == "option_decision":
             policy = event.get("mode", "unknown").upper() + " OPTIONS + SCRIPTED PRIMITIVES"
             action = event.get("action", "?")
+        elif kind == "target_action":
+            action, health, food = event["skill"], round(event["health"], 1), event["food"]
         elif kind == "survival_reference_action":
             action, health, food = event["objective"], event["health"], event["food"]
-        elif kind == "survival_reference_consumed":
+        elif kind in ["survival_reference_consumed", "target_consumed"]:
             meals += 1
             food = event.get("afterFood", food)
-        elif kind == "survival_reference_plant_harvest":
+        elif kind in ["survival_reference_plant_harvest", "target_harvest_attempt"]:
             harvests += 1
         elif kind == "survival_reference_food_damage_observed" and event.get("attribution") == "self":
             hits += 1
