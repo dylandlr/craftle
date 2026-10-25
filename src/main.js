@@ -275,13 +275,14 @@ for(const [index,profile] of activeProfiles.entries()){
      },1500);
      bot.once('end',()=>clearInterval(timer));
    }
-   if(['survival_reference','learned_survival_options','targeted_survival_options'].includes(process.env.CRAFTLE_BEHAVIOR)){
+   if(['survival_reference','learned_survival_options','targeted_survival_options','auto_eat_control'].includes(process.env.CRAFTLE_BEHAVIOR)){
      if(activeProfiles.length!==1)throw Error('Survival reference requires one agent');
      if(!bot.__survivalReferenceStarted){
        bot.__survivalReferenceStarted=true;
-       const targeted=process.env.CRAFTLE_BEHAVIOR==='targeted_survival_options';
-       const optionController=targeted?createTargetedController({mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),checkpoint:process.env.CRAFTLE_TARGET_CHECKPOINT??'recordings/targeted/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({rewardVersion:process.env.CRAFTLE_OPTION_REWARD_VERSION??'v1',epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),commitmentSteps:Number(process.env.CRAFTLE_OPTION_COMMITMENT_STEPS??1),mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
-       (targeted?startTargetedSurvival:startSurvivalReference)(bot,{decisionController:optionController,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
+       const targeted=['targeted_survival_options','auto_eat_control'].includes(process.env.CRAFTLE_BEHAVIOR);
+       const autoEatControl=process.env.CRAFTLE_BEHAVIOR==='auto_eat_control';
+       const optionController=targeted?createTargetedController({mode:autoEatControl?'auto_eat':process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),checkpoint:process.env.CRAFTLE_TARGET_CHECKPOINT??'recordings/targeted/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):process.env.CRAFTLE_BEHAVIOR==='learned_survival_options'?createLearningOptionController({rewardVersion:process.env.CRAFTLE_OPTION_REWARD_VERSION??'v1',epsilon:Number(process.env.CRAFTLE_OPTION_EPSILON??0.3),commitmentSteps:Number(process.env.CRAFTLE_OPTION_COMMITMENT_STEPS??1),mode:process.env.CRAFTLE_OPTION_POLICY??'training',seed:Number(process.env.CRAFTLE_OPTION_SEED??1),checkpoint:process.env.CRAFTLE_OPTION_CHECKPOINT??'recordings/options/policy.json',log:e=>log(profile.name,e.type,{agent_id:profile.id,...e})}):null;
+       (targeted?startTargetedSurvival:startSurvivalReference)(bot,{decisionController:optionController,autoEatControl,log:e=>log(profile.name,e.type,{agent_id:profile.id,...e,informationAccess:'privileged_mineflayer_state'})});
        const videoDir=process.env.CRAFTLE_REFERENCE_VIDEO_DIR;
        if(videoDir){
          fs.mkdirSync(path.join(videoDir,'frames'),{recursive:true});
