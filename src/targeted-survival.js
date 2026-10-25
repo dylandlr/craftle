@@ -1,11 +1,20 @@
+import {loader as autoEatPlugin} from 'mineflayer-auto-eat';
 import pathfinderPackage from 'mineflayer-pathfinder';
 import {HOSTILE_MOBS} from './survival-reference.js';
 import {observeTargets,edible} from './target-opportunities.js';
 import {foodPlantAction} from './food-foraging.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
-export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now}={}){
+export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
  const {pathfinder,Movements,goals:{GoalNear,GoalXZ}}=navigation;
+ if(autoEatControl){
+  bot.loadPlugin(autoEatPlugin);
+  bot.autoEat.setOpts({minHunger:15,priority:'foodPoints'});
+  bot.autoEat.on('eatStart',opts=>log({type:'auto_eat_start',food:opts.food?.name??null,foodBefore:bot.food,decisionSource:'plugin_threshold',learned:false}));
+  bot.autoEat.on('eatFinish',opts=>log({type:'auto_eat_finish',food:opts.food?.name??null,foodAfter:bot.food,decisionSource:'plugin_threshold',learned:false}));
+  bot.autoEat.on('eatFail',error=>log({type:'auto_eat_failure',message:error?.message??String(error),decisionSource:'plugin_threshold'}));
+  bot.autoEat.enableAuto();log({type:'auto_eat_control_enabled',minHunger:15,priority:'foodPoints',learned:false});
+ }
  bot.loadPlugin(pathfinder);const movements=new Movements(bot);
  Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:1});bot.pathfinder.setMovements(movements);
  let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer;
@@ -54,7 +63,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
+ const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
