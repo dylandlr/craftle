@@ -2,7 +2,7 @@ name: Continuous Craftle v3 learning
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/continuous-learning.yml', 'scripts/audit-option-checkpoint.js']
+    paths: ['.github/workflows/continuous-learning.yml', 'scripts/audit-option-checkpoint.js', 'scripts/checkpoint-lineage.js']
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
@@ -39,10 +39,18 @@ jobs:
         id: restore_training
         uses: actions/cache/restore@v4
         with:
-          path: recordings/options/policy.json
+          path: |
+            recordings/options/policy.json
+            recordings/options/lineage.json
           key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             craftle-options-v3-structured7-assisted4-commit4-audited-v1-
+      - name: Verify predecessor checkpoint identity
+        env:
+          RESTORED_KEY: ${{ steps.restore_training.outputs.cache-matched-key }}
+          CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          node scripts/checkpoint-lineage.js verify recordings/options/policy.json recordings/options/lineage.json "$RESTORED_KEY" "$CURRENT_RUN"
       - name: Verify warm-start cache identity
         run: |
           if [ -s recordings/options/policy.json ]; then
@@ -157,12 +165,17 @@ jobs:
         id: video_evidence
         if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
+      - name: Stamp outgoing checkpoint lineage
+        if: success() && steps.checkpoint_audit.outcome == 'success' && steps.reward_audit.outcome == 'success'
+        run: node scripts/checkpoint-lineage.js write recordings/options/policy.json recordings/options/lineage.json unused ${{ github.run_id }} ${{ github.run_attempt }}
       - name: Save validated training checkpoint
         id: promote_checkpoint
         if: success() && steps.checkpoint_audit.outcome == 'success' && steps.reward_audit.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: recordings/options/policy.json
+          path: |
+            recordings/options/policy.json
+            recordings/options/lineage.json
           key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Record outgoing checkpoint
         if: always()
