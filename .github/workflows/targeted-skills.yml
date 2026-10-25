@@ -2,7 +2,7 @@ name: Targeted skill contract pilot
 on:
   push:
     branches: [main]
-    paths: ['src/target*.js', 'test/targeted-skills.test.js', 'scripts/audit-targeted-evidence.js', 'test/audit-targeted-evidence.test.js', '.github/workflows/targeted-skills.yml']
+    paths: ['src/target*.js', 'test/targeted-skills.test.js', 'scripts/audit-targeted-evidence.js', 'test/audit-targeted-evidence.test.js', 'test/audit-targeted-evidence.test.js', '.github/workflows/targeted-skills.yml']
   workflow_dispatch:
 permissions:
   contents: read
