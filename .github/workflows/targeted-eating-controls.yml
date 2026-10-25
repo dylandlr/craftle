@@ -3,7 +3,7 @@ name: Targeted eating decision controls
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/targeted-eating-controls.yml', 'src/targeted-survival.js', 'src/targeted-controller.js', 'src/main.js', 'test/auto-eat-control.test.js']
+    paths: ['.github/workflows/targeted-eating-controls.yml', 'src/targeted-survival.js', 'src/food-provenance.js', 'test/food-provenance.test.js', 'src/targeted-controller.js', 'src/main.js', 'test/auto-eat-control.test.js']
   workflow_dispatch:
 permissions:
   contents: read
@@ -118,7 +118,7 @@ jobs:
             const p=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
             if(p.updates!==236||transitions.some(e=>e.updates!==236))throw Error('Frozen targeted network unexpectedly trained');
           }else if(fs.existsSync('recordings/targeted/policy.json'))throw Error('Control wrote model weights');
-          console.log(JSON.stringify({pluginMeals:events.filter(e=>e.type==='auto_eat_finish').length,mode:process.env.TARGET_MODE,decisions:decisions.length,transitions:transitions.length,meals:events.filter(e=>e.type==='target_consumed'&&e.afterFood>e.beforeFood).length,harvestAttempts:events.filter(e=>e.type==='target_harvest_attempt').length,limitations:'Single development arena. Scripted semantic perception and targetable actuators. No learning advantage established.'}));
+          console.log(JSON.stringify({pickups:events.filter(e=>e.type==='food_provenance_pickup_event').length,inventoryGains:events.filter(e=>e.type==='food_provenance_inventory_delta'&&e.delta>0).length,pluginMeals:events.filter(e=>e.type==='auto_eat_finish').length,mode:process.env.TARGET_MODE,decisions:decisions.length,transitions:transitions.length,meals:events.filter(e=>e.type==='target_consumed'&&e.afterFood>e.beforeFood).length,harvestAttempts:events.filter(e=>e.type==='target_harvest_attempt').length,limitations:'Single development arena. Scripted semantic perception and targetable actuators. No learning advantage established.'}));
           NODE
       - name: Audit action-to-observation evidence
         if: always()
