@@ -1,0 +1,169 @@
+name: No-starting-food acquisition benchmark
+# Audits observed eating separately from once-only credited decision reward.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/no-start-food-benchmark.yml', 'scripts/sample-minecraft-server.js']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [frozen, random, scripted, auto_eat]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore pinned trained targeted checkpoint
+        if: matrix.mode == 'frozen'
+        uses: actions/download-artifact@v4
+        with:
+          name: targeted-skills-training-40177819797
+          run-id: 40177819797
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: recordings
+      - name: Assert frozen targeted policy provenance
+        if: matrix.mode == 'frozen'
+        run: |
+          test -s recordings/targeted/policy.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+          if(c.schema!=='craftle.targeted.dqn.v1'||c.updates!==236||c.trainingState?.replay?.length!==59)throw Error('Wrong pinned targeted checkpoint');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev python3-pil
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Start controlled vanilla Minecraft arena
+        run: |
+          mkdir -p recordings/survival-reference
+          docker run -d --name craftle-targeted -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MEMORY=2G -e TYPE=VANILLA -e VERSION=1.21.1 -e MODE=survival -e SPAWN_PROTECTION=0 -e DIFFICULTY=normal -e SEED=20261205 itzg/minecraft-server:java21
+          ready=false
+          for i in $(seq 1 120); do
+            if docker logs craftle-targeted 2>&1 | grep -Fq 'For help, type "help"'; then ready=true; break; fi
+            sleep 3
+          done
+          test "$ready" = true
+          docker exec craftle-targeted rcon-cli 'forceload add -16 -16 16 16'
+          docker exec craftle-targeted rcon-cli 'fill -7 80 -7 7 85 7 stone hollow'
+          docker exec craftle-targeted rcon-cli 'fill -6 81 -6 6 86 6 air'
+          docker exec craftle-targeted rcon-cli 'setworldspawn 0 81 0'
+          docker exec craftle-targeted rcon-cli 'gamerule spawnRadius 0'
+          docker exec craftle-targeted rcon-cli 'time set 1000'
+          docker exec craftle-targeted rcon-cli 'weather clear'
+          docker exec craftle-targeted rcon-cli 'setblock 2 80 0 farmland[moisture=7]'
+          docker exec craftle-targeted rcon-cli 'setblock 2 81 0 carrots[age=7]'
+          docker exec craftle-targeted rcon-cli 'setblock -2 80 0 grass_block'
+          docker exec craftle-targeted rcon-cli 'setblock -2 81 0 sweet_berry_bush[age=3]'
+      - name: Ensure empty starting inventory and timestamp server setup
+        run: |
+          docker exec craftle-targeted rcon-cli 'clear Turesla' || true
+          printf '{"phase":"arena_prepared","hostUnixMs":%s}\n' "$(date +%s%3N)" > recordings/survival-reference/server-clock.jsonl
+          docker exec craftle-targeted rcon-cli 'time query gametime' >> recordings/survival-reference/server-clock-initial.txt
+      - name: Run targetable skills and record server-side observations
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: ${{ matrix.mode == 'auto_eat' && 'auto_eat_control' || 'targeted_survival_options' }}
+          CRAFTLE_OPTION_POLICY: ${{ matrix.mode }}
+          CRAFTLE_OPTION_SEED: '17'
+          CRAFTLE_TARGET_CHECKPOINT: recordings/targeted/policy.json
+          CRAFTLE_RL_MAX_MS: '90000'
+          CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
+          CRAFTLE_RECORD_FRAMES: '20000'
+          CRAFTLE_CAPTURE_TELEMETRY: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          if [ "${{ matrix.mode }}" = frozen ]; then sha256sum recordings/targeted/policy.json > recordings/survival-reference/frozen-before.sha256; fi
+          timeout --signal=TERM --kill-after=8s 115s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 &
+          agent_pid=$!
+          for i in $(seq 1 40); do
+            if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
+            sleep 1
+          done
+          docker exec craftle-targeted rcon-cli 'clear Turesla'
+          docker exec craftle-targeted rcon-cli 'effect give Turesla minecraft:hunger 15 20 true'
+          for i in $(seq 1 8); do
+            printf 'sample_host_unix_ms=%s sample_host_monotonic_ns=%s\n' "$(date +%s%3N)" "$(python3 -c 'import time;print(time.monotonic_ns())')" >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'time query gametime' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla foodLevel' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla Health' >> recordings/survival-reference/server-observations.log
+            docker exec craftle-targeted rcon-cli 'data get entity Turesla Inventory' >> recordings/survival-reference/server-observations.log
+            sleep 10
+          done
+          wait "$agent_pid" || status=$?
+          test "${status:-0}" -eq 0
+          if [ "${{ matrix.mode }}" = frozen ]; then sha256sum recordings/targeted/policy.json > recordings/survival-reference/frozen-after.sha256; cmp recordings/survival-reference/frozen-before.sha256 recordings/survival-reference/frozen-after.sha256; fi
+      - name: Capture independent final crop block states
+        if: always()
+        run: |
+          {
+            echo "phase=after"
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            docker exec craftle-targeted rcon-cli 'execute if block 2 81 0 minecraft:carrots[age=7] run say CRAFTLE_CARROT_MATURE' || true
+            docker exec craftle-targeted rcon-cli 'execute if block -2 81 0 minecraft:sweet_berry_bush[age=3] run say CRAFTLE_BERRY_MATURE' || true
+            docker exec craftle-targeted rcon-cli 'data get block 2 81 0' || true
+            docker exec craftle-targeted rcon-cli 'data get block -2 81 0' || true
+          } >> recordings/survival-reference/server-crop-snapshots.log 2>&1
+      - name: Audit targeted controller execution
+        env:
+          TARGET_MODE: ${{ matrix.mode }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const events=fs.readFileSync('recordings/survival-reference/agent.log','utf8').split('\n').filter(s=>s.startsWith('{"timestamp":')).map(s=>JSON.parse(s));
+          const decisions=events.filter(e=>e.type==='target_decision'),transitions=events.filter(e=>e.type==='target_transition'),terminals=events.filter(e=>e.type==='target_terminal');
+          if(decisions.length<3||!events.some(e=>e.type==='shutdown')||events.some(e=>['target_runtime_error','recording_error','error'].includes(e.type)))throw Error('Invalid targeted pilot execution');
+          if(decisions.some(e=>e.mode!==process.env.TARGET_MODE||e.contract!=='targeted44-actions15-v1'||!e.mask[e.index]))throw Error('Target contract mismatch');
+          if(process.env.TARGET_MODE==='auto_eat'){
+            if(!events.some(e=>e.type==='auto_eat_control_enabled')||decisions.some(e=>e.skill==='eat')||events.some(e=>e.type==='target_consumed'||e.type==='target_verified_recovery'))throw Error('Auto eat plugin and targeted policy not isolated');
+          }
+          if(process.env.TARGET_MODE==='training'){
+            const p=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+            if(p.schema!=='craftle.targeted.dqn.v1'||p.updates!==4*(transitions.length+terminals.length))throw Error('Target checkpoint accounting mismatch');
+          }else if(process.env.TARGET_MODE==='frozen'){
+            const p=JSON.parse(fs.readFileSync('recordings/targeted/policy.json','utf8'));
+            if(p.updates!==236||transitions.some(e=>e.updates!==236))throw Error('Frozen targeted network unexpectedly trained');
+          }else if(fs.existsSync('recordings/targeted/policy.json'))throw Error('Control wrote model weights');
+          console.log(JSON.stringify({pickups:events.filter(e=>e.type==='food_provenance_pickup_event').length,inventoryGains:events.filter(e=>e.type==='food_provenance_inventory_delta'&&e.delta>0).length,pluginMeals:events.filter(e=>e.type==='auto_eat_finish').length,mode:process.env.TARGET_MODE,decisions:decisions.length,transitions:transitions.length,meals:events.filter(e=>e.type==='target_consumed'&&e.afterFood>e.beforeFood).length,harvestAttempts:events.filter(e=>e.type==='target_harvest_attempt').length,limitations:'Single development arena. Scripted semantic perception and targetable actuators. No learning advantage established.'}));
+          NODE
+      - name: Audit action-to-observation evidence
+        if: always()
+        run: |
+          if [ -s recordings/survival-reference/agent.log ]; then
+            node scripts/audit-targeted-evidence.js recordings/survival-reference/agent.log > recordings/survival-reference/targeted-evidence-audit.json
+            cat recordings/survival-reference/targeted-evidence-audit.json
+          fi
+      - name: Report acquisition evidence and ambiguity
+        if: always()
+        run: |
+          if [ -s recordings/survival-reference/agent.log ]; then
+            node scripts/report-food-provenance.js recordings/survival-reference/agent.log > recordings/survival-reference/food-provenance-summary.json
+            cat recordings/survival-reference/food-provenance-summary.json
+          fi
+      - name: Encode annotated full POV
+        if: always()
+        run: python3 scripts/encode-reference-video.py recordings/survival-reference
+      - name: Archive independent server logs and configuration
+        if: always()
+        run: |
+          mkdir -p recordings/survival-reference
+          docker logs --timestamps craftle-targeted > recordings/survival-reference/server.log 2>&1 || true
+          docker exec craftle-targeted cat /data/server.properties | python3 -c 'import sys,json; pairs=(line.strip().split("=",1) for line in sys.stdin if "=" in line and not line.startswith("#")); allowed={"level-seed","gamemode","difficulty","online-mode","view-distance","simulation-distance","spawn-protection","max-players"}; print(json.dumps({k:v for k,v in pairs if k in allowed},indent=2))' > recordings/survival-reference/server-settings.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: no-start-food-acquisition-${{ matrix.mode }}-${{ github.run_id }}
+          path: recordings
+          retention-days: 30
