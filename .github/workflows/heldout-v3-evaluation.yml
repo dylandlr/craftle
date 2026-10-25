@@ -184,6 +184,16 @@ jobs:
           test "${#reports[@]}" -eq 6
           node scripts/report-option-controls.js compare "${reports[@]}" > comparison.json
           cat comparison.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const groups=JSON.parse(fs.readFileSync('comparison.json','utf8'));
+          if(groups.length!==2||groups.some(g=>!g.pairedEligible))throw Error('Held-out comparison has invalid or unmatched trials');
+          for(const group of groups){
+            const frozen=group.results.find(r=>r.treatment==='frozen');
+            if(!frozen||frozen.updateCounter!==208)throw Error('Frozen checkpoint changed or wrong version');
+          }
+          console.log('Both held-out seeds paired; pinned neural checkpoint unchanged');
+          NODE
       - uses: actions/upload-artifact@v4
         with:
           name: heldout-v3-comparison-${{ github.run_id }}
