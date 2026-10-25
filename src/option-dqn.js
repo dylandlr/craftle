@@ -16,7 +16,7 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
   if(t.schema!=='craftle.dqn.training-state.v1'||!Array.isArray(t.tw)||!Array.isArray(t.tv)||!Array.isArray(t.replay)||t.replay.length>512)throw Error('Invalid DQN training state');
   if(t.tw.length!==hidden||t.tv.length!==outputs||t.tw.some(r=>r.length!==inputs+1||!r.every(Number.isFinite))||t.tv.some(r=>r.length!==hidden+1||!r.every(Number.isFinite)))throw Error('Invalid DQN target weights');
   for(const e of t.replay){
-   if(!Array.isArray(e.state)||e.state.length!==inputs||!e.state.every(Number.isFinite)||!Number.isInteger(e.index)||e.index<0||e.index>=outputs||!Number.isFinite(e.reward)||typeof e.terminal!=='boolean')throw Error('Invalid replay transition');
+   if(!Array.isArray(e.state)||e.state.length!==inputs||!e.state.every(Number.isFinite)||!Number.isInteger(e.index)||e.index<0||e.index>=outputs||!Number.isFinite(e.reward)||(e.terminal!==undefined&&typeof e.terminal!=='boolean'))throw Error('Invalid replay transition');
    if(!e.terminal&&(!Array.isArray(e.nextState)||e.nextState.length!==inputs||!e.nextState.every(Number.isFinite)||!Array.isArray(e.nextMask)||e.nextMask.length!==outputs||!e.nextMask.some(Boolean)))throw Error('Invalid replay successor');
    replay.push(structuredClone(e));
   }
