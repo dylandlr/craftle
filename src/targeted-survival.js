@@ -55,10 +55,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      if(item&&bot.food<20){await bot.equip(item,'hand');if(!valid())return;const before=bot.food;await bot.consume();if(!valid())return;const credited=decisionController.consumed(choice.decisionId,before,bot.food);log({type:bot.food>before?'target_consumed':'target_consume_no_hunger_gain',decisionId:choice.decisionId,item:item.name,beforeFood:before,afterFood:bot.food,credited});}
     }else if(choice.skill==='harvest'&&target?.kind==='plant'&&target.reachable){
      const block=bot.blockAt(p.offset(target.position.x-p.x,target.position.y-p.y,target.position.z-p.z)),action=foodPlantAction(block);
-     if(action&&bot.canSeeBlock?.(block)){if(action==='dig')await bot.dig(block);else await bot.activateBlock(block);if(!valid())return;log({type:'target_harvest_attempt',decisionId:choice.decisionId,targetId:target.id,plant:block.name});}
+     if(action&&bot.canSeeBlock?.(block)){log({type:'target_harvest_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,plant:block.name});if(action==='dig')await bot.dig(block);else await bot.activateBlock(block);if(!valid())return;log({type:'target_harvest_attempt',decisionId:choice.decisionId,targetId:target.id,plant:block.name});}
     }else if(choice.skill==='attack'&&target?.kind==='animal'){
      const entity=Object.values(bot.entities).find(e=>`entity:${e?.id}`===target.id);
-     if(entity?.position&&entity.position.distanceTo(p)<3&&bot.canSeeEntity?.(entity)){await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
+     if(entity?.position&&entity.position.distanceTo(p)<3&&bot.canSeeEntity?.(entity)){log({type:'target_attack_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id});await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
     }
    }
    if(!valid())return;
