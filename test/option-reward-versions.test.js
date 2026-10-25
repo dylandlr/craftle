@@ -13,4 +13,4 @@ test('v1 reward remains unchanged and v2 puts more value on observed food recove
  assert.ok(Math.abs(b.reward-0.97)<1e-10); // 2 hunger gained * .5 - .03
  assert.equal(a.rewardVersion,'v1');assert.equal(b.rewardVersion,'v2');
 });
-test('invalid reward version is rejected',()=>assert.throws(()=>createLearningOptionController({mode:'random',rewardVersion:'v3'}),/reward version/));
+test('invalid reward version is rejected',()=>assert.throws(()=>createLearningOptionController({mode:'random',rewardVersion:'invalid-v4'}),/reward version/));
