@@ -144,6 +144,12 @@ jobs:
         run: |
           node scripts/match-server-acquisition.js recordings/survival-reference/agent.log recordings/server-observer/events.jsonl > recordings/server-observer/acquisition-match.json
           cat recordings/server-observer/acquisition-match.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync('recordings/server-observer/acquisition-match.json','utf8'));
+          if(r.verifiedAcquisitionCandidates>r.completeAcquisitionCandidates || r.completeAcquisitionCandidates>r.singleCommandCandidates)throw Error('Invalid evidence hierarchy');
+          console.log(JSON.stringify({mode:process.env.CRAFTLE_OPTION_POLICY??'unknown',singleCommandCandidates:r.singleCommandCandidates,pickupCandidates:r.completeAcquisitionCandidates,postTickInventoryGainCandidates:r.verifiedAcquisitionCandidates,conclusion:'observation-only; no causal reward credit'}));
+          NODE
       - name: Audit targeted controller execution
         env:
           TARGET_MODE: ${{ matrix.mode }}
