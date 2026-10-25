@@ -3,7 +3,7 @@ name: No-starting-food acquisition benchmark
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/no-start-food-benchmark.yml', 'observer/**', 'scripts/sample-minecraft-server.js', 'scripts/match-server-acquisition.js', 'test/match-server-acquisition.test.js']
+    paths: ['.github/workflows/no-start-food-benchmark.yml', 'observer/**', 'scripts/sample-minecraft-server.js', 'scripts/audit-server-acquisition.js', 'test/audit-server-acquisition.test.js', 'scripts/match-server-acquisition.js', 'test/match-server-acquisition.test.js']
   workflow_dispatch:
 permissions:
   contents: read
@@ -140,6 +140,13 @@ jobs:
           console.log(JSON.stringify({events:rows.length,serverPickups:rows.filter(r=>r.event==='item_pickup_event').length,serverBlockBreaks:rows.filter(r=>r.event==='block_break_event').length,serverMeals:rows.filter(r=>r.event==='item_consume_event').length}));
           NODE
           sha256sum recordings/server-observer/events.jsonl > recordings/server-observer/events.sha256
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';import {auditServerAcquisition} from './scripts/audit-server-acquisition.js';
+          const events=fs.readFileSync('recordings/server-observer/events.jsonl','utf8').trim().split('\n').map(JSON.parse);
+          const report=auditServerAcquisition(events,[]);
+          fs.writeFileSync('recordings/server-observer/acquisition-audit.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify({serverPickups:report.serverPickups,matched:report.matchedServerDropPickups,consumption:report.serverConsumptionEvents}));
+          NODE
       - name: Correlate server acquisition and agent decisions
         run: |
           node scripts/match-server-acquisition.js recordings/survival-reference/agent.log recordings/server-observer/events.jsonl > recordings/server-observer/acquisition-match.json
