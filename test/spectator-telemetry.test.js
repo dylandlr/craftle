@@ -33,3 +33,16 @@ test('read-only inspector reads only bounded session events and flags stale tele
     fs.rmSync(root,{recursive:true,force:true});
   }
 });
+
+test('continuous agent telemetry takes precedence over older session records',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-continuous-'));
+ try{
+  const file=path.join(root,'continuous','agent.log');
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fs.writeFileSync(file,JSON.stringify({timestamp:new Date().toISOString(),agent:'Turesla',agent_id:'agent_001',type:'health',health:19,food:14})+'\\n');
+  const state=readAgentTelemetry(root);
+  assert.equal(state.available,true);
+  assert.equal(state.agent.health,19);
+  assert.equal(state.agent.food,14);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
