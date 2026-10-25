@@ -98,6 +98,17 @@ jobs:
           wait "$agent_pid" || status=$?
           test "${status:-0}" -eq 0
           if [ "${{ matrix.mode }}" = frozen ]; then sha256sum recordings/targeted/policy.json > recordings/survival-reference/frozen-after.sha256; cmp recordings/survival-reference/frozen-before.sha256 recordings/survival-reference/frozen-after.sha256; fi
+      - name: Capture independent final crop block states
+        if: always()
+        run: |
+          {
+            echo "phase=after"
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            docker exec craftle-targeted rcon-cli 'execute if block 2 81 0 minecraft:carrots[age=7] run say CRAFTLE_CARROT_MATURE' || true
+            docker exec craftle-targeted rcon-cli 'execute if block -2 81 0 minecraft:sweet_berry_bush[age=3] run say CRAFTLE_BERRY_MATURE' || true
+            docker exec craftle-targeted rcon-cli 'data get block 2 81 0' || true
+            docker exec craftle-targeted rcon-cli 'data get block -2 81 0' || true
+          } >> recordings/survival-reference/server-crop-snapshots.log 2>&1
       - name: Audit targeted controller execution
         env:
           TARGET_MODE: ${{ matrix.mode }}
