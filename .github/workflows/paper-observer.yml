@@ -1,0 +1,65 @@
+name: Paper server observer integration
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'observer/**'
+      - '.github/workflows/paper-observer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile Paper observer
+        run: mvn -B -f observer/pom.xml package
+      - name: Launch instrumented Paper 1.21.1
+        run: |
+          mkdir -p recordings/server-observer plugins
+          cp observer/target/craftle-observer-0.1.0.jar plugins/
+          docker run -d --name craftle-observer -p 25565:25565 \
+            -v "$PWD/plugins:/data/plugins" \
+            -e EULA=TRUE -e TYPE=PAPER -e VERSION=1.21.1 \
+            -e ONLINE_MODE=FALSE -e ENABLE_RCON=true -e CRAFTLE_EXPERIMENT_ID=observer-smoke \
+            itzg/minecraft-server:java21
+          ready=false
+          for i in $(seq 1 100); do
+            if docker logs craftle-observer 2>&1 | grep -Fq 'Done ('; then ready=true; break; fi
+            sleep 3
+          done
+          test "$ready" = true
+          docker exec craftle-observer rcon-cli 'time query gametime'
+          sleep 3
+          test -s plugins/CraftleObserver/events.jsonl
+          cp plugins/CraftleObserver/events.jsonl recordings/server-observer/events.jsonl
+      - name: Validate observer event records
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const rows=fs.readFileSync('recordings/server-observer/events.jsonl','utf8').trim().split('\n').map(JSON.parse);
+          if(!rows.some(r=>r.event==='observer_boot'))throw Error('Missing server observer boot event');
+          for(const [i,r] of rows.entries()){
+            if(r.schema!=='craftle.server-event.v1'||!Number.isSafeInteger(r.serverTick)||!Number.isSafeInteger(r.sequence)||!Number.isSafeInteger(r.unixTimeMs)||!Number.isSafeInteger(r.monotonicNsSinceBoot))throw Error('Bad event schema at '+i);
+            if(i && (r.sequence<=rows[i-1].sequence||r.monotonicNsSinceBoot<rows[i-1].monotonicNsSinceBoot))throw Error('Nonmonotonic server sequence');
+          }
+          console.log(JSON.stringify({events:rows.length,serverTick:rows.at(-1).serverTick,bootId:rows[0].serverBootId}));
+          NODE
+          sha256sum recordings/server-observer/events.jsonl > recordings/server-observer/events.sha256
+      - name: Archive server logs
+        if: always()
+        run: |
+          docker logs --timestamps craftle-observer > recordings/server-observer/server-console.log 2>&1 || true
+          cp plugins/CraftleObserver/events.jsonl recordings/server-observer/events-final.jsonl 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paper-observer-${{ github.run_id }}
+          path: recordings/server-observer
+          retention-days: 30
