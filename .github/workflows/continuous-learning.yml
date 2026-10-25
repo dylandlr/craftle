@@ -50,6 +50,16 @@ jobs:
           else
             echo "No prior checkpoint cache available: this is a cold start, not proof of continuity."
           fi
+      - name: Verify complete restored state if present
+        run: |
+          if [ -s recordings/options/policy.json ]; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('recordings/options/policy.json','utf8'));
+          if(c.updates>=304 && (!c.trainingState || !Array.isArray(c.trainingState.replay) || !Number.isSafeInteger(c.trainingState.rngState) || !Array.isArray(c.trainingState.tw) || !Array.isArray(c.trainingState.tv)))throw Error('Resumed 304+ checkpoint lacks full training state');
+          console.log(JSON.stringify({type:'restored_training_state',updates:c.updates,replaySize:c.trainingState?.replay?.length??null,complete:Boolean(c.trainingState)}));
+          NODE
+          fi
       - name: Record incoming checkpoint provenance
         run: |
           mkdir -p recordings/experiment
