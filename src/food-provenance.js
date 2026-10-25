@@ -1,6 +1,6 @@
 // Observational provenance only: a preceding command is not proof of causality.
 export function attachFoodProvenance(bot,{log=()=>{},getDecision=()=>null,clock=Date.now}={}){
- const snapshot=()=>Object.fromEntries(bot.inventory.items().filter(Boolean).map(i=>[i.name,i.count]));
+ const snapshot=()=>{const counts={};for(const i of bot.inventory.items().filter(Boolean))counts[i.name]=(counts[i.name]??0)+i.count;return counts;};
  let previous=snapshot(),stopped=false;
  const emitInventory=(source)=>{
   if(stopped)return;
