@@ -19,6 +19,7 @@ export function matchServerAcquisition(agent,server,{windowMs=6000}={}){
  const drops=ordered.filter(e=>e.event==='block_drops_event');
  const pickups=ordered.filter(e=>e.event==='item_pickup_event');
  const meals=ordered.filter(e=>e.event==='item_consume_event');
+ const confirmations=ordered.filter(e=>e.event==='pickup_post_tick_inventory');
  const records=[];let unique=0,ambiguous=0,unmatched=0;
  for(const b of breaks){
   const candidates=intents.filter(a=>sameBlock(a,b)&&sameActor(a,b)&&epoch(a)<=b.unixTimeMs&&b.unixTimeMs-epoch(a)<=windowMs);
@@ -27,9 +28,13 @@ export function matchServerAcquisition(agent,server,{windowMs=6000}={}){
   const matchingDrops=drops.filter(d=>d.x===b.x&&d.y===b.y&&d.z===b.z&&compatibleServerActor(b,d)&&d.serverTick>=b.serverTick&&d.serverTick<=b.serverTick+2);
   const itemIds=new Set(matchingDrops.flatMap(d=>(d.drops??[]).map(x=>x.entityUuid)));
   const matchingPickups=pickups.filter(p=>itemIds.has(p.itemEntityUuid)&&compatibleServerActor(b,p)&&p.serverTick>=b.serverTick);
-  records.push({serverBreakSequence:b.sequence,serverTick:b.serverTick,block:[b.x,b.y,b.z],association:status,decisionId:candidates.length===1?candidates[0].decisionId:null,matchedDropEvents:matchingDrops.length,matchedPickupEvents:matchingPickups.length,completedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&matchingPickups.length>0});
+  const verifiedPickups=matchingPickups.filter(p=>confirmations.some(c=>
+    c.itemEntityUuid===p.itemEntityUuid&&compatibleServerActor(p,c)&&
+    c.sequence>p.sequence&&c.serverTick>=p.serverTick&&c.serverTick<=p.serverTick+3&&
+    c.item===p.item&&Number.isFinite(c.beforeCount)&&Number.isFinite(c.afterCount)&&c.afterCount>c.beforeCount));
+  records.push({verifiedInventoryGains:verifiedPickups.length,serverBreakSequence:b.sequence,serverTick:b.serverTick,block:[b.x,b.y,b.z],association:status,decisionId:candidates.length===1?candidates[0].decisionId:null,matchedDropEvents:matchingDrops.length,matchedPickupEvents:matchingPickups.length,completedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&matchingPickups.length>0,verifiedAcquisitionCandidate:candidates.length===1&&matchingDrops.length===1&&verifiedPickups.length>0});
  }
- return {schema:'craftle.server-acquisition-match.v1',serverBootId:ordered[0]?.serverBootId??null,serverEvents:ordered.length,serverBlockBreaks:breaks.length,serverPickups:pickups.length,serverConsumptionEvents:meals.length,singleCommandCandidates:unique,ambiguousBreaks:ambiguous,unmatchedBreaks:unmatched,completeAcquisitionCandidates:records.filter(r=>r.completedAcquisitionCandidate).length,records,limitations:'Only candidate association; actor mismatch rejects matches, absent actor identity is not confirmation, and one linked drop event is required. Event timestamps originate in different processes; no calibrated clock uncertainty or server-acknowledged decision token. Drop and pickup UUIDs are authoritative when present. No reward credit.'};
+ return {schema:'craftle.server-acquisition-match.v1',serverBootId:ordered[0]?.serverBootId??null,serverEvents:ordered.length,serverBlockBreaks:breaks.length,serverPickups:pickups.length,serverConsumptionEvents:meals.length,singleCommandCandidates:unique,ambiguousBreaks:ambiguous,unmatchedBreaks:unmatched,completeAcquisitionCandidates:records.filter(r=>r.completedAcquisitionCandidate).length,verifiedAcquisitionCandidates:records.filter(r=>r.verifiedAcquisitionCandidate).length,records,limitations:'Only candidate association; actor mismatch rejects matches, absent actor identity is not confirmation, and one linked drop event is required. Event timestamps originate in different processes; no calibrated clock uncertainty or server-acknowledged decision token. Drop and pickup UUIDs are authoritative when present; post-tick inventory gains strengthen evidence but may be confounded by concurrent inventory changes. No reward credit.'};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const agent=fs.readFileSync(process.argv[2],'utf8').split('\n').filter(s=>s.startsWith('{"timestamp":')).map(JSON.parse);
