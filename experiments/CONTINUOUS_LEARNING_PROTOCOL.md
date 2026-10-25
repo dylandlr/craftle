@@ -12,6 +12,10 @@ Sources consulted: [Mineflayer](https://github.com/PrismarineJS/mineflayer), [Mi
 
 ## Limitations / next research engineering gates
 
+Checkpoint accounting now compares outgoing minus incoming updates against four updates per logged transition or terminal, including resumed episodes. Incoming manifests record validated network identity and SHA256; outgoing audits check each logged transition counter and final checkpoint. A new versioned cache namespace excludes the older unvalidated chain, so its first episode intentionally cold-starts. Original caches/artifacts remain untouched.
+
+Promotion requires a successful episode, checkpoint accounting, verified-reward audit, and video encoding. Failed runs still archive diagnostics but cannot save to this cache chain. No meals is a valid behavioral result and does not block promotion. Per-run promotion status is archived separately from checkpoint contents. Local tests exercise two consecutive actual controller episodes, including death and restored weights; live cold-start and restored-workflow evidence are still required before declaring operational continuity.
+
 1. This is *periodic continuing training*, not uninterrupted 24/7 uptime: workflow scheduling can be delayed and jobs can fail. The max episode here is 180 seconds per hourly run.
 2. Checkpoints preserve model weights and update count, **not** optimizer/replay buffer/PRNG, so episode boundaries are not bit-exact resumptions. Cache restoration is best-effort; cold starts flagged in lineage. Cache entries can be evicted, and attempts may be skipped.
 3. World seed is currently fixed to 20261205; vary train seeds separately from held-out seeds before claiming generalization.

@@ -1,5 +1,8 @@
 name: Continuous Craftle v3 learning
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/continuous-learning.yml', 'scripts/audit-option-checkpoint.js']
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
@@ -37,14 +40,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: recordings/options/policy.json
-          key: craftle-v3-main-${{ github.run_id }}
+          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            craftle-v3-main-
+            craftle-options-v3-structured7-assisted4-commit4-audited-v1-
       - name: Record incoming checkpoint provenance
         run: |
           mkdir -p recordings/experiment
           printf '{"schema":"craftle.continuous.v1","runId":"%s","priorCacheKey":"%s","gitSha":"%s","server":"PAPER","version":"1.21.1","policy":"training","reward":"v3","episodeSeconds":180}\n' \
             "${{ github.run_id }}" "${{ steps.restore_training.outputs.cache-matched-key }}" "${{ github.sha }}" > recordings/experiment/lineage.json
+          node scripts/audit-option-checkpoint.js capture recordings/options/policy.json recordings/experiment/incoming-checkpoint.json
           if [ -f recordings/options/policy.json ]; then
             sha256sum recordings/options/policy.json > recordings/experiment/incoming-policy.sha256
           else
@@ -59,6 +63,7 @@ jobs:
           done
           exit 1
       - name: Run neural options over scripted primitives
+        id: training_episode
         env:
           CRAFTLE_AGENT_IDS: agent_001
           CRAFTLE_BEHAVIOR: learned_survival_options
@@ -110,17 +115,12 @@ jobs:
           grep -q '"type":"option_decision"' recordings/survival-reference/agent.log
           grep -q '"type":"option_transition"' recordings/survival-reference/agent.log
           test -s recordings/options/policy.json
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const checkpoint=JSON.parse(fs.readFileSync('recordings/options/policy.json','utf8'));
-          const events=fs.readFileSync('recordings/survival-reference/agent.log','utf8').split('\n').filter(line=>line.startsWith('{"timestamp":')).map(line=>JSON.parse(line));
-          const transitions=events.filter(e=>e.type==='option_transition').length;
-          const terminals=events.filter(e=>e.type==='option_terminal').length;
-          const decisions=events.filter(e=>e.type==='option_decision');
-          if(checkpoint.updates<=0||checkpoint.updates!==4*(transitions+terminals))throw Error('Neural update/checkpoint accounting failed');
-          console.log(JSON.stringify({type:'neural_learning_audit',schema:checkpoint.schema,updates:checkpoint.updates,transitions,terminals,decisions:decisions.length,actions:Object.fromEntries(checkpoint.options.map(action=>[action,decisions.filter(e=>e.action===action).length]))}));
-          NODE
+      - name: Verify resumed checkpoint accounting
+        id: checkpoint_audit
+        run: |
+          node scripts/audit-option-checkpoint.js verify recordings/options/policy.json recordings/survival-reference/agent.log recordings/experiment/incoming-checkpoint.json recordings/experiment/checkpoint-audit.json
       - name: Audit verified-outcome reward links
+        id: reward_audit
         if: always()
         run: |
           if [ -s recordings/survival-reference/agent.log ]; then
@@ -137,17 +137,31 @@ jobs:
             echo 'Events above are credited only when a matching option-instance ledger event is verified; zero is a valid negative outcome.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Encode full sampled POV using capture timestamps
+        id: video_evidence
         if: always()
         run: python3 scripts/encode-reference-video.py recordings/survival-reference
-      - name: Save updated training checkpoint
-        if: always() && hashFiles('recordings/options/policy.json') != ''
+      - name: Save validated training checkpoint
+        id: promote_checkpoint
+        if: success() && steps.checkpoint_audit.outcome == 'success' && steps.reward_audit.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: recordings/options/policy.json
-          key: craftle-v3-main-${{ github.run_id }}
+          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Record outgoing checkpoint
         if: always()
+        env:
+          CHECKPOINT_AUDIT: ${{ steps.checkpoint_audit.outcome }}
+          REWARD_AUDIT: ${{ steps.reward_audit.outcome }}
+          TRAINING_EPISODE: ${{ steps.training_episode.outcome }}
+          VIDEO_EVIDENCE: ${{ steps.video_evidence.outcome }}
+          CACHE_SAVE: ${{ steps.promote_checkpoint.outcome }}
         run: |
+          mkdir -p recordings/experiment
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const checks=Object.fromEntries(['TRAINING_EPISODE','CHECKPOINT_AUDIT','REWARD_AUDIT','VIDEO_EVIDENCE','CACHE_SAVE'].map(key=>[key,process.env[key]||'not_run']));
+          fs.writeFileSync('recordings/experiment/promotion-status.json',JSON.stringify({schema:'craftle.checkpoint-promotion.v1',checks,note:'Cache save outcome is not a guarantee of future cache retention.'},null,2)+'\n');
+          NODE
           if [ -s recordings/options/policy.json ]; then
             sha256sum recordings/options/policy.json > recordings/experiment/outgoing-policy.sha256
           fi
