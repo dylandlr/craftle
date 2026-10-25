@@ -3,7 +3,7 @@ name: Targeted eating decision controls
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/targeted-eating-controls.yml', 'src/targeted-survival.js', 'src/food-provenance.js', 'test/food-provenance.test.js', 'src/targeted-controller.js', 'src/main.js', 'test/auto-eat-control.test.js']
+    paths: ['.github/workflows/targeted-eating-controls.yml', 'src/targeted-survival.js', 'src/food-provenance.js', 'test/food-provenance.test.js', 'src/food-provenance-summary.js', 'scripts/report-food-provenance.js', 'test/food-provenance-summary.test.js', 'src/targeted-controller.js', 'src/main.js', 'test/auto-eat-control.test.js']
   workflow_dispatch:
 permissions:
   contents: read
@@ -126,6 +126,13 @@ jobs:
           if [ -s recordings/survival-reference/agent.log ]; then
             node scripts/audit-targeted-evidence.js recordings/survival-reference/agent.log > recordings/survival-reference/targeted-evidence-audit.json
             cat recordings/survival-reference/targeted-evidence-audit.json
+          fi
+      - name: Report acquisition evidence and ambiguity
+        if: always()
+        run: |
+          if [ -s recordings/survival-reference/agent.log ]; then
+            node scripts/report-food-provenance.js recordings/survival-reference/agent.log > recordings/survival-reference/food-provenance-summary.json
+            cat recordings/survival-reference/food-provenance-summary.json
           fi
       - name: Encode annotated full POV
         if: always()
