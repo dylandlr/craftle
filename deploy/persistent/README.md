@@ -1,3 +1,18 @@
+## Watch-only browser spectator monitor (first implemented slice)
+
+Pull the latest main branch and recreate the agent (your persistent state directory is untouched):
+
+```powershell
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+$env:CRAFTLE_REFERENCE_WIDTH = "1280"
+$env:CRAFTLE_REFERENCE_HEIGHT = "720"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+Open **http://127.0.0.1:3001/** for the new watch-only monitor. It embeds the working Prismarine Viewer from port 3000, shows a connection/reconnection indication, and offers **Return to Auto** (resets the embedded viewer to its default camera by reloading it). The new monitor HTTP server runs in the long-lived persistent runner rather than in the three-minute session process. Port 3001 is exposed only on Windows loopback.
+
+**Scope limitation:** This is an incremental browser monitor, *not yet* an independently rendered/captured third-person Auto Director. The actual Prismarine Viewer camera on port 3000 still belongs to each short-lived agent session; the monitor reconnects when a new one starts. The Return to Auto button resets the browser camera, not an authoritative shared camera lease. It does not send commands to the learning agent or affect its checkpoint. Manual camera leases, inspector, independent 720p third-person recording, and uninterrupted camera streams remain future implementation work. Port 3000 continues to serve the unmodified raw viewer.
+
 # Craftle on your PC: persistent Minecraft Java world
 
 Requires Docker Desktop using Linux containers, enough free disk for recordings, and an awake PC. This deployment is not active until started on that host. Starting it uses the Minecraft server under the [Minecraft EULA](https://aka.ms/MinecraftEULA).
