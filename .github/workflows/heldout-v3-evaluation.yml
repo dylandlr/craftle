@@ -24,12 +24,17 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: recordings/options/policy.json
-          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-heldout-never-exact
-          restore-keys: |
-            craftle-options-v3-structured7-assisted4-commit4-audited-v1-
+          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-40163890149-1
       - name: Require genuine promoted checkpoint
         if: matrix.treatment == 'frozen'
-        run: test -s recordings/options/policy.json
+        run: |
+          test -s recordings/options/policy.json
+          echo '8aec7405fab1faf8ea8646d9c4526b6fd6c23c31b7e58c804cdfe99532c54906  recordings/options/policy.json' | sha256sum -c -
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const checkpoint=JSON.parse(fs.readFileSync('recordings/options/policy.json','utf8'));
+          if(checkpoint.updates!==208)throw Error('Expected pinned v3 policy with exactly 208 updates');
+          NODE
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
