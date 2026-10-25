@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: read
 jobs:
   scripted-reference:
     strategy:
@@ -45,16 +46,38 @@ jobs:
           key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             craftle-options-v3-structured7-assisted4-commit4-audited-v1-
+      - name: Recover promoted checkpoint artifact if cache unavailable
+        if: steps.restore_training.outputs.cache-matched-key == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: continuous-v3-natural-20261205-eps0.30-40173712413
+          run-id: 40173712413
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: recordings
+      - name: Identify checkpoint source
+        id: checkpoint_source
+        env:
+          CACHE_KEY: ${{ steps.restore_training.outputs.cache-matched-key }}
+        run: |
+          if [ -n "$CACHE_KEY" ]; then
+            echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
+            echo "source=cache" >> "$GITHUB_OUTPUT"
+          else
+            test -s recordings/options/policy.json
+            test -s recordings/options/lineage.json
+            echo "key=craftle-options-v3-structured7-assisted4-commit4-audited-v1-40173712413-1" >> "$GITHUB_OUTPUT"
+            echo "source=pinned-promoted-artifact-40173712413" >> "$GITHUB_OUTPUT"
+          fi
       - name: Verify predecessor checkpoint identity
         env:
-          RESTORED_KEY: ${{ steps.restore_training.outputs.cache-matched-key }}
+          RESTORED_KEY: ${{ steps.checkpoint_source.outputs.key }}
           CURRENT_RUN: ${{ github.run_id }}
         run: |
           node scripts/checkpoint-lineage.js verify recordings/options/policy.json recordings/options/lineage.json "$RESTORED_KEY" "$CURRENT_RUN"
       - name: Verify warm-start cache identity
         run: |
           if [ -s recordings/options/policy.json ]; then
-            echo "RESTORED_CHECKPOINT_KEY=${{ steps.restore_training.outputs.cache-matched-key }}"
+            echo "RESTORED_CHECKPOINT_KEY=${{ steps.checkpoint_source.outputs.key }}"
           else
             echo "No prior checkpoint cache available: this is a cold start, not proof of continuity."
           fi
@@ -72,7 +95,7 @@ jobs:
         run: |
           mkdir -p recordings/experiment
           printf '{"schema":"craftle.continuous.v1","runId":"%s","priorCacheKey":"%s","gitSha":"%s","server":"PAPER","version":"1.21.1","policy":"training","reward":"v3","episodeSeconds":180}\n' \
-            "${{ github.run_id }}" "${{ steps.restore_training.outputs.cache-matched-key }}" "${{ github.sha }}" > recordings/experiment/lineage.json
+            "${{ github.run_id }}" "${{ steps.checkpoint_source.outputs.key }}" "${{ github.sha }}" > recordings/experiment/lineage.json
           node scripts/audit-option-checkpoint.js capture recordings/options/policy.json recordings/experiment/incoming-checkpoint.json
           if [ -f recordings/options/policy.json ]; then
             sha256sum recordings/options/policy.json > recordings/experiment/incoming-policy.sha256
