@@ -3,7 +3,7 @@ name: Targeted eating decision controls
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/targeted-eating-controls.yml']
+    paths: ['.github/workflows/targeted-eating-controls.yml', 'src/targeted-survival.js', 'src/targeted-controller.js', 'src/main.js', 'test/auto-eat-control.test.js']
   workflow_dispatch:
 permissions:
   contents: read
