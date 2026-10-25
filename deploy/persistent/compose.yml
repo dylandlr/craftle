@@ -31,6 +31,8 @@ services:
     stop_grace_period: 60s
   agent:
     profiles: [learning]
+    ports:
+      - '127.0.0.1:3000:3000'
     build:
       context: ../..
       dockerfile: deploy/persistent/agent.Dockerfile
@@ -46,6 +48,8 @@ services:
       CRAFTLE_PERSISTENT_SESSION_MS: '180000'
       CRAFTLE_REFERENCE_WIDTH: '${CRAFTLE_REFERENCE_WIDTH:-256}'
       CRAFTLE_REFERENCE_HEIGHT: '${CRAFTLE_REFERENCE_HEIGHT:-256}'
+      CRAFTLE_CAMERA_MODE: '${CRAFTLE_CAMERA_MODE:-first_person}'
+      CRAFTLE_THIRD_PERSON_PORT: '3000'
       LIBGL_ALWAYS_SOFTWARE: '1'
     volumes:
       - ./state/agent:/state/agent
