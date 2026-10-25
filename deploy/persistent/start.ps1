@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-& docker info *> $null
+# Let cmd handle native stderr so Windows PowerShell does not turn Docker warnings into terminating errors.
+& cmd.exe /d /c "docker info >nul 2>&1"
 if ($LASTEXITCODE -ne 0) { throw 'Start Docker Desktop with Linux containers first.' }
 foreach ($name in @('state/server', 'state/agent', 'secrets')) {
     New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot $name) | Out-Null
