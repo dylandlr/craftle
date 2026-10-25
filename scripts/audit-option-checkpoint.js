@@ -10,7 +10,9 @@ function inspectCheckpoint(file){
  if(!Number.isSafeInteger(snapshot.updates)||snapshot.updates<0)throw Error('Invalid checkpoint update count');
  // Validate the actual network schema, action order, dimensions and finite weights.
  createOptionDQN({snapshot,training:false,random:()=>0.5});
- return {schema:snapshot.schema,updates:snapshot.updates,sha256:digest(bytes)};
+ const training=snapshot.trainingState;
+ const replaySize=training?.replay?.length??null;
+ return {schema:snapshot.schema,updates:snapshot.updates,sha256:digest(bytes),trainingStateSchema:training?.schema??null,replaySize,rngPresent:Number.isSafeInteger(training?.rngState),targetWeightsPresent:Boolean(training?.tw&&training?.tv)};
 }
 export function captureIncoming(file){
  const checkpoint=fs.existsSync(file)?inspectCheckpoint(file):null;
@@ -23,6 +25,10 @@ export function auditCheckpoint(file,events,incoming){
  if(!Number.isSafeInteger(initial)||initial<0)throw Error('Invalid incoming update count');
  if(!incoming.coldStart&&(!/^[a-f0-9]{64}$/.test(incoming.checkpoint.sha256)||incoming.checkpoint.schema!=='craftle.options.dqn.v1'))throw Error('Invalid incoming checkpoint identity');
  const outgoing=inspectCheckpoint(file);
+ if(!outgoing.targetWeightsPresent||!outgoing.rngPresent||outgoing.replaySize===null)throw Error('Missing complete resumable DQN state');
+ if(!incoming.coldStart&&incoming.checkpoint.trainingStateSchema==='craftle.dqn.training-state.v1'){
+  if(!incoming.checkpoint.targetWeightsPresent||!incoming.checkpoint.rngPresent||incoming.checkpoint.replaySize===null)throw Error('Restored checkpoint missing resumable state');
+ }
  const decisions=events.filter(e=>e.type==='option_decision');
  if(!decisions.length||decisions.some(e=>e.mode!=='training'||e.rewardVersion!=='v3'||e.commitmentSteps!==4))throw Error('Mismatched training decision contract');
  let expected=initial,transitions=0,terminals=0;
