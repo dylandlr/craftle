@@ -9,8 +9,8 @@ test('v1 reward remains unchanged and v2 puts more value on observed food recove
   ctl.choose(observation(16,0));ctl.choose(observation(18,0));ctl.stop();
  }
  const a=logs1.find(x=>x.type==='option_transition'),b=logs2.find(x=>x.type==='option_transition');
- assert.equal(a.reward,0.08); // 2 hunger gained * .05 - .02
- assert.equal(b.reward,0.97); // 2 hunger gained * .5 - .03
+ assert.ok(Math.abs(a.reward-0.08)<1e-10); // 2 hunger gained * .05 - .02
+ assert.ok(Math.abs(b.reward-0.97)<1e-10); // 2 hunger gained * .5 - .03
  assert.equal(a.rewardVersion,'v1');assert.equal(b.rewardVersion,'v2');
 });
 test('invalid reward version is rejected',()=>assert.throws(()=>createLearningOptionController({mode:'random',rewardVersion:'v3'}),/reward version/));
