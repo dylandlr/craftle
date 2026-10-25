@@ -38,9 +38,9 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <div class="metric"><small>Position</small><strong id="position">—</strong></div>
 <div class="metric"><small>Recent action</small><strong id="last-action">—</strong></div>
 <div class="metric"><small>Latest event</small><strong id="last-event">—</strong></div>
-<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>
+<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>\n<div class="metric"><small>Motion / desired framing</small><strong id="shot">—</strong></div>\n<div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
 </section>
-<p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: independent continuous Auto Director recording and shared WASD takeover are not implemented yet.</p>
+<p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
 let connected=null;
@@ -70,6 +70,9 @@ async function inspect(){
   put('position',a.position?[a.position.x,a.position.y,a.position.z].map(n=>n.toFixed(1)).join(', '):'—');
   put('last-action',a.lastAction?.action??a.lastAction?.type??'—');
   put('last-event',a.lastEvent?.type??'—');
+  put('shot',a.shot?a.shot.animation+' · '+a.shot.zoomIntent+' zoom':'—');
+  const effect=a.effects?.[a.effects.length-1];
+  put('effect',effect?effect.kind+(effect.name?' · '+effect.name:''):'—');
   put('freshness',a.stale?'Stale / session gap':'Live · '+new Date(a.lastObservedAt).toLocaleTimeString());
  }catch{document.getElementById('freshness').textContent='Unavailable';}
 }
