@@ -289,7 +289,12 @@ for(const [index,profile] of activeProfiles.entries()){
          let captureCount=0;
          const manifest=path.join(videoDir,'frames.jsonl');
          fs.writeFileSync(manifest,'');
-         const server=await startLiveObservationServer({width:256,height:256,
+         const captureWidth=Number(process.env.CRAFTLE_REFERENCE_WIDTH??256);
+         const captureHeight=Number(process.env.CRAFTLE_REFERENCE_HEIGHT??256);
+         if(!Number.isInteger(captureWidth)||!Number.isInteger(captureHeight)||
+           captureWidth<128||captureWidth>1920||captureHeight<128||captureHeight>1080)
+           throw Error('Reference capture dimensions must be integers within 128..1920 x 128..1080');
+         const server=await startLiveObservationServer({width:captureWidth,height:captureHeight,
            onJpeg:(jpeg,frame)=>{
              const file=String(captureCount++).padStart(6,'0')+'.jpg';
              fs.writeFileSync(path.join(videoDir,'frames',file),jpeg);
@@ -301,8 +306,8 @@ for(const [index,profile] of activeProfiles.entries()){
          });
          const headless=await prepareRecorder();
          const output=server.host+':'+server.port;
-         headless(bot,{output,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??20000),width:256,height:256,viewDistance:3,jpegOptions:{quality:0.8}});
-         log(profile.name,'reference_video_capture_started',{directory:videoDir,manifest,width:256,height:256,sampling:'all_received_frames',viewDistance:3,jpegQuality:0.8,source:'rendered_first_person_rgb'});
+         headless(bot,{output,frames:Number(process.env.CRAFTLE_RECORD_FRAMES??20000),width:captureWidth,height:captureHeight,viewDistance:3,jpegOptions:{quality:0.8}});
+         log(profile.name,'reference_video_capture_started',{directory:videoDir,manifest,width:captureWidth,height:captureHeight,sampling:'all_received_frames',viewDistance:3,jpegQuality:0.8,source:'rendered_first_person_rgb'});
        }
        const maxMs=Number(process.env.CRAFTLE_RL_MAX_MS??60000);
        if(Number.isFinite(maxMs)&&maxMs>=1000){const t=setTimeout(()=>shutdown(),maxMs);bot.once('end',()=>clearTimeout(t));}
