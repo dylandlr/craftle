@@ -9,3 +9,13 @@ test('rejects duplicate decisions and invented or mismatched outcomes',()=>{
  assert.throws(()=>auditTargetedEvidence([d,{type:'target_verified_recovery',decisionId:1,beforeFood:16,afterFood:20}]),/Invalid verified/);
  assert.throws(()=>auditTargetedEvidence([d,{type:'target_action',decisionId:1,skill:'attack',targetId:'plant:a'}]),/does not match/);
 });
+
+test('a recovery requires precisely one corresponding consumption event',()=>{
+ const eat={type:'target_decision',decisionId:7,skill:'eat',action:'eat',targetId:null};
+ const recovery={type:'target_verified_recovery',decisionId:7,beforeFood:16,afterFood:20};
+ const consumed={type:'target_consumed',decisionId:7,beforeFood:16,afterFood:20,item:'bread'};
+ assert.throws(()=>auditTargetedEvidence([eat,recovery]),/requires one matching consumption/);
+ assert.equal(auditTargetedEvidence([eat,recovery,consumed]).verifiedHungerRecoveries,1);
+ assert.throws(()=>auditTargetedEvidence([eat,recovery,consumed,consumed]),/requires one matching consumption/);
+ assert.throws(()=>auditTargetedEvidence([eat,recovery,{...consumed,afterFood:19}]),/requires one matching consumption/);
+});
