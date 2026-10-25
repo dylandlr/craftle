@@ -11,6 +11,18 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
   if(w.length!==hidden||v.length!==outputs||w.some(r=>r.length!==inputs+1||!r.every(Number.isFinite))||v.some(r=>r.length!==hidden+1||!r.every(Number.isFinite)))throw Error('Invalid policy weights');
  }
  let tw=w.map(r=>r.slice()),tv=v.map(r=>r.slice());const replay=[];
+ if(snapshot?.trainingState){
+  const t=snapshot.trainingState;
+  if(t.schema!=='craftle.dqn.training-state.v1'||!Array.isArray(t.tw)||!Array.isArray(t.tv)||!Array.isArray(t.replay)||t.replay.length>512)throw Error('Invalid DQN training state');
+  if(t.tw.length!==hidden||t.tv.length!==outputs||t.tw.some(r=>r.length!==inputs+1||!r.every(Number.isFinite))||t.tv.some(r=>r.length!==hidden+1||!r.every(Number.isFinite)))throw Error('Invalid DQN target weights');
+  for(const e of t.replay){
+   if(!Array.isArray(e.state)||e.state.length!==inputs||!e.state.every(Number.isFinite)||!Number.isInteger(e.index)||e.index<0||e.index>=outputs||!Number.isFinite(e.reward)||typeof e.terminal!=='boolean')throw Error('Invalid replay transition');
+   if(!e.terminal&&(!Array.isArray(e.nextState)||e.nextState.length!==inputs||!e.nextState.every(Number.isFinite)||!Array.isArray(e.nextMask)||e.nextMask.length!==outputs||!e.nextMask.some(Boolean)))throw Error('Invalid replay successor');
+   replay.push(structuredClone(e));
+  }
+  tw=t.tw.map(r=>r.slice());tv=t.tv.map(r=>r.slice());
+  if(t.rngState!==null&&t.rngState!==undefined){if(typeof random.setState!=='function')throw Error('Checkpoint requires stateful RNG');random.setState(t.rngState);}
+ }
  const validate=x=>{if(!Array.isArray(x)||x.length!==inputs||!x.every(Number.isFinite))throw Error('Invalid option observation');};
  const forward=(x,a=w,b=v)=>{const h=a.map(row=>Math.tanh(row[inputs]+x.reduce((sum,value,i)=>sum+value*row[i],0)));return {h,q:b.map(row=>row[hidden]+h.reduce((sum,value,i)=>sum+value*row[i],0))};};
  const eligible=mask=>{const ids=mask.flatMap((yes,i)=>yes?[i]:[]);if(mask.length!==outputs||!ids.length)throw Error('Invalid action mask');return ids;};
@@ -38,7 +50,7 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
     if(updates%100===0){tw=w.map(r=>r.slice());tv=v.map(r=>r.slice());}
    }
   },
-  snapshot:()=>structuredClone({schema,options,w,v,updates}),
+  snapshot:()=>structuredClone({schema,options,w,v,updates,trainingState:{schema:'craftle.dqn.training-state.v1',tw,tv,replay,rngState:typeof random.getState==='function'?random.getState():null}}),
   stats:()=>({updates,replaySize:replay.length,training})
  };
 }
