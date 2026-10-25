@@ -16,6 +16,7 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
   choose(o){
    const {features,mask}=encodeTargets(o);
    if(pending){
+    if(Number.isFinite(o.foodUnits)&&Number.isFinite(pending.foodUnits))log({type:'target_inventory_observed',decisionId:pending.decisionId,action:pending.action,previousFoodUnits:pending.foodUnits,currentFoodUnits:o.foodUnits,deltaFoodUnits:o.foodUnits-pending.foodUnits,evidence:'subsequent_observation_not_causal_proof'});
     const reward=pending.credit+Math.min(0,o.health-pending.health)*0.7-0.03;
     if(mode==='training')learner.observe({...pending,state:pending.state,reward,nextState:features,nextMask:mask,steps:1});
     log({type:'target_transition',decisionId:pending.decisionId,action:pending.action,reward,...stats()});
@@ -28,7 +29,7 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
     index=TARGET_ACTIONS.indexOf(action??'explore');
    }else index=learner.choose(features,mask).index;
    const choice=decodeTargetAction(index,o),decisionId=++serial;
-   pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,credit:0,decisionId};
+   pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,credit:0,decisionId};
    log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',capabilityTier:'scripted_targeted_skills'});
    if(mode==='training'&&stats().updates%40===0)save();
    return {...choice,decisionId};
