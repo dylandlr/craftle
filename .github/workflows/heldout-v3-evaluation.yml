@@ -1,0 +1,184 @@
+name: Held-out frozen v3 policy evaluation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/heldout-v3-evaluation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  scripted-reference:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [natural]
+        seed: ['20261216', '20261217']
+        treatment: [scripted, random, frozen]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore last promoted v3 checkpoint
+        if: matrix.treatment == 'frozen'
+        uses: actions/cache/restore@v4
+        with:
+          path: recordings/options/policy.json
+          key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-heldout-never-exact
+          restore-keys: |
+            craftle-options-v3-structured7-assisted4-commit4-audited-v1-
+      - name: Require genuine promoted checkpoint
+        if: matrix.treatment == 'frozen'
+        run: test -s recordings/options/policy.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Mineflayer and renderer
+        run: |
+          mkdir -p recordings/survival-reference
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb ffmpeg libgl1-mesa-dev libxi-dev libxext-dev libx11-dev libglu1-mesa-dev python3-pil
+          npm install --no-audit --no-fund
+          npm install --no-save 'github:PrismarineJS/node-canvas-webgl'
+          npm run configure
+          npm test
+      - name: Launch Minecraft server
+        run: |
+          docker run -d --name craftle-reference -p 25565:25565 -e EULA=TRUE -e ONLINE_MODE=FALSE -e MAX_PLAYERS=2 -e MEMORY=2G -e TYPE=PAPER -e VERSION=1.21.1 -e MODE=survival -e DIFFICULTY=normal -e SEED=${{ matrix.seed }} itzg/minecraft-server:java21
+          for i in $(seq 1 120); do
+            if docker logs craftle-reference 2>&1 | grep -Fq 'For help, type "help"'; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - name: Run privileged scripted controller
+        env:
+          CRAFTLE_AGENT_IDS: agent_001
+          CRAFTLE_BEHAVIOR: learned_survival_options
+          CRAFTLE_OPTION_POLICY: ${{ matrix.treatment }}
+          CRAFTLE_OPTION_SEED: '17'
+          CRAFTLE_OPTION_REWARD_VERSION: 'v3'
+          CRAFTLE_OPTION_COMMITMENT_STEPS: '4'
+          CRAFTLE_OPTION_CHECKPOINT: recordings/options/policy.json
+          CRAFTLE_RL_MAX_MS: '180000'
+          CRAFTLE_REFERENCE_VIDEO_DIR: recordings/survival-reference
+          CRAFTLE_RECORD_FRAMES: '20000'
+          CRAFTLE_CAPTURE_TELEMETRY: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          SCENARIO: ${{ matrix.scenario }}
+          WORLD_SEED: ${{ matrix.seed }}
+        run: |
+          mkdir -p recordings/survival-reference
+          docker exec craftle-reference rcon-cli "gamerule spawnRadius 0"
+          docker exec craftle-reference rcon-cli "time set 1000"
+          docker exec craftle-reference rcon-cli "weather clear"
+          if [ "$CRAFTLE_OPTION_POLICY" = frozen ]; then
+            sha256sum "$CRAFTLE_OPTION_CHECKPOINT" | cut -d ' ' -f1 > recordings/survival-reference/checkpoint-before.sha256
+          fi
+          timeout --signal=TERM --kill-after=8s 200s xvfb-run -a node src/main.js > recordings/survival-reference/agent.log 2>&1 &
+          agent_pid=$!
+          if [ "$SCENARIO" = food-fixture ]; then
+            for i in $(seq 1 40); do
+              if grep -q '"type":"spawn"' recordings/survival-reference/agent.log; then break; fi
+              sleep 1
+            done
+            docker exec craftle-reference rcon-cli "forceload add -16 -16 16 16"
+            sleep 3
+            docker exec craftle-reference rcon-cli "fill -6 80 -6 6 80 6 stone"
+            docker exec craftle-reference rcon-cli "fill -6 81 -6 6 86 6 air"
+            docker exec craftle-reference rcon-cli "tp Turesla 0 81 0"
+            docker exec craftle-reference rcon-cli 'summon sheep 1 81 0 {NoAI:1b}'
+            docker exec craftle-reference rcon-cli 'summon sheep -1 81 0 {NoAI:1b}'
+            docker exec craftle-reference rcon-cli "effect give Turesla minecraft:hunger 15 20 true"
+          fi
+          wait "$agent_pid" || status=$?
+          grep -E '"type":"survival_reference_(hunt|consumed|error)"' recordings/survival-reference/agent.log || true
+          if [ "$SCENARIO" = food-fixture ]; then
+            echo 'Food outcomes measured; not prerequisites for technically valid evaluation.'
+          fi
+          if [ "${status:-0}" -ne 0 ] && [ "${status:-0}" -ne 124 ]; then exit 1; fi
+          grep -q '"type":"survival_reference_started"' recordings/survival-reference/agent.log
+          test "$(grep -c '"type":"survival_reference_action"' recordings/survival-reference/agent.log)" -ge 3
+          node scripts/report-survival-reference.js recordings/survival-reference/agent.log > recordings/survival-reference/summary.json
+          cat recordings/survival-reference/summary.json
+          node scripts/report-option-controls.js report "$CRAFTLE_OPTION_POLICY" "$WORLD_SEED" recordings/survival-reference/agent.log recordings/survival-reference/summary.json > recordings/survival-reference/control.json
+          cat recordings/survival-reference/control.json
+          grep -q '"type":"option_decision"' recordings/survival-reference/agent.log
+          grep -q '"type":"option_transition"' recordings/survival-reference/agent.log
+          if [ "$CRAFTLE_OPTION_POLICY" = frozen ]; then
+            sha256sum "$CRAFTLE_OPTION_CHECKPOINT" | cut -d ' ' -f1 > recordings/survival-reference/checkpoint-after.sha256
+            cmp recordings/survival-reference/checkpoint-before.sha256 recordings/survival-reference/checkpoint-after.sha256
+          fi
+      - name: Encode full sampled POV using capture timestamps
+        if: always()
+        run: python3 scripts/encode-reference-video.py recordings/survival-reference
+      - name: Write reproducibility manifest
+        if: always()
+        env:
+          TREATMENT: ${{ matrix.treatment }}
+          WORLD_SEED: ${{ matrix.seed }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -s recordings/survival-reference/summary.json ] && [ -s recordings/survival-reference/agent.log ]; then
+            video=$(find recordings/survival-reference -maxdepth 1 -name '*.mp4' | head -1)
+            node scripts/experiment-manifest.js recordings/survival-reference/experiment-manifest.json "$TREATMENT" "$WORLD_SEED" 17 "$GIT_SHA" "$RUN_ID" 180 1 recordings/survival-reference/summary.json recordings/survival-reference/agent.log "${video:-}" recordings/options/policy.json recordings/survival-reference/frames/manifest.json
+          else
+            echo 'Trial incomplete: insufficient evidence for a reproducibility manifest'
+          fi
+      - name: Archive logs
+        if: always()
+        run: |
+          mkdir -p recordings/survival-reference
+          docker logs craftle-reference > recordings/survival-reference/server.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        id: control_video_artifact
+        if: always()
+        with:
+          name: heldout-v3-${{ matrix.treatment }}-${{ matrix.seed }}-${{ github.run_id }}
+          path: recordings/survival-reference
+          retention-days: 30
+      - name: Link complete POV footage in job summary
+        if: always()
+        env:
+          ARCHIVE_ID: ${{ steps.control_video_artifact.outputs.artifact-id }}
+          TREATMENT: ${{ matrix.treatment }}
+          WORLD_SEED: ${{ matrix.seed }}
+        run: |
+          {
+            echo "### Full Minecraft POV — $TREATMENT / world $WORLD_SEED"
+            if [ -n "$ARCHIVE_ID" ]; then
+              echo "[Download full video and experiment evidence](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/$ARCHIVE_ID)"
+            else
+              echo "Recording archive unavailable."
+            fi
+            if [ -s recordings/survival-reference/video-timing.json ]; then
+              echo '~~~json'
+              cat recordings/survival-reference/video-timing.json
+              echo '~~~'
+            else
+              echo "No validated video timing report."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  compare:
+    needs: scripted-reference
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: heldout-v3-*
+          path: control-results
+      - name: Compare only complete matched controls
+        run: |
+          mapfile -t reports < <(find control-results -name control.json | sort)
+          test "${#reports[@]}" -eq 6
+          node scripts/report-option-controls.js compare "${reports[@]}" > comparison.json
+          cat comparison.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heldout-v3-comparison-${{ github.run_id }}
+          path: comparison.json
