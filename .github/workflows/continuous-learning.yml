@@ -43,6 +43,13 @@ jobs:
           key: craftle-options-v3-structured7-assisted4-commit4-audited-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             craftle-options-v3-structured7-assisted4-commit4-audited-v1-
+      - name: Verify warm-start cache identity
+        run: |
+          if [ -s recordings/options/policy.json ]; then
+            echo "RESTORED_CHECKPOINT_KEY=${{ steps.restore_training.outputs.cache-matched-key }}"
+          else
+            echo "No prior checkpoint cache available: this is a cold start, not proof of continuity."
+          fi
       - name: Record incoming checkpoint provenance
         run: |
           mkdir -p recordings/experiment
