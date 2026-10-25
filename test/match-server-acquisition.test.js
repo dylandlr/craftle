@@ -9,7 +9,7 @@ test('rejects ambiguous attribution and requires drop entity identity',()=>{
  const a=[{type:'target_harvest_intent',decisionId:1,targetId:'plant:2,81,0',timestampMs:1900},{type:'target_harvest_intent',decisionId:2,targetId:'plant:2,81,0',timestampMs:1910}];
  const r=matchServerAcquisition(a,[e('block_break_event',1,{x:2,y:81,z:0}),e('item_pickup_event',2,{itemEntityUuid:'unlinked'})]);
  assert.equal(r.completeAcquisitionCandidates,0);assert.equal(r.ambiguousBreaks,1);
- assert.throws(()=>matchServerAcquisition([], [e('observer_boot',2),e('observer_boot',1)]),/ordering/);
+ assert.throws(()=>matchServerAcquisition([], [e('observer_boot',1),e('observer_boot',1)]),/ordering/);
 });
 
 test('does not attribute another players break, drop or pickup',()=>{
@@ -46,4 +46,15 @@ test('requires post-tick inventory increase for verified acquisition, not merely
  assert.equal(matchServerAcquisition(a,[...rows,{...observation,afterCount:0}]).verifiedAcquisitionCandidates,0);
  assert.equal(matchServerAcquisition(a,[...rows,{...observation,playerUuid:'other'}]).verifiedAcquisitionCandidates,0);
  assert.equal(matchServerAcquisition(a,[...rows,{...observation,itemEntityUuid:'wrong'}]).verifiedAcquisitionCandidates,0);
+});
+
+test('pickup event cannot precede the originating drop event even in same tick',()=>{
+ const a=[{agent:'Turesla',type:'target_harvest_intent',decisionId:5,targetId:'plant:2,81,0',timestampMs:1900}];
+ const b=e('block_break_event',1,{x:2,y:81,z:0,playerName:'Turesla',playerUuid:'self'});
+ const p=e('item_pickup_event',2,{itemEntityUuid:'u',playerUuid:'self',item:'minecraft:carrot',serverTick:102});
+ const d=e('block_drops_event',3,{x:2,y:81,z:0,playerUuid:'self',drops:[{entityUuid:'u'}],serverTick:102});
+ const c=e('pickup_post_tick_inventory',4,{playerUuid:'self',itemEntityUuid:'u',item:'minecraft:carrot',beforeCount:0,afterCount:1});
+ const r=matchServerAcquisition(a,[b,p,d,c]);
+ assert.equal(r.completeAcquisitionCandidates,0);
+ assert.equal(r.verifiedAcquisitionCandidates,0);
 });
