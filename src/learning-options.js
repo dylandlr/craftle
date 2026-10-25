@@ -53,14 +53,15 @@ export function createLearningOptionController({checkpoint,log=()=>{},training=t
     const action=o.hostileDistance<8?'retreat':o.food<=18&&o.foodAvailable?'eat':o.health<=7&&o.food>=18?'retreat':!o.foodAvailable?'forage':'explore';
     choice={action,index:OPTIONS.indexOf(action)};
    }else choice=learner.choose(state,mask);
-   pending={state,index:choice.index,action:choice.action,reward:0,steps:0};
+   pending={state,index:choice.index,action:choice.action,reward:0,steps:0,attributionId:null};
    previous={health:o.health,food:o.food,inventoryCount:o.inventoryCount,threat:o.hostileDistance<8};
    log({type:'option_decision',...choice,features:state,mask,origin:neural?'neural_policy':mode+'_option_policy',mode,seed,commitmentSteps,rewardVersion,epsilon,capabilityTier:'scripted_assisted_options'});
    if(stats().updates%40===0)save();
    return choice.action;
   },
+  bindOutcomeOption(optionId){if(pending)pending.attributionId=optionId;},
   creditOutcome(event){
-   if(rewardVersion!=='v3'||mode!=='training'||!pending||event?.kind!=='option_outcome'||event.evidence!=='verified_hunger_recovery'||event.option!==pending.action)return false;
+   if(rewardVersion!=='v3'||mode!=='training'||!pending||event?.kind!=='option_outcome'||event.evidence!=='verified_hunger_recovery'||event.option!==pending.action||!pending.attributionId||event.optionId!==pending.attributionId)return false;
    const key=[event.life,event.optionId,event.sequence].join(':');
    if(credited.has(key))return false;
    credited.add(key);
