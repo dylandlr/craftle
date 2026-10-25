@@ -36,6 +36,14 @@ Handoff is triggered by explicit **Take Camera**. Opening the UI alone can remai
 
 Track selected agent, smooth chase cam; default full-body framing. Switch only on stable, measurable action/event priorities (combat > death > crafting/interaction > travel > idle), with hysteresis/cooldown to prevent camera thrash. Avoid invented event interpretations. Support temporary gaps at session boundaries.
 
+## Browser live monitor and camera ownership
+
+The browser at `http://localhost:3000` is the **live monitor for the same Auto Director camera** whose frames are saved to `director.mp4`. There must be **one authoritative camera pose and render stream** (or frame-identical encoding derivatives), not an unrelated browser render that merely follows the same target. When the browser connects, display the latest live frame immediately and subscribe to the ongoing stream without resetting the recorder, changing the target, or claiming the camera lease. Show connection state, latency/frame timestamp and whether the currently monitored stream is Auto Director or manual.
+
+A **Take Camera** action claims a bounded renewable lease; manual movement changes the live shared camera view and all spectators see that handoff. However, uninterrupted automatic cinematic coverage must continue via a separate **background automatic camera/render stream** when manual takeover occurs, while the scientific first-person capture is unaffected. The active live monitored view may thus switch from auto to manual, but auto recording never stops. **Return to Auto** or lease expiry switches the live monitor back to auto. If desired, offer a **Watch Auto** button to view the uninterrupted auto feed during another user's manual takeover, without fighting their camera controls.
+
+The browser must not have to be open for footage capture to run; the recorder must not restart at agent session boundaries. Provide read-only remote watchers and a single locally authorized controller, without creating Minecraft player entities.
+
 ## Human spectator v1
 
 - Left panel: live agent roster, follow selection, policy/session identities.
