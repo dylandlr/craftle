@@ -76,3 +76,18 @@ test('one decision must not receive two acquisitions for separate breaks',()=>{
  assert.deepEqual(r.duplicateDecisionIds,[42]);
  assert.ok(r.records.every(x=>x.duplicateAssociation));
 });
+
+test('strict verification requires complete matching server actor identities',()=>{
+ const agent=[{agent:'Turesla',type:'target_harvest_intent',decisionId:71,targetId:'plant:2,81,0',timestampMs:1900}];
+ const rows=[
+  e('block_break_event',1,{x:2,y:81,z:0,playerName:'Turesla',playerUuid:'self'}),
+  e('block_drops_event',2,{x:2,y:81,z:0,playerUuid:'self',drops:[{entityUuid:'item-71'}]}),
+  e('item_pickup_event',3,{playerUuid:'self',itemEntityUuid:'item-71',item:'minecraft:carrot'}),
+  e('pickup_post_tick_inventory',4,{playerUuid:'self',itemEntityUuid:'item-71',item:'minecraft:carrot',beforeCount:0,afterCount:1})
+ ];
+ assert.equal(matchServerAcquisition(agent,rows).strictVerifiedAcquisitionCandidates,1);
+ for(const index of [0,1,2,3]){
+  const altered=rows.map((r,i)=>i===index?{...r,playerUuid:null}:r);
+  assert.equal(matchServerAcquisition(agent,altered).strictVerifiedAcquisitionCandidates,0);
+ }
+});
