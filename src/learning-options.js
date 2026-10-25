@@ -22,7 +22,7 @@ export function createLearningOptionController({checkpoint,log=()=>{},training=t
  const terminal=()=>{if(pending&&mode==='training'){const reward=pending.reward-5*Math.pow(gamma,pending.steps);learner.observe({...pending,reward,terminal:true});log({type:'option_terminal',action:pending.action,reward,steps:pending.steps});}pending=null;previous=null;save();};
  return {
   choose(o){
-   const state=features(o),mask=[o.foodAvailable,true,true,true];
+   const state=features(o),mask=[Boolean(o.foodAvailable)&&o.food<20,true,true,true];
    const key=Math.floor(o.position.x/4)+','+Math.floor(o.position.z/4);
    if(pending){
     const foodGain=Math.max(0,o.food-previous.food),inventoryGain=Math.max(0,o.inventoryCount-previous.inventoryCount);
