@@ -3,7 +3,7 @@ param(
  [string]$Checkpoint = 'accepted'
 )
 $ErrorActionPreference = 'Stop'
-$root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $sourceRoot = Join-Path $root 'deploy/persistent/state/agent'
 $filmRoot = Join-Path $root 'deploy/filming/state/agent'
 $names = @{
