@@ -42,8 +42,10 @@ test('embedded spectator script boots and Return to Auto resets view without bot
   return nodes.get(id);
  };
  const document={getElementById:node,addEventListener(type,fn){handlers.set('document:'+type,fn);}};
+ node('viewer').contentWindow={postMessage(data,origin){assert.equal(origin,'http://127.0.0.1:3000');handlers.set('cameraMode',data.mode);}};
+ const window={addEventListener(type,fn){handlers.set('window:'+type,fn);}};
  const timers=[];
- const sandbox={document,Date,console,setInterval:fn=>timers.push(fn),fetch:async url=>({
+ const sandbox={document,window,Date,console,setInterval:fn=>timers.push(fn),fetch:async url=>({
    ok:true,json:async()=>url==='/api/status'?{cameraReachable:true}:{agent:null}
  })};
  vm.runInNewContext(script,sandbox);
@@ -53,6 +55,6 @@ test('embedded spectator script boots and Return to Auto resets view without bot
  assert.equal(node('return-auto').disabled,false);
  handlers.get('return-auto:click')();
  assert.equal(node('viewport').dataset.cameraMode,'auto');
- assert.match(node('viewer').src,/camera_reset=/);
+ assert.equal(handlers.get('cameraMode'),'auto');
  assert.ok(timers.length>=2);
 });
