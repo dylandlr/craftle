@@ -35,7 +35,9 @@ foreach($slug in @('flashback','fabric-api')){
     Write-Host "Would install $slug $($version.version_number): $name"
     $entry.status='dry_run'
   }else{
-    $others=@(Get-ChildItem -Path $mods -Filter '*.jar' -File | Where-Object {($_.Name -match 'flashback|fabric-api') -and $_.Name -ne $name})
+    # Only reject another version of the SAME project. Flashback and Fabric API coexist.
+    $projectPattern=if($slug -eq 'flashback'){'^flashback[-.]'}else{'^fabric-api[-.]'}
+    $others=@(Get-ChildItem -Path $mods -Filter '*.jar' -File | Where-Object {($_.Name -match $projectPattern) -and $_.Name -ne $name})
     if($others.Count){throw "Existing Flashback/Fabric API jars found. Refusing mixed versions: $($others.Name -join ', '). Use a clean profile."}
     if(Test-Path $dest){
       $hash=(Get-FileHash -Algorithm SHA512 $dest).Hash.ToLowerInvariant()
