@@ -55,6 +55,16 @@ def main():
         probe=subprocess.run(['ffprobe','-v','error','-show_entries','format=duration,size:stream=codec_name,width,height,r_frame_rate','-of','json',args.video],capture_output=True,text=True,check=True)
         result['videoProbe']=json.loads(probe.stdout)
         result['videoPath']=args.video
+        duration=float(result['videoProbe']['format']['duration'])
+        frame_dir=pathlib.Path(args.out).parent/'review-frames'
+        frame_dir.mkdir(parents=True,exist_ok=True)
+        frames=[]
+        for i in range(12):
+            when=duration*(i+.5)/12
+            frame=frame_dir/f'frame-{i+1:02}.jpg'
+            subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-ss',str(when),'-i',args.video,'-frames:v','1','-q:v','3',str(frame)],check=True)
+            frames.append({'second':round(when,3),'file':str(frame)})
+        result['sampledFrames']=frames
         result['frameContentAnalyzed']=False
     out=pathlib.Path(args.out);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(result,indent=2)+'\n',encoding='utf8')
