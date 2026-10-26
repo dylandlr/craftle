@@ -33,7 +33,7 @@ foreach($slug in @('flashback','fabric-api')){
     $entry.status='dry_run'
   }else{
     $others=@(Get-ChildItem -Path $mods -Filter '*.jar' -File | Where-Object {($_.Name -match 'flashback|fabric-api') -and $_.Name -ne $name})
-    if($others.Count -and -not $Force){throw "Existing Flashback/Fabric API jars found. Refusing mixed versions: $($others.Name -join ', '). Use a clean profile."}
+    if($others.Count){throw "Existing Flashback/Fabric API jars found. Refusing mixed versions: $($others.Name -join ', '). Use a clean profile."}
     if(Test-Path $dest){
       $hash=(Get-FileHash -Algorithm SHA512 $dest).Hash.ToLowerInvariant()
       if($hash -ne $file.hashes.sha512.ToLowerInvariant()){throw "Existing file digest differs: $dest"}
