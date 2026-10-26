@@ -10,6 +10,7 @@ const renderLine='  renderer.render(viewer.scene, viewer.camera)';
 const afterViewer='const viewer = new Viewer(renderer)';
 if(!source.includes(renderLine)||!source.includes(afterViewer))
   throw Error('Unsupported Prismarine Viewer browser entry; camera patch not applied');
+const fixed=process.env.CRAFTLE_VIEWER_CAMERA_BUILD==='fixed';
 const injected=`
 // Craftle read-only chase camera. Never emits socket actions or Mineflayer commands.
 let craftleShot = null;
@@ -25,8 +26,9 @@ function craftleChase(pos,yaw) {
   return {camera:{x:pos.x+Math.sin(yaw)*back,y:pos.y+1.1+elevation,z:pos.z+Math.cos(yaw)*back},
     target:{x:pos.x,y:pos.y+1.1,z:pos.z}};
 }
-const craftleStream = new EventSource('http://127.0.0.1:3001/api/director/stream');
-craftleStream.addEventListener('director', event => {
+if (!${fixed}) { /* director stream disabled for fixed chase builds */ }
+const craftleStream = ${fixed} ? null : new EventSource('http://127.0.0.1:3001/api/director/stream');
+craftleStream?.addEventListener('director', event => {
   try {
     const shot = JSON.parse(event.data);
     const pt = v => v && ['x','y','z'].every(k => Number.isFinite(v[k]));
@@ -46,13 +48,13 @@ source=source.replace(afterViewer,afterViewer+'\n'+injected);
 const positionHook="  socket.on('position', ({ pos, addMesh, yaw, pitch }) => {";
 if(!source.includes(positionHook))throw Error('Viewer position handler changed; fallback not installed');
 source=source.replace(positionHook,positionHook+"\n    craftleFallback = craftleChase(pos,yaw);");
-source=source.replace(renderLine,`  const streamFresh=craftleShot && Date.now()-craftleLastAt<10000;
+source=source.replace(renderLine,`  const streamFresh=${fixed?'false':'craftleShot && Date.now()-craftleLastAt<10000'};
   const activeShot=streamFresh ? craftleShot : craftleFallback;
   craftleSource=streamFresh?'director':craftleFallback?'viewer-socket':'none';
   if (craftleAuto && activeShot) {
-    if(controls)controls.enabled=false;
+    if(controls){controls.enabled=false;}
     const p=activeShot.camera,t=activeShot.target;
-    viewer.camera.position.lerp(new THREE.Vector3(p.x,p.y,p.z),0.20);
+    viewer.camera.position.lerp(new THREE.Vector3(p.x,p.y,p.z),0.12);
     viewer.camera.lookAt(t.x,t.y,t.z);
   }else if(controls)controls.enabled=true;
   craftleFrames++;
