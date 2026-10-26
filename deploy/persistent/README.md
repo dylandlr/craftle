@@ -1,3 +1,18 @@
+## Camera not following: viewer socket fallback
+
+If the auto drone is static while Turesla moves, the custom viewer now falls back to its direct `socket.on('position')` event from Prismarine Viewer, with a fixed six-block trailing shot. This avoids relying exclusively on the separate 3001 director-event stream. When fresh cinematic director poses are available, those still take priority. **This fix requires rebuilding the agent Docker image**, not just restarting its container. For an animated visible agent rather than first-person view, set `CRAFTLE_CAMERA_MODE=third_person` in the same terminal as the compose command, since its default is `first_person`.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+curl.exe http://127.0.0.1:3001/api/status
+curl.exe http://127.0.0.1:3001/api/director
+```
+
+The `/api/director` response should show `available:true` with a valid camera and target for the primary director. The browser socket fallback can still work with `available:false`, so a false response alone no longer proves the viewer cannot follow. A server-reported `cameraReachable:false` means the viewer itself is offline. Hard-refresh the browser if it has cached the old viewer bundle. A motionless in-game agent should result in a motionless trailing camera; inspect agent logs and pose changes to distinguish that case. This fallback has not been validated visually on the user's Windows Docker environment.
+
 ## Experimental live drone camera rendering (2026-10-25)
 
 The agent Docker image now rebuilds Prismarine Viewer's **browser** webpack bundle after patching its known `lib/index.js` render loop via `scripts/patch-prismarine-browser.js`. With the normal third-person web viewer on port 3000 and the spectator monitor on port 3001, the browser's Three.js camera consumes `/api/director/stream` and eases toward the trailing-drone camera pose **inside the renderer**, just before every render call. This is the first implementation to attempt actual on-screen chase-camera motion rather than just displaying camera coordinates.
