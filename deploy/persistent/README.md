@@ -1,3 +1,21 @@
+## Experimental live drone camera rendering (2026-10-25)
+
+The agent Docker image now rebuilds Prismarine Viewer's **browser** webpack bundle after patching its known `lib/index.js` render loop via `scripts/patch-prismarine-browser.js`. With the normal third-person web viewer on port 3000 and the spectator monitor on port 3001, the browser's Three.js camera consumes `/api/director/stream` and eases toward the trailing-drone camera pose **inside the renderer**, just before every render call. This is the first implementation to attempt actual on-screen chase-camera motion rather than just displaying camera coordinates.
+
+To test locally after backing up existing persistent data:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+docker compose -f deploy/persistent/compose.yml --profile learning logs --tail 50 agent
+```
+
+Open `http://127.0.0.1:3001/`. Auto mode follows the streamed target by default, while Take Camera asks the viewer to release auto following; Return to Auto re-enables the drone. Only the local monitor origin `http://127.0.0.1:3001` may send camera-mode messages to the viewer, and only `http://127.0.0.1:3000` may read the director SSE stream cross-origin. There is no Mineflayer control packet, extra spectator player, or model update from this browser interaction.
+
+**Unverified:** Docker webpack rebuild of the installed npm Prismarine Viewer package and the final frame behavior still need an actual Windows Docker smoke test. The patch deliberately fails the image build if upstream `lib/index.js` markers change, rather than silently pretending the custom renderer is enabled. The startup requirements increased because webpack is added to the image build. This doesn't add avatar skeletal animations, graphical particles, audible sound or uninterrupted cinematic MP4s; those are subsequent phases. If rebuild fails, the original image/container and data are not supposed to be deleted—retain them and inspect the webpack error.
+
 ## Drone camera renderer adapter (not yet connected to stock iframe)
 
 `src/director-camera-adapter.js` now implements a camera bridge using **the actual Three.js camera** exposed by Prismarine Viewer's low-level `Viewer`. In a custom viewer's own JS/render loop, create it with `createDirectorCameraAdapter(viewer)`, attach `connectDirectorStream(adapter)`, and call `adapter.tick()` immediately before `renderer.render(viewer.scene,viewer.camera)`. `adapter.setMode('manual')` suspends automatic pose changes; `adapter.setMode('auto')` resumes. It enforces freshness and finite XYZ and never imports/controls Mineflayer. See `test/director-camera-adapter.test.js`.
