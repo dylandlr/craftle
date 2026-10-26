@@ -1,3 +1,13 @@
+## Agent identities and unique skins
+
+Identity and visual appearance are separate from an agent's learned concept of self. `scripts/generate-agent-skins.py` now creates nine distinct **placeholder** Minecraft 64x64 PNG skin textures and a reproducible `identities.json` linking each agent name to a stable identity ID and skin digest. Run `python scripts/generate-agent-skins.py --output recordings/skins` (Pillow required). These are graphical placeholders, not proof that agents understand their own appearance or can recognize another agent.
+
+**Rendering limitation:** both experimental servers currently use vanilla `TYPE: VANILLA` and `ONLINE_MODE: 'FALSE'`. Vanilla Java clients require signed skin properties, so custom offline agent skins will not become visible merely by writing PNG files. Do not claim the generated skins are applied. Implementation choices:
+- Keep vanilla and use a **1.21.1-compatible client-side skin override mod** (e.g. SkinsAndCapes) in the dedicated Flashback filming profile, with an audited local skin asset source. This changes presentation without influencing the server learner.
+- If *all* native clients must see unique skins, use a compatible server-side Fabric skin restoration mod on an **isolated filming server** after compatibility testing. This changes the server software and should not be silently applied to the controlled vanilla experiment.
+
+Important: future mirrors, self-recognition and visual agent-to-agent identity should use sensory images only where actually provided. The identity registry must not automatically become a DQN observation feature, which would leak ground-truth IDs and pre-solve the recognition task.
+
 ## Spectator environmental checks (Minecraft Java 1.21.1)
 
 **Important verified mechanics:** Spectator players do not trigger natural mob spawning or inhibit despawning in vanilla Java. However, the 1.21.1 gamerule `spectatorsGenerateChunks` defaults to `true`; spectators can generate new terrain while flying. This is a real potential contamination route that a missing Mineflayer player entity does not address.
