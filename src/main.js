@@ -36,6 +36,37 @@ for(const [index,profile] of activeProfiles.entries()){
  log(profile.name,'connecting',{agent_id:profile.id,index});
  const bot=mineflayer.createBot({host:config.host,port:config.port,username:profile.name,version:config.version,hideErrors:true});
  bots.push(bot);
+ // Optional observation-only audit on the isolated filming world.
+ // This does not add observer information to agent policy inputs.
+ const observerName=process.env.CRAFTLE_CAMERA_USERNAME??'';
+ if(process.env.CRAFTLE_OBSERVER_AUDIT==='1'&&/^[A-Za-z0-9_]{3,16}$/.test(observerName)){
+   let previous='';
+   const sampleObserver=()=>{
+     const playerEntries=Object.values(bot.players??{});
+     const playerList=playerEntries.some(p=>p?.username===observerName);
+     const entities=Object.values(bot.entities??{}).filter(e=>
+       e?.username===observerName||e?.name===observerName);
+     const signature=JSON.stringify([playerList,entities.map(e=>e.id).sort()]);
+     if(signature!==previous){
+       previous=signature;
+       log(profile.name,'observer_visibility_audit',{agent_id:profile.id,
+         observer:observerName,playerListVisible:playerList,
+         entityVisible:entities.length>0,entityIds:entities.map(e=>e.id),
+         interpretation:'mineflayer_client_observation_only'});
+     }
+   };
+   bot.on('spawn',sampleObserver);
+   bot.on('playerJoined',sampleObserver);
+   bot.on('playerLeft',sampleObserver);
+   bot.on('entitySpawn',sampleObserver);
+   bot.on('entityGone',sampleObserver);
+   const auditTimer=setInterval(sampleObserver,1500);
+   bot.once('end',()=>clearInterval(auditTimer));
+   bot.on('messagestr',(message)=>{if(message.includes(observerName))
+     log(profile.name,'observer_chat_audit',{agent_id:profile.id,
+       observer:observerName,received:true,
+       note:'Message mentioning observer received by Mineflayer'});});
+ }
  const lifeFeedback=createLifeFeedback();
  bot.on('messagestr',(message,position)=>{
    const entry=lifeFeedback.chat(message,position??'chat');
