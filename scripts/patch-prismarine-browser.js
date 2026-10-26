@@ -27,7 +27,7 @@ craftleStream.addEventListener('director', event => {
   } catch {}
 });
 window.addEventListener('message', event => {
-  if(event.origin !== window.location.origin || event.source !== window.parent)return;
+  if(event.origin !== 'http://127.0.0.1:3001' || event.source !== window.parent)return;
   if(event.data?.type === 'craftle-camera-mode')
     craftleAuto = event.data.mode !== 'manual';
 });
