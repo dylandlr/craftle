@@ -32,6 +32,11 @@ function describe(e){
  if(e.type==='target_verified_recovery')return 'Hunger recovery verified';
  if(e.type==='food_provenance_pickup_event')return 'Item pickup observed';
  if(e.type==='death_screen_observed')return 'Turesla died';
+ if(e.type==='food_sequence_started')return 'Started seeking food at '+(e.targetId??'a target');
+ if(e.type==='food_sequence_recovery')return 'Completed food sequence: '+(e.status??'recovery observed');
+ if(e.type==='health'&&Number.isFinite(e.health)&&Number.isFinite(e.food)){
+  if(e.health<=8||e.food<=6)return 'Low vitals: '+e.health+' HP, '+e.food+' hunger';
+ }
  if(e.type==='target_navigation_result'&&e.status==='noPath')return 'No path to target';
  return null;
 }
