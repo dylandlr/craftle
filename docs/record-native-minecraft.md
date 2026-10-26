@@ -1,3 +1,57 @@
+# Recommended path: Flashback (Minecraft Java 1.21.1, Fabric)
+
+**Status:** Flashback client setup and recording finalization scripts are committed; **no native video has been captured or verified**. The real Minecraft Java client must still run on your Windows machine. The isolated filming server, not the live persistent learning server, is the target.
+
+## A. Install Flashback in a separate Minecraft instance
+
+Create a dedicated **Fabric 1.21.1** launcher profile/instance and note its game directory. Then preview compatible versions (no downloads):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-flashback-client.ps1 -GameDirectory "C:\Minecraft\CraftleFlashback"
+```
+
+To download the exact 1.21.1 Fabric builds of Flashback and Fabric API from Modrinth and verify the published SHA-512 checksums, add `-DownloadMods`. The script refuses conflicting jars and will not install or modify Minecraft itself, Fabric Loader or the launcher. Install Fabric Loader in the instance using your preferred launcher first. Flashback is **client-side only**.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-flashback-client.ps1 -GameDirectory "C:\Minecraft\CraftleFlashback" -DownloadMods
+```
+
+Official release list: https://modrinth.com/mod/flashback/versions — select versions filtered for **1.21.1**. The 1.21.1 branch is distinct from newer 26.x releases. Do not install Flashback on the vanilla server.
+
+## B. Start the isolated filming server
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-native-filming.ps1 -Checkpoint accepted
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build
+```
+
+The checkpoint-copy script refuses to overwrite a previous filming checkpoint. Use a new clean filming state for an independent run; never erase the persistent learning server's state. Native client connects to `127.0.0.1:25575`. Set **only the filming account** to spectator mode with `rcon-cli`; this world is not used for uncontaminated scientific benchmarks.
+
+## C. Capture an entire Flashback replay
+
+Enable Flashback's **Automatically Start** and **Automatically Finish** recording options in the client, or use its in-game record controls. Connect to the isolated filming server, follow Turesla through the spectator selection screen, and leave Flashback recording until the intended end. Exit/disconnect cleanly so Flashback can finish writing its replay. Preserve the raw replay before editing.
+
+Open Flashback's replay editor, track Turesla, export a full-duration native `.mp4` with game audio; preserve a separate untouched master and make shorter clips separately. For a long trial, ensure sufficient disk space and memory. Export without fullscreen if the encoder presents a black video.
+
+## D. Finalize a verifiable evidence bundle
+
+Determine the **UTC timestamp of the first frame in the exported replay segment**, not the MP4 file creation time or the time Flashback rendered the export. The exported replay timeline may be trimmed, retimed or shifted from the original recording. If the starting time cannot be established precisely, mark the annotation alignment as approximate; do not claim frame-level synchronization.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/finalize-flashback-recording.ps1 `
+  -Video "recordings/native/turesla-full.mp4" `
+  -ReplayStartUtc "2026-10-26T18:00:00Z" `
+  -OutputDirectory "recordings/native/run-001"
+```
+
+The timestamp shown is **an example**. This copies the **filming** agent log, probes the actual MP4 using `ffprobe`, generates an SRT and JSON evidence manifest, and leaves the original MP4 unchanged. Use a unique output directory per run. Flashback and the Minecraft client are not launched by this script.
+
+## E. Acceptance gate
+
+The recording is complete only once a genuine MP4 has been exported from a Fabric Minecraft Java client, its frames are visibly inspected, Turesla is present, and the evidence bundle passes the checks. There is **no real MP4 yet** from this assistant's execution.
+
+---
+
 # Native Minecraft full-session recording — first safe filming run
 
 This produces footage in a **real Minecraft Java 1.21.1 client**, not Prismarine. It runs a cloned Turesla checkpoint on a completely separate vanilla world and separate Docker Compose project.
