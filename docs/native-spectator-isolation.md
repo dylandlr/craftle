@@ -1,3 +1,37 @@
+## Spectator environmental checks (Minecraft Java 1.21.1)
+
+**Important verified mechanics:** Spectator players do not trigger natural mob spawning or inhibit despawning in vanilla Java. However, the 1.21.1 gamerule `spectatorsGenerateChunks` defaults to `true`; spectators can generate new terrain while flying. This is a real potential contamination route that a missing Mineflayer player entity does not address.
+
+**Mitigation on the isolated filming server now (safe, targeted):**
+
+```powershell
+docker compose -f deploy/filming/compose.yml exec minecraft rcon-cli "gamerule spectatorsGenerateChunks false"
+docker compose -f deploy/filming/compose.yml exec minecraft rcon-cli "gamerule spectatorsGenerateChunks"
+```
+
+The second command must return `false`. This gamerule persists with the filming world, but we have not executed it on your server. Do not apply it to production without separate approval. Preventing fresh generation is not identical to proving that previously loaded chunks, player tickets, world performance, or other game mechanics are unaffected.
+
+### Quick within-world A/B observation (not a controlled experiment)
+
+1. Leave the isolated filming server running with Turesla. Disconnect `dyl_is_here` and leave follow/commentary services stopped or unchanged across phases.
+2. Collect a 2-minute baseline with:
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/sample-filming-environment.ps1 -Phase baseline -Samples 24 -IntervalSeconds 5
+```
+3. Join again as `dyl_is_here`, stay in spectator gamemode, and use follow mode near Turesla (avoid free flying far away). Repeat:
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/sample-filming-environment.ps1 -Phase spectator -Samples 24 -IntervalSeconds 5
+```
+4. Compare `recordings/isolation/baseline.jsonl` with `spectator.jsonl`. Each record includes player list, spectator-generation gamerule, world gametime and RCON entity-presence tests for a handful of species within 64 blocks of Turesla. These are **not true mob population counts** or chunk metrics and are not sufficient to establish equivalence. If gametime differs, that's expected: the world remains active between phases. No claim of zero difference is warranted without repeated matched-seed fresh-world trials.
+
+### Required definitive follow-up
+
+- Create two *identical cold copies* of the filming world and accepted checkpoint; start each from the same state with matched agent seed and fixed action sequence (a learning policy that continues to update is not a fair deterministic baseline).
+- Run paired A/B replicates where only the spectator presence differs. Keep its position near Turesla and never let it free-fly into unexplored terrain.
+- Instrument a server-side profiler or audited mod for chunk ticket counts, loaded/ticking chunk counts per dimension, spawn attempts/success and reasons, natural mob caps, TPS/MSPT and newly generated chunks. Vanilla RCON alone cannot provide a sufficient complete picture.
+- Compare Turesla's *policy observation features* and trajectories, not solely its final reward. The existence of a spectator might still change performance or stochastic scheduling.
+- Declare observer isolation only if predetermined tolerances and all invariants pass, with documented seeds, measurements and replicate counts. Until then continue using the separately hosted filming copy.
+
 ## Filming observer audit (opt-in, not proof of zero impact)
 
 The agent can now log whether its Mineflayer `bot.players` registry includes the camera username, whether any `bot.entities` entry has the camera username, and whether received chat mentions that name. These are passive reads; the policy remains unchanged. Enable **only in the isolated filming server**:
