@@ -28,3 +28,26 @@ test('spectator decodes real effect reports without claiming audio playback',()=
  assert.deepEqual(a.effects.map(e=>e.kind),['sound','particle']);
  assert.equal('audioPlayback' in a,false);
 });
+
+test('live director API exposes read-only pose without mutating world',async()=>{
+ const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
+ const {startSpectatorMonitor}=await import('../src/spectator-monitor.js');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-director-api-'));
+ const dir=path.join(root,'continuous');fs.mkdirSync(dir,{recursive:true});
+ const at=new Date().toISOString();
+ fs.writeFileSync(path.join(dir,'agent.log'),JSON.stringify({timestamp:at,agent:'Turesla',agent_id:'agent_001',type:'spectator_effect',kind:'motion',position:{x:10,y:64,z:10},yaw:0,velocity:{x:0,y:0,z:-1},onGround:true})+'\n');
+ const server=startSpectatorMonitor({port:0,host:'127.0.0.1',cameraPort:1,telemetryRoot:root});
+ await new Promise(resolve=>server.once('listening',resolve));
+ try{
+  const url='http://127.0.0.1:'+server.address().port+'/api/director';
+  const response=await fetch(url);assert.equal(response.status,200);
+  const pose=await response.json();
+  assert.equal(pose.available,true);assert.equal(pose.control,'read_only');
+  assert.equal(pose.renderApplied,false);assert.equal(pose.agentId,'agent_001');
+  assert.ok(pose.camera.z>pose.target.z);
+  const denied=await fetch(url,{method:'POST'});assert.equal(denied.status,405);
+ }finally{
+  await new Promise(resolve=>server.close(resolve));
+  fs.rmSync(root,{force:true,recursive:true});
+ }
+});
