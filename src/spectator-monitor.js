@@ -56,7 +56,8 @@ function setManual(enabled){
  take.disabled=manual;
  back.disabled=!manual;
  help.textContent=manual?'Manual mode: click inside the viewer to focus its controls. Escape returns to Auto.':'Auto mode: the existing Prismarine camera follows the agent. Camera controls are watch-only.';
- if(manual)frame.focus();else{take.focus();resetCamera();}
+ frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:manual?'manual':'auto'},'http://127.0.0.1:3000');
+ if(manual)frame.focus();else take.focus();
 }
 take.addEventListener('click',()=>setManual(true));
 back.addEventListener('click',()=>setManual(false));
@@ -134,6 +135,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
     if(route==='/api/director/stream'){
+      res.setHeader('Access-Control-Allow-Origin','http://127.0.0.1:3000');
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8',
         'Connection':'keep-alive','X-Accel-Buffering':'no'});
       res.write('retry: 1500\n\n');
