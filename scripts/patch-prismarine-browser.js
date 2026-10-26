@@ -13,8 +13,15 @@ if(!source.includes(renderLine)||!source.includes(afterViewer))
 const injected=`
 // Craftle read-only chase camera. Never emits socket actions or Mineflayer commands.
 let craftleShot = null;
+let craftleFallback = null;
 let craftleLastAt = 0;
 let craftleAuto = true;
+function craftleChase(pos,yaw) {
+  if(!pos || ![pos.x,pos.y,pos.z,yaw].every(Number.isFinite))return null;
+  const back=6,elevation=3.6;
+  return {camera:{x:pos.x+Math.sin(yaw)*back,y:pos.y+1.1+elevation,z:pos.z+Math.cos(yaw)*back},
+    target:{x:pos.x,y:pos.y+1.1,z:pos.z}};
+}
 const craftleStream = new EventSource('http://127.0.0.1:3001/api/director/stream');
 craftleStream.addEventListener('director', event => {
   try {
@@ -33,9 +40,13 @@ window.addEventListener('message', event => {
 });
 `;
 source=source.replace(afterViewer,afterViewer+'\n'+injected);
-source=source.replace(renderLine,`  if (craftleAuto && craftleShot && Date.now()-craftleLastAt<10000) {
+const positionHook="  socket.on('position', ({ pos, addMesh, yaw, pitch }) => {";
+if(!source.includes(positionHook))throw Error('Viewer position handler changed; fallback not installed');
+source=source.replace(positionHook,positionHook+"\\n    craftleFallback = craftleChase(pos,yaw);");
+source=source.replace(renderLine,`  const activeShot=craftleShot && Date.now()-craftleLastAt<10000 ? craftleShot : craftleFallback;
+  if (craftleAuto && activeShot) {
     if(controls)controls.enabled=false;
-    const p=craftleShot.camera,t=craftleShot.target;
+    const p=activeShot.camera,t=activeShot.target;
     viewer.camera.position.lerp(new THREE.Vector3(p.x,p.y,p.z),0.20);
     viewer.camera.lookAt(t.x,t.y,t.z);
   }else if(controls)controls.enabled=true;
