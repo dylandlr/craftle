@@ -1,3 +1,33 @@
+## Agent intelligence: targeted reward v2 (experimental)
+
+The targeted DQN's prior **v1** reward mostly valued successful eating while lightly penalizing each action. We now have opt-in **v2**, which adds bounded reward for first-time entry into an 8×8 block grid cell (+0.12), observed net edible inventory gains (+0.15 per item, capped +0.45), and horizontal movement progress (max +0.03 per decision). Death (-5), health loss, successful eating and time/action costs remain. V2 reward components are logged individually; observational inventory gains are **not** represented as proof that a specific attack/harvest action caused them. These terms are exploratory shaping incentives, **not evidence that intelligence or survival has improved yet**.
+
+Training keeps separate files:
+- v1: `/state/agent/continuous-policy.json`
+- v2: `/state/agent/continuous-policy-reward-v2.json`
+- accepted baseline remains `/state/agent/accepted-policy.json`
+
+Enable v2 in PowerShell using the **known-working stock renderer**:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+$env:CRAFTLE_CUSTOM_VIEWER = "0"
+$env:CRAFTLE_TARGET_REWARD_VERSION = "v2"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+A new v2 checkpoint is seeded once from the existing accepted baseline (not from the mutable continuous-v1 file); later restarts use its own weights and replay state. To compare v1 and v2, hold world seed, starting agent inventory, experiment duration, epsilon and seeds constant, and evaluate each trained checkpoint under a **frozen** policy across multiple fresh matched-seed worlds. Running v1 and v2 consecutively in the same persistent world is a convenient demonstration but **not** a controlled comparison. Before promoting reward v2 as the default, measure survival time, deaths per Minecraft hour, verified eating, food reserves, novel area exploration, and repeated target-action success.
+
+For a read-only summary of observed behavior from the continuous log, use:
+
+```powershell
+docker compose -f deploy/persistent/compose.yml --profile learning exec agent node scripts/report-agent-learning.js /state/agent/continuous/agent.log
+```
+
+The report only counts logged behavior; it never loads or modifies policy weights. Note that the same continuous log includes successive runs and potentially different reward versions; for fair comparison retain version-specific experimental logs.
+
 ## Fixed-distance chase camera (experimental, opt-in)
 
 This safer intermediary mode renders a trailing camera based solely on Prismarine Viewer's own `socket.on('position')` events, without the cinematic director EventSource. The browser follows six blocks behind the agent and approximately 4.7 blocks above the agent's feet, with position easing. It never sends movement commands to Mineflayer.
