@@ -1,3 +1,17 @@
+## Food acquisition evidence chain (instrumentation v1)
+
+The agent now logs `food_sequence_started`, `food_sequence_attempt`, `food_sequence_inventory_gain`, `food_sequence_recovery`, and `food_sequence_finished` events in the targeted survival loop. The sequence observer has **no authority over actions, observations, rewards or policy weights**. It starts on a selected approach target, notes a subsequent harvest/attack on that same target, counts food-item gains on later observations, and recognizes a later verified hunger increase after eating. A recovery without inventory gain is explicitly distinct. Death, timeout, target changes and shutdown end the sequence.
+
+This is **temporal association, not proof of causation**: other items could be collected, a target could disappear, a harvest could fail, and the eaten food could predate the attempt. It provides a falsifiable intermediate measure for improving delayed credit assignment later without fabricating successful skills.
+
+Run the read-only report after collecting new events:
+
+```powershell
+docker compose -f deploy/persistent/compose.yml --profile learning exec agent node scripts/report-agent-learning.js /state/agent/continuous/agent.log
+```
+
+Check `foodSequences` alongside verified eating, deaths, visited cells, and action distribution. The continuous log can span different software versions/reward versions, so a rigorous benchmark must use separate runs with versioned logs and matched starting conditions.
+
 ## Agent intelligence: targeted reward v2 (experimental)
 
 The targeted DQN's prior **v1** reward mostly valued successful eating while lightly penalizing each action. We now have opt-in **v2**, which adds bounded reward for first-time entry into an 8×8 block grid cell (+0.12), observed net edible inventory gains (+0.15 per item, capped +0.45), and horizontal movement progress (max +0.03 per decision). Death (-5), health loss, successful eating and time/action costs remain. V2 reward components are logged individually; observational inventory gains are **not** represented as proof that a specific attack/harvest action caused them. These terms are exploratory shaping incentives, **not evidence that intelligence or survival has improved yet**.
