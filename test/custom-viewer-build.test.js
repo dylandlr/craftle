@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+
+test('custom viewer build patches actual render loop, without Minecraft actions',()=>{
+ const script=fs.readFileSync(path.resolve('scripts/patch-prismarine-browser.js'),'utf8');
+ const docker=fs.readFileSync(path.resolve('deploy/persistent/agent.Dockerfile'),'utf8');
+ assert.match(script,/renderer\.render\(viewer\.scene, viewer\.camera\)/);
+ assert.match(script,/viewer\.camera\.position\.lerp/);
+ assert.match(script,/craftleAuto/);
+ assert.match(script,/EventSource/);
+ assert.doesNotMatch(script,/bot\.setControlState|bot\.look\(|bot\.attack\(/);
+ assert.match(docker,/patch-prismarine-browser\.js/);
+ assert.match(docker,/webpack --config webpack\.config\.js/);
+});
