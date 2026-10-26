@@ -1,3 +1,24 @@
+## Verbose commentary and diagnosing treetop wandering
+
+The filming-only commentator now sends more informative messages to the configured camera player `dyl_is_here`: DQN decision ID, choice, available action mask count, detected target count, skill failures, pathfinding failures, substantial rewards, and a periodic position/vitals/reward summary. This uses a targeted `tellraw dyl_is_here` command (no global broadcast) from a separate observer tool. Turesla's current targeted DQN cannot press Tab or issue chat commands, and the commentary service does not inject messages into its policy. Keep this service restricted to the filming world because vanilla chat events and RCON still add some server workload.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME="dyl_is_here"
+docker compose -f deploy/filming/compose.yml --profile commentary up -d commentary
+docker compose -f deploy/filming/compose.yml --profile commentary logs --tail 40 commentary
+```
+
+The filming footage needs independent review. Export the complete Flashback video as `recordings/native/turesla-full.mp4` and copy the filming log (don't copy the production-world log):
+
+```powershell
+New-Item -ItemType Directory -Force recordings/native | Out-Null
+docker compose -f deploy/filming/compose.yml --profile learning cp agent:/state/agent/continuous/agent.log recordings/native/filming-agent.log
+python scripts/review-filming.py --log recordings/native/filming-agent.log --video recordings/native/turesla-full.mp4 --out recordings/native/filming-review.json
+```
+
+The reviewer produces a JSON behavioral report plus 12 actual timestamped video frames under `recordings/native/review-frames/`. It reports action frequencies, navigation failures, explored 8-block cells and Y-coordinate range. **This does not automatically recognize tree blocks, interpret avatar actions from images, or prove why the agent climbs trees**. Inspect the extracted frames alongside the JSON. A ground-truth terrain diagnosis requires block-underfoot samples and matched replay/event timestamps. You may upload the MP4 plus log to ChatGPT for an actual visual diagnosis.
+
 ## Keep native spectator attached after Turesla dies
 
 Vanilla /spectate can detach when its target player dies. On the isolated filming server there is now an opt-in **follow watchdog** that reissues `spectate Turesla <your camera player>` after spawn/death/respawn events and on a 30-second safety heartbeat. It **does not move, attack or change the learner**. The camera may briefly become free-flying between Turesla's death and respawn; automatic reattachment resumes after the new player entity exists. This is not a seamless replay camera cut, and Flashback should keep recording during the gap.
