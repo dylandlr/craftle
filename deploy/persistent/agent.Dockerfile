@@ -7,5 +7,6 @@ COPY src ./src
 COPY scripts ./scripts
 ARG CRAFTLE_CUSTOM_VIEWER=1
 ARG CRAFTLE_VIEWER_CAMERA_BUILD=director
-RUN if [ "$CRAFTLE_CUSTOM_VIEWER" = "1" ]; then CRAFTLE_VIEWER_CAMERA_BUILD="$CRAFTLE_VIEWER_CAMERA_BUILD" node scripts/patch-prismarine-browser.js && (cd node_modules/prismarine-viewer && /app/node_modules/.bin/webpack --config webpack.config.js); else echo 'Craftle cinematic camera disabled: using stock Prismarine Viewer'; fi
+ARG CRAFTLE_ANIMATED_VIEWER=0
+RUN if [ "$CRAFTLE_CUSTOM_VIEWER" = "1" ]; then CRAFTLE_VIEWER_CAMERA_BUILD="$CRAFTLE_VIEWER_CAMERA_BUILD" node scripts/patch-prismarine-browser.js && (cd node_modules/prismarine-viewer && /app/node_modules/.bin/webpack --config webpack.config.js); elif [ "$CRAFTLE_ANIMATED_VIEWER" = "1" ]; then node scripts/patch-prismarine-animations.js && (cd node_modules/prismarine-viewer && /app/node_modules/.bin/webpack --config webpack.config.js); else echo 'Craftle cinematic camera disabled: using stock Prismarine Viewer'; fi
 CMD ["flock", "-n", "/state/agent/runner.lock", "node", "scripts/persistent-agent.js"]
