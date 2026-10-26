@@ -39,7 +39,7 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <div class="metric"><small>Position</small><strong id="position">—</strong></div>
 <div class="metric"><small>Recent action</small><strong id="last-action">—</strong></div>
 <div class="metric"><small>Latest event</small><strong id="last-event">—</strong></div>
-<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>\n<div class="metric"><small>Motion / desired framing</small><strong id="shot">—</strong></div>\n<div class="metric"><small>Drone distance / height</small><strong id="drone-pose">—</strong></div>\n<div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
+<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>\n<div class="metric"><small>Camera renderer</small><strong id="renderer-status">Not reporting</strong></div>\n<div class="metric"><small>Motion / desired framing</small><strong id="shot">—</strong></div>\n<div class="metric"><small>Drone distance / height</small><strong id="drone-pose">—</strong></div>\n<div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
 </section>
 <p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
@@ -47,7 +47,13 @@ const frame=document.getElementById('viewer'),offline=document.getElementById('o
 const viewport=document.getElementById('viewport'),take=document.getElementById('take-camera');
 const back=document.getElementById('return-auto'),mode=document.getElementById('mode');
 const help=document.getElementById('camera-help');
-let connected=null,manual=false;
+let connected=null,manual=false,lastRendererReport=0;
+window.addEventListener('message',event=>{
+ if(event.origin!=='http://127.0.0.1:3000'||event.source!==frame.contentWindow||event.data?.type!=='craftle-renderer-status')return;
+ lastRendererReport=Date.now();
+ const d=event.data;
+ document.getElementById('renderer-status').textContent=d.applied?'Applying '+d.source+' · frame '+d.frames:d.auto?'Waiting for position · frame '+d.frames:'Manual camera';
+});
 function resetCamera(){frame.src='http://127.0.0.1:3000/?camera_reset='+Date.now();}
 function setManual(enabled){
  manual=enabled;
@@ -89,6 +95,7 @@ async function inspect(){
   put('shot',a.shot?a.shot.animation+' · '+a.shot.zoomIntent+' zoom':'—');\n  put('drone-pose',a.shot?a.shot.distance.toFixed(1)+' blocks back · '+a.shot.height.toFixed(1)+' up':'—');
   const effect=a.effects?.[a.effects.length-1];
   put('effect',effect?effect.kind+(effect.name?' · '+effect.name:''):'—');
+  if(Date.now()-lastRendererReport>4000)put('renderer-status','No renderer report — check refresh or bundle');
   put('freshness',a.stale?'Stale / session gap':'Live · '+new Date(a.lastObservedAt).toLocaleTimeString());
  }catch{document.getElementById('freshness').textContent='Unavailable';}
 }
