@@ -22,6 +22,6 @@ test('custom viewer build patches actual render loop, without Minecraft actions'
  assert.match(docker,/CRAFTLE_CUSTOM_VIEWER=1/);
  assert.match(docker,/using stock Prismarine Viewer/);
  const compose=fs.readFileSync(path.resolve('deploy/persistent/compose.yml'),'utf8');
- assert.match(compose,/CRAFTLE_CUSTOM_VIEWER:/);
+ assert.match(compose,/CRAFTLE_CUSTOM_VIEWER: '\\$\\{CRAFTLE_CUSTOM_VIEWER:-0\\}'/);
  assert.match(docker,/webpack@5 webpack-cli@6 process buffer assert/);
 });
