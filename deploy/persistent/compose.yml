@@ -39,6 +39,7 @@ services:
       dockerfile: deploy/persistent/agent.Dockerfile
       args:
         CRAFTLE_CUSTOM_VIEWER: '${CRAFTLE_CUSTOM_VIEWER:-1}'
+        CRAFTLE_VIEWER_CAMERA_BUILD: '${CRAFTLE_VIEWER_CAMERA_BUILD:-director}'
     restart: unless-stopped
     depends_on:
       minecraft:
