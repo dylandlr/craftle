@@ -1,3 +1,18 @@
+## Opt-in walking/idle animations with the original camera
+
+An independent animation-only Prismarine Viewer browser build is now available. It uses the existing bot mesh's named `leftArm`, `rightArm`, `leftLeg` and `rightLeg` bones, updates angles from actual rendered horizontal displacement each frame, and eases back to idle when movement stops. This fixes the missing animation registration of the manually spawned bot model without changing the stock OrbitControls/camera or Mineflayer's learning and actions. No new in-world spectator entity is created.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+$env:CRAFTLE_CUSTOM_VIEWER = "0"
+$env:CRAFTLE_ANIMATED_VIEWER = "1"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+Open `http://127.0.0.1:3000/` or the monitor on port 3001. This remains an **experimental image build** and has not been visually verified on Windows Docker. It is only a walking/idle visual slice, **not** jumping, mining, eating or sound effects. If anything goes black, set `CRAFTLE_ANIMATED_VIEWER=0` with `CRAFTLE_CUSTOM_VIEWER=0` and rebuild to restore the stock viewer. The animation flag is ignored when `CRAFTLE_CUSTOM_VIEWER=1`; avoid combining these experimental modes until each passes a visual test. All agent state paths are preserved through rebuilds.
+
 ## Food acquisition evidence chain (instrumentation v1)
 
 The agent now logs `food_sequence_started`, `food_sequence_attempt`, `food_sequence_inventory_gain`, `food_sequence_recovery`, and `food_sequence_finished` events in the targeted survival loop. The sequence observer has **no authority over actions, observations, rewards or policy weights**. It starts on a selected approach target, notes a subsequent harvest/attack on that same target, counts food-item gains on later observations, and recognizes a later verified hunger increase after eating. A recovery without inventory gain is explicitly distinct. Death, timeout, target changes and shutdown end the sequence.
