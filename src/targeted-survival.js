@@ -68,18 +68,18 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      const block=bot.blockAt(p.offset(target.position.x-p.x,target.position.y-p.y,target.position.z-p.z)),action=foodPlantAction(block);
      if(action&&bot.canSeeBlock?.(block)){
       const before={name:block.name,stateId:block.stateId??null,properties:block.getProperties?.()??null};
-      log({type:'target_harvest_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,plant:block.name});
+      log({type:'target_harvest_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,targetPosition:{x:block.position.x,y:block.position.y,z:block.position.z},plant:block.name});
       if(action==='dig')await bot.dig(block);else await bot.activateBlock(block);
       if(!valid())return;
       const afterBlock=bot.blockAt(block.position);
       const after={name:afterBlock?.name??null,stateId:afterBlock?.stateId??null,properties:afterBlock?.getProperties?.()??null};
       const changed=before.stateId!==null&&after.stateId!==null?before.stateId!==after.stateId:JSON.stringify(before)!==JSON.stringify(after);
-      log({type:'target_harvest_block_observation',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,action,before,after,changed,evidence:'client_world_observation_not_server_confirmation'});
+      log({type:'target_harvest_block_observation',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,targetPosition:{x:block.position.x,y:block.position.y,z:block.position.z},action,before,after,changed,evidence:'client_world_observation_not_server_confirmation'});
       log({type:'target_harvest_attempt',decisionId:choice.decisionId,targetId:target.id,plant:block.name});
      }
     }else if(choice.skill==='attack'&&target?.kind==='animal'){
      const entity=Object.values(bot.entities).find(e=>`entity:${e?.id}`===target.id);
-     if(entity?.position&&entity.position.distanceTo(p)<3&&bot.canSeeEntity?.(entity)){log({type:'target_attack_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id});await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
+     if(entity?.position&&entity.position.distanceTo(p)<3&&bot.canSeeEntity?.(entity)){log({type:'target_attack_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,targetPosition:{x:entity.position.x,y:entity.position.y,z:entity.position.z}});await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
     }
    }
    if(!valid())return;
