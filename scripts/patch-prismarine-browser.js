@@ -42,7 +42,7 @@ window.addEventListener('message', event => {
 source=source.replace(afterViewer,afterViewer+'\n'+injected);
 const positionHook="  socket.on('position', ({ pos, addMesh, yaw, pitch }) => {";
 if(!source.includes(positionHook))throw Error('Viewer position handler changed; fallback not installed');
-source=source.replace(positionHook,positionHook+"\\n    craftleFallback = craftleChase(pos,yaw);");
+source=source.replace(positionHook,positionHook+"\n    craftleFallback = craftleChase(pos,yaw);");
 source=source.replace(renderLine,`  const activeShot=craftleShot && Date.now()-craftleLastAt<10000 ? craftleShot : craftleFallback;
   if (craftleAuto && activeShot) {
     if(controls)controls.enabled=false;
