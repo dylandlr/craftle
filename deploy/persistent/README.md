@@ -1,3 +1,9 @@
+## Live drone camera pose API (renderer integration)
+
+The spectator monitor on `http://127.0.0.1:3001` now exposes **`GET /api/director`**. The JSON contains a smoothed chase camera pose, look-at target, action-derived zoom intention, agent identity and observation timestamp. The output is read-only and calculated exclusively from spectator telemetry; there are no control POST endpoints and it does not send movement commands to Minecraft. Stale or missing telemetry results in `available:false` with null pose fields, rather than presenting a stale camera as live. This is an integration contract for the next custom renderer, **not a claim that Prismarine Viewer's iframe camera is already driven by it** (`renderApplied:false`).
+
+The standard high-level Prismarine Viewer `mineflayer` web API exposes first/third-person selection but not an external per-frame camera setter. Its lower-level Viewer does expose `setFirstPersonCamera` and camera controls; turning this endpoint into a real drone shot requires hosting a customized viewer page and explicit render-loop control rather than trying to control a different-origin iframe. We should validate the renderer camera matrix, terrain occlusion, and actual motion on local vanilla 1.21.1 before enabling it by default. Audio, particles and avatar skeletal animation remain separate rendering tasks.
+
 ## Spectator effects and cinematic-drone groundwork
 
 When the agent is running, the observation-only event bridge (`CRAFTLE_SPECTATOR_EFFECTS=1` by default) records genuine Mineflayer movement, entity swings/hurts, received particles and sound-effect *metadata* to its regular session or continuous agent log. The inspector at `http://127.0.0.1:3001` displays the most recent particles/sounds, motion type and a calculated trailing-drone shot intention (behind heading, elevated, with tighter zoom for observed attack/harvest decisions). The shot planner `src/spectator-director.js` has deterministic unit tests.
