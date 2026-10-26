@@ -1,6 +1,7 @@
 import http from 'node:http';
 import net from 'node:net';
 import {readAgentTelemetry} from './spectator-telemetry.js';
+import {smoothDirectorPose} from './spectator-director.js';
 
 export function cameraReachable({host='127.0.0.1',port=3000,timeoutMs=700}={}){
   return new Promise(resolve=>{
@@ -96,13 +97,30 @@ check();inspect();setInterval(check,3000);setInterval(inspect,2000);
 
 export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.0.0.1',cameraPort=3000,telemetryRoot=null}={}){
   const page=spectatorHtml();
+  let lastPose=null,lastObservedAt=null;
   const server=http.createServer(async(req,res)=>{
     const route=(req.url??'/').split('?')[0];
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
-    if(route==='/api/agent'){
+    if(route==='/api/director'){
+      let agent=null;
+      if(telemetryRoot)try{agent=readAgentTelemetry(telemetryRoot).agent;}catch{}
+      // Only a fresh motion report can steer the camera. Never let stale telemetry make it drift.
+      const valid=Boolean(agent&&!agent.stale&&agent.motion&&agent.shot);
+      if(valid&&agent.motion.timestamp!==lastObservedAt){
+        lastPose=smoothDirectorPose(lastPose,agent.shot,0.22);
+        lastObservedAt=agent.motion.timestamp;
+      }
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({schema:'craftle.director-pose.v1',available:valid,
+        camera:valid?lastPose?.camera:null,target:valid?lastPose?.target:null,
+        distance:valid?agent.shot.distance:null,animation:valid?agent.shot.animation:null,
+        zoomIntent:valid?agent.shot.zoomIntent:null,agentId:valid?agent.id:null,
+        observedAt:valid?agent.motion.timestamp:null,renderApplied:false,
+        control:'read_only',time:new Date().toISOString()}));
+    }else if(route==='/api/agent'){
       let data={available:false,agent:null};
       if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
