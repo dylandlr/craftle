@@ -26,7 +26,6 @@ function craftleChase(pos,yaw) {
   return {camera:{x:pos.x+Math.sin(yaw)*back,y:pos.y+1.1+elevation,z:pos.z+Math.cos(yaw)*back},
     target:{x:pos.x,y:pos.y+1.1,z:pos.z}};
 }
-if (!${fixed}) { /* director stream disabled for fixed chase builds */ }
 const craftleStream = ${fixed} ? null : new EventSource('http://127.0.0.1:3001/api/director/stream');
 craftleStream?.addEventListener('director', event => {
   try {
