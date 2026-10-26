@@ -1,3 +1,17 @@
+## Filming observer audit (opt-in, not proof of zero impact)
+
+The agent can now log whether its Mineflayer `bot.players` registry includes the camera username, whether any `bot.entities` entry has the camera username, and whether received chat mentions that name. These are passive reads; the policy remains unchanged. Enable **only in the isolated filming server**:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = "YOUR_ACTUAL_MINECRAFT_USERNAME"
+$env:CRAFTLE_OBSERVER_AUDIT = "1"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --no-deps --force-recreate agent
+docker compose -f deploy/filming/compose.yml --profile learning exec agent sh -lc "grep 'observer_visibility_audit\|observer_chat_audit' /state/agent/continuous/agent.log | tail -20"
+```
+
+The audit should be enabled while the camera account is logged in. This command **restarts only the filming agent**, not the persistent learning agent or Minecraft server. It reports exposure through Mineflayer's public registries, not every raw player-info/network packet, and does not establish whether the server's mob spawning, chunk loading, ticks, or world generation change. A `playerListVisible: true` result definitively means the account is known to Mineflayer; `entityVisible: false` means no matching observer entity was present in the sampled client entity table, not proof of complete invisibility. No zero-contamination claim should be made on this basis alone.
+
 # Craftle native Minecraft recorder — isolation contract v1
 
 ## Non-negotiable architecture
