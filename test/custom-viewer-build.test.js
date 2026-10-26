@@ -11,6 +11,9 @@ test('custom viewer build patches actual render loop, without Minecraft actions'
  assert.match(script,/craftleAuto/);
  assert.match(script,/EventSource/);
  assert.match(script,/craftleFallback = craftleChase\(pos,yaw\)/);
+ assert.match(script,/CRAFTLE_VIEWER_CAMERA_BUILD/);
+ assert.match(script,/streamFresh=\$\{fixed\?/);
+ assert.match(docker,/CRAFTLE_VIEWER_CAMERA_BUILD/);
  assert.match(script,/activeShot=craftleShot/);
  assert.match(script,/socket\.on\('position'/);
  assert.doesNotMatch(script,/bot\.setControlState|bot\.look\(|bot\.attack\(/);
