@@ -27,9 +27,11 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 </style></head><body><header><div><h1>Craftle · Spectator Monitor</h1><small>Watch-only by default · observer commands never control the learning agent</small></div><small id="mode">AUTO VIEW</small></header>
 <main><section class="viewport" id="viewport" data-camera-mode="auto" aria-label="Live Minecraft spectator viewer">
 <iframe id="viewer" title="Live third-person Prismarine Viewer" src="http://127.0.0.1:3000/" allowfullscreen></iframe>
-<div class="camera-shield" id="camera-shield" aria-hidden="true"></div>\n<div id="offline"><h2>Waiting for camera</h2><p>Agent session is reconnecting. The monitor remains available.</p></div></section>
+<div class="camera-shield" id="camera-shield" aria-hidden="true"></div>
+<div id="offline"><h2>Waiting for camera</h2><p>Agent session is reconnecting. The monitor remains available.</p></div></section>
 <div class="controls">
-<button id="take-camera" type="button">Take Camera · WASD</button>\n<button id="return-auto" type="button" disabled>↺ Return to Auto</button>
+<button id="take-camera" type="button">Take Camera · WASD</button>
+<button id="return-auto" type="button" disabled>↺ Return to Auto</button>
 <a href="http://127.0.0.1:3000/" target="_blank" rel="noopener noreferrer">Open raw camera ↗</a>
 <span class="status" id="status" role="status" aria-live="polite">Checking camera…</span>
 </div>
@@ -39,9 +41,14 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <div class="metric"><small>Position</small><strong id="position">—</strong></div>
 <div class="metric"><small>Recent action</small><strong id="last-action">—</strong></div>
 <div class="metric"><small>Latest event</small><strong id="last-event">—</strong></div>
-<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>\n<div class="metric"><small>Camera renderer</small><strong id="renderer-status">Not reporting</strong></div>\n<div class="metric"><small>Motion / desired framing</small><strong id="shot">—</strong></div>\n<div class="metric"><small>Drone distance / height</small><strong id="drone-pose">—</strong></div>\n<div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
+<div class="metric"><small>Telemetry</small><strong id="freshness">Not connected</strong></div>
+<div class="metric"><small>Camera renderer</small><strong id="renderer-status">Not reporting</strong></div>
+<div class="metric"><small>Motion / desired framing</small><strong id="shot">—</strong></div>
+<div class="metric"><small>Drone distance / height</small><strong id="drone-pose">—</strong></div>
+<div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
 </section>
-<p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>\n<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
+<p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>
+<p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
 const viewport=document.getElementById('viewport'),take=document.getElementById('take-camera');
@@ -74,7 +81,8 @@ async function check(){
   if(!response.ok)throw Error('monitor status unavailable');
   const data=await response.json();
   const online=!!data.cameraReachable;
-  if(connected===false&&online)resetCamera();\n  if(!online&&manual)setManual(false);
+  if(connected===false&&online)resetCamera();
+  if(!online&&manual)setManual(false);
   connected=online;offline.style.display=online?'none':'grid';
   status.textContent=online?'● Camera server connected':'● Camera offline / reconnecting';
   status.className='status '+(online?'green':'amber');
@@ -92,7 +100,8 @@ async function inspect(){
   put('position',a.position?[a.position.x,a.position.y,a.position.z].map(n=>n.toFixed(1)).join(', '):'—');
   put('last-action',a.lastAction?.action??a.lastAction?.type??'—');
   put('last-event',a.lastEvent?.type??'—');
-  put('shot',a.shot?a.shot.animation+' · '+a.shot.zoomIntent+' zoom':'—');\n  put('drone-pose',a.shot?a.shot.distance.toFixed(1)+' blocks back · '+a.shot.height.toFixed(1)+' up':'—');
+  put('shot',a.shot?a.shot.animation+' · '+a.shot.zoomIntent+' zoom':'—');
+  put('drone-pose',a.shot?a.shot.distance.toFixed(1)+' blocks back · '+a.shot.height.toFixed(1)+' up':'—');
   const effect=a.effects?.[a.effects.length-1];
   put('effect',effect?effect.kind+(effect.name?' · '+effect.name:''):'—');
   if(Date.now()-lastRendererReport>4000)put('renderer-status','No renderer report — check refresh or bundle');
