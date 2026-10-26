@@ -121,7 +121,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     const fingerprint=JSON.stringify([state.available,state.observedAt,state.camera,state.target]);
     if(fingerprint===lastEmitted)return;
     lastEmitted=fingerprint;
-    const payload='event: director\\ndata: '+JSON.stringify(state)+'\\n\\n';
+    const payload='event: director\ndata: '+JSON.stringify(state)+'\n\n';
     for(const res of subscribers){
       if(res.destroyed||res.writableLength>65536){subscribers.delete(res);res.end();continue;}
       res.write(payload);
@@ -136,8 +136,8 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     if(route==='/api/director/stream'){
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8',
         'Connection':'keep-alive','X-Accel-Buffering':'no'});
-      res.write('retry: 1500\\n\\n');
-      res.write('event: director\\ndata: '+JSON.stringify(directorPayload())+'\\n\\n');
+      res.write('retry: 1500\n\n');
+      res.write('event: director\ndata: '+JSON.stringify(directorPayload())+'\n\n');
       subscribers.add(res);
       req.on('close',()=>subscribers.delete(res));
     }else if(route==='/api/director'){
