@@ -56,6 +56,29 @@ services:
       - ./state/agent:/state/agent
     init: true
     stop_grace_period: 60s
+  follow:
+    image: node:22-alpine
+    profiles: [follow]
+    restart: unless-stopped
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    working_dir: /app
+    command: ['node', '/app/scripts/filming-spectator-follow.js']
+    environment:
+      CRAFTLE_CAMERA_USERNAME: '${CRAFTLE_CAMERA_USERNAME:-}'
+      CRAFTLE_FOLLOW_TARGET: Turesla
+      CRAFTLE_COMMENTARY_LOG: /state/agent/continuous/agent.log
+      CRAFTLE_RCON_HOST: minecraft
+      CRAFTLE_RCON_PORT: '25575'
+      CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
+      CRAFTLE_FOLLOW_CHECK_MS: '6000'
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ./state/agent:/state/agent:ro
+    secrets:
+      - rcon_password
+    init: true
   commentary:
     image: node:22-alpine
     profiles: [commentary]
