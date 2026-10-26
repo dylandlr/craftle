@@ -49,3 +49,33 @@ A normal native Minecraft observer, even in spectator mode, may affect simulatio
 ## Limitations and next engineering phase
 
 This is a reproducible **manual native-client recording pipeline**, not autonomous headless rendering. End-to-end unattended capture requires real-client automation or a deterministic server replay with full authoritative state, and is not implemented. Server observer isolation remains to be proved; see `docs/native-spectator-isolation.md`. Prismarine's annotations remain available as a debug view at `http://127.0.0.1:3011/api/annotations` for the separate filming agent, subject to agent logging.
+
+## Versioned native recording + synchronized annotation workflow
+
+Flashback is a good fit for the initial real-client demonstration. Its official [1.21.1-compatible builds](https://flashback-mod.com/) provide recording, replay editing, **Track Entity** camera tracking and MP4 export. In a replay, track **Turesla** rather than manually approximating its movements. Native recording must begin *while* connected to the separate filming server on port `25575`. A later MP4 export may start at a different replay timestamp: use the actual beginning of the exported segment, **not** the moment you pressed Save or Export.
+
+For a full recording, start Flashback capture before the behavior you wish to film, save at the end, and open the replay after disconnecting. In the editor select Turesla with Track Entity (body/root), set start/end boundaries, configure camera offset and export 1080p MP4. Avoid shorts-only trimming: retain a complete master export and make a shorter edit separately. If the replay contains multiple deaths/respawns, verify that the entity tracking reattaches correctly after each; a UUID change can require separate camera segments.
+
+To align annotations to a real native MP4, first copy the filming log out of Docker:
+
+```powershell
+New-Item -ItemType Directory -Force -Path recordings/native | Out-Null
+docker compose -f deploy/filming/compose.yml --profile learning cp agent:/state/agent/continuous/agent.log recordings/native/filming-agent.log
+```
+
+Then export the real Minecraft client footage, e.g. `recordings/native/turesla-full.mp4`. Record the precise **first exported video-frame UTC timestamp** in an experiment manifest. Only after you know that actual time, run:
+
+```powershell
+python scripts/align-native-filming.py `
+  --video recordings/native/turesla-full.mp4 `
+  --log recordings/native/filming-agent.log `
+  --video-start-utc 2026-10-26T18:00:00Z `
+  --output-prefix recordings/native/turesla-evidence
+```
+
+**The timestamp shown above is an example; replace it with the actual frame-aligned UTC timestamp.** If you only know the approximate clock time or edited the replay's time mapping, the subtitle timing cannot be claimed exact. Adjust with a measured `--offset-seconds` for constant offsets; nonlinear cuts/time warps need a future segment-based alignment format.
+
+The script verifies the MP4 using ffprobe and emits an `.srt` file and an audit `.json` with evidence classifications; it **does not** fabricate an MP4, install Minecraft, drive Flashback or perform exports. You may import the SRT into your editor or separately burn it into a derivative video with ffmpeg; preserve the original unannotated recording. Run the unit check with `python -m unittest discover -s test -p 'test_native_filming_alignment.py'`.
+
+**Native footage status:** No exported Minecraft video is attached to this repository or conversation yet. The recording requires the real client and actual gameplay run; do not claim completed footage until the MP4 is verified.
+
