@@ -1,3 +1,9 @@
+## Push-style Auto Director camera stream
+
+`GET http://127.0.0.1:3001/api/director/stream` now delivers **Server-Sent Events** named `director` containing the read-only smoothed drone-camera pose. A new connection receives an initial state immediately, then updates when agent motion changes (checked every 200 ms; not a guaranteed 5 FPS render source). Missing or stale agent telemetry is explicitly `available:false`. The stream sends no gameplay packets and has no write endpoint; slow/disconnected viewers are discarded. The existing `GET /api/director` remains available.
+
+This is a renderer integration primitive, **not rendered drone footage**. The present iframe on port 3001 still displays Prismarine Viewer's stock third-person camera. A custom/forked browser viewer that accesses `Viewer.camera` in its Three.js rendering loop is required to apply the new camera pose, render particles, animate the Minecraft avatar, and play position-aware sound. The complete cinematic recorder is not yet deployed. Do not confuse the observer stream with autonomous video recording.
+
 ## Live drone camera pose API (renderer integration)
 
 The spectator monitor on `http://127.0.0.1:3001` now exposes **`GET /api/director`**. The JSON contains a smoothed chase camera pose, look-at target, action-derived zoom intention, agent identity and observation timestamp. The output is read-only and calculated exclusively from spectator telemetry; there are no control POST endpoints and it does not send movement commands to Minecraft. Stale or missing telemetry results in `available:false` with null pose fields, rather than presenting a stale camera as live. This is an integration contract for the next custom renderer, **not a claim that Prismarine Viewer's iframe camera is already driven by it** (`renderApplied:false`).
