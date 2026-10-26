@@ -4,6 +4,7 @@ import {HOSTILE_MOBS} from './survival-reference.js';
 import {observeTargets,edible} from './target-opportunities.js';
 import {foodPlantAction} from './food-foraging.js';
 import {attachFoodProvenance} from './food-provenance.js';
+import {createFoodSequenceTracker} from './food-sequence-tracker.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -20,9 +21,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:1});bot.pathfinder.setMovements(movements);
  let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer,activeDecision=null;
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
+ const sequences=createFoodSequenceTracker({log,clock});
+ let previousFoodUnits=null;
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
- const death=()=>{if(ended||dead)return;dead=true;life++;decisionController.terminal();cancel();};
+ const death=()=>{if(ended||dead)return;dead=true;life++;sequences.death();decisionController.terminal();cancel();};
  const spawn=()=>{if(ended)return;dead=false;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){clearGoal();log({type:'target_navigation_result',status:'noPath',life});}};
@@ -42,6 +45,9 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    const choice=typeof proposed?.then==='function'?await proposed:proposed;
    if(!valid())return;
    p=bot.entity.position;
+   if(previousFoodUnits!==null)sequences.inventory({before:previousFoodUnits,after:observation.foodUnits});
+   previousFoodUnits=observation.foodUnits;
+   sequences.decision(choice);
    activeDecision={decisionId:choice.decisionId,skill:choice.skill,targetId:choice.targetId};
    const current=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const target=current.targets.find(t=>t.id===choice.targetId);
@@ -57,7 +63,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     clearGoal();
     if(choice.skill==='eat'){
      const item=bot.inventory.items().find(item=>edible(bot,item));
-     if(item&&bot.food<20){await bot.equip(item,'hand');if(!valid())return;const before=bot.food;await bot.consume();if(!valid())return;const credited=decisionController.consumed(choice.decisionId,before,bot.food);log({type:bot.food>before?'target_consumed':'target_consume_no_hunger_gain',decisionId:choice.decisionId,item:item.name,beforeFood:before,afterFood:bot.food,credited});}
+     if(item&&bot.food<20){await bot.equip(item,'hand');if(!valid())return;const before=bot.food;await bot.consume();if(!valid())return;const credited=decisionController.consumed(choice.decisionId,before,bot.food);sequences.consumed({before,after:bot.food,decisionId:choice.decisionId});log({type:bot.food>before?'target_consumed':'target_consume_no_hunger_gain',decisionId:choice.decisionId,item:item.name,beforeFood:before,afterFood:bot.food,credited});}
     }else if(choice.skill==='harvest'&&target?.kind==='plant'&&target.reachable){
      const block=bot.blockAt(p.offset(target.position.x-p.x,target.position.y-p.y,target.position.z-p.z)),action=foodPlantAction(block);
      if(action&&bot.canSeeBlock?.(block)){
@@ -81,7 +87,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
+ const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
