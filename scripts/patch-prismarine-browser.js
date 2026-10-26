@@ -16,6 +16,9 @@ let craftleShot = null;
 let craftleFallback = null;
 let craftleLastAt = 0;
 let craftleAuto = true;
+let craftleFrames = 0;
+let craftleLastReport = 0;
+let craftleSource = 'none';
 function craftleChase(pos,yaw) {
   if(!pos || ![pos.x,pos.y,pos.z,yaw].every(Number.isFinite))return null;
   const back=6,elevation=3.6;
@@ -43,13 +46,24 @@ source=source.replace(afterViewer,afterViewer+'\n'+injected);
 const positionHook="  socket.on('position', ({ pos, addMesh, yaw, pitch }) => {";
 if(!source.includes(positionHook))throw Error('Viewer position handler changed; fallback not installed');
 source=source.replace(positionHook,positionHook+"\n    craftleFallback = craftleChase(pos,yaw);");
-source=source.replace(renderLine,`  const activeShot=craftleShot && Date.now()-craftleLastAt<10000 ? craftleShot : craftleFallback;
+source=source.replace(renderLine,`  const streamFresh=craftleShot && Date.now()-craftleLastAt<10000;
+  const activeShot=streamFresh ? craftleShot : craftleFallback;
+  craftleSource=streamFresh?'director':craftleFallback?'viewer-socket':'none';
   if (craftleAuto && activeShot) {
     if(controls)controls.enabled=false;
     const p=activeShot.camera,t=activeShot.target;
     viewer.camera.position.lerp(new THREE.Vector3(p.x,p.y,p.z),0.20);
     viewer.camera.lookAt(t.x,t.y,t.z);
   }else if(controls)controls.enabled=true;
+  craftleFrames++;
+  if(Date.now()-craftleLastReport>1000){
+    craftleLastReport=Date.now();
+    window.parent.postMessage({type:'craftle-renderer-status',version:2,
+      source:craftleSource,auto:craftleAuto,frames:craftleFrames,
+      applied:Boolean(craftleAuto&&activeShot),
+      camera:{x:viewer.camera.position.x,y:viewer.camera.position.y,z:viewer.camera.position.z}},
+      'http://127.0.0.1:3001');
+  }
 `+renderLine);
 fs.writeFileSync(entry,source);
 console.log('Craftle camera injected into Prismarine Viewer browser entry');
