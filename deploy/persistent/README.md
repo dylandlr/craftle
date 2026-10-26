@@ -1,3 +1,9 @@
+## Drone camera renderer adapter (not yet connected to stock iframe)
+
+`src/director-camera-adapter.js` now implements a camera bridge using **the actual Three.js camera** exposed by Prismarine Viewer's low-level `Viewer`. In a custom viewer's own JS/render loop, create it with `createDirectorCameraAdapter(viewer)`, attach `connectDirectorStream(adapter)`, and call `adapter.tick()` immediately before `renderer.render(viewer.scene,viewer.camera)`. `adapter.setMode('manual')` suspends automatic pose changes; `adapter.setMode('auto')` resumes. It enforces freshness and finite XYZ and never imports/controls Mineflayer. See `test/director-camera-adapter.test.js`.
+
+**Deployment caveat:** the existing embedded stock Prismarine Viewer at :3000 has its Viewer instance scoped inside its webpack bundle; the :3001 iframe cannot access it, and simply importing the adapter into :3001 will not move that camera. A custom-built Prismarine browser client that exposes the Viewer instance (or bundles the adapter in the renderer) is still required. This adapter is tested as an isolated module, not yet a functioning filmed drone shot. Third-person 720p video, animations, particles, and audible sound remain outstanding.
+
 ## Push-style Auto Director camera stream
 
 `GET http://127.0.0.1:3001/api/director/stream` now delivers **Server-Sent Events** named `director` containing the read-only smoothed drone-camera pose. A new connection receives an initial state immediately, then updates when agent motion changes (checked every 200 ms; not a guaranteed 5 FPS render source). Missing or stale agent telemetry is explicitly `available:false`. The stream sends no gameplay packets and has no write endpoint; slow/disconnected viewers are discarded. The existing `GET /api/director` remains available.
