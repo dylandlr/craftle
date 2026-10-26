@@ -56,6 +56,28 @@ services:
       - ./state/agent:/state/agent
     init: true
     stop_grace_period: 60s
+  commentary:
+    image: node:22-alpine
+    profiles: [commentary]
+    restart: unless-stopped
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    working_dir: /app
+    command: ['node', '/app/scripts/filming-chat-commentator.js']
+    environment:
+      CRAFTLE_CAMERA_USERNAME: '${CRAFTLE_CAMERA_USERNAME:-}'
+      CRAFTLE_COMMENTARY_LOG: /state/agent/continuous/agent.log
+      CRAFTLE_RCON_HOST: minecraft
+      CRAFTLE_RCON_PORT: '25575'
+      CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
+      CRAFTLE_CHAT_INTERVAL_MS: '${CRAFTLE_CHAT_INTERVAL_MS:-3500}'
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ./state/agent:/state/agent:ro
+    secrets:
+      - rcon_password
+    init: true
 secrets:
   rcon_password:
     file: ../persistent/secrets/rcon_password.txt
