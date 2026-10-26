@@ -1,0 +1,5 @@
+node_modules/
+recordings/
+deploy/persistent/state/
+deploy/filming/state/
+*.mp4
