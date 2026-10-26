@@ -40,6 +40,7 @@ services:
       args:
         CRAFTLE_CUSTOM_VIEWER: '${CRAFTLE_CUSTOM_VIEWER:-0}'
         CRAFTLE_VIEWER_CAMERA_BUILD: '${CRAFTLE_VIEWER_CAMERA_BUILD:-director}'
+        CRAFTLE_ANIMATED_VIEWER: '${CRAFTLE_ANIMATED_VIEWER:-0}'
     restart: unless-stopped
     depends_on:
       minecraft:
