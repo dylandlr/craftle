@@ -12,13 +12,13 @@ const port=Number(process.env.CRAFTLE_RCON_PORT??25575);
 const password=fs.readFileSync(process.env.CRAFTLE_RCON_PASSWORD_FILE??'/run/secrets/rcon_password','utf8').trim();
 if(!password)throw Error('Missing RCON password');
 const minimumMs=Math.max(1500,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??3500));
-let lastSent=0,queued=[],busy=false,seen=new Set();
+let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
 function describe(e){
  if(!e||!e.timestamp||typeof e.type!=='string')return null;
  if(e.type==='target_decision'){
   const a=typeof e.action==='string'?e.action:'unknown';
-  if(a==='explore')return 'Exploring the world';
-  if(a==='retreat')return 'Retreating from danger';
+  if(a==='explore')return 'DQN chose EXPLORE (#'+(e.decisionId??'?')+'); targets='+((e.targets??[]).length)+'; options masked='+((e.mask??[]).filter(Boolean).length);
+  if(a==='retreat')return 'DQN chose RETREAT (#'+(e.decisionId??'?')+')';
   if(a==='eat')return 'Decided to eat';
   if(a.startsWith('approach_'))return 'Approaching target '+(e.targetId??a);
   if(a.startsWith('attack_'))return 'Selected attack '+(e.targetId??a)+' (not verified)';
@@ -37,7 +37,11 @@ function describe(e){
  if(e.type==='health'&&Number.isFinite(e.health)&&Number.isFinite(e.food)){
   if(e.health<=8||e.food<=6)return 'Low vitals: '+e.health+' HP, '+e.food+' hunger';
  }
- if(e.type==='target_navigation_result'&&e.status==='noPath')return 'No path to target';
+ if(e.type==='target_navigation_result'&&e.status==='noPath')return 'Pathfinder reported NO PATH';
+ if(e.type==='target_action_rejected')return 'Action rejected: '+(e.reason??'unknown');
+ if(e.type==='target_runtime_error')return 'Agent skill error: '+String(e.message??'unknown').slice(0,85);
+ if(e.type==='target_reward_components')return null;
+ if(e.type==='target_transition'&&Number.isFinite(e.reward)&&Math.abs(e.reward)>.25)return 'DQN reward '+e.reward.toFixed(2)+' from '+(e.action??'action');
  return null;
 }
 function packet(id,type,payload){
@@ -91,6 +95,10 @@ async function poll(){
     for(const line of lines){
      if(!line.startsWith('{"timestamp":'))continue;
      let e;try{e=JSON.parse(line);}catch{continue;}
+     if(e.type==='pose_sample'&&e.position)lastPosition=e.position;
+     if(e.type==='health')lastVitals={health:e.health,food:e.food};
+     if(e.type==='target_decision')lastDecision=e;
+     if(e.type==='target_transition')lastReward=e.reward;
      const message=describe(e);if(!message)continue;
      const key=[e.timestamp,e.type,e.decisionId??'',e.targetId??''].join('|');
      if(seen.has(key))continue;seen.add(key);if(seen.size>5000)seen.clear();
@@ -99,6 +107,16 @@ async function poll(){
      queued.push(message);if(queued.length>40)queued.shift();
     }
    }finally{fs.closeSync(fd);}
+  }
+  // Slow telemetry summary: ground in observed position and decision, never invent terrain type.
+  if(Date.now()-lastSummary>=15000&&lastDecision){
+   lastSummary=Date.now();
+   const pos=lastPosition&&[lastPosition.x,lastPosition.y,lastPosition.z].every(Number.isFinite)?
+     [lastPosition.x,lastPosition.y,lastPosition.z].map(v=>v.toFixed(1)).join(','):'unknown';
+   const vit=lastVitals&&Number.isFinite(lastVitals.health)&&Number.isFinite(lastVitals.food)?
+     ' HP='+lastVitals.health+' food='+lastVitals.food:'';
+   queued.push('STATUS action='+(lastDecision.action??'?')+' pos='+pos+vit+
+     (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''));
   }
   if(queued.length&&Date.now()-lastSent>=minimumMs){
    const msg=queued[0];
