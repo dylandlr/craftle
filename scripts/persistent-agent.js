@@ -28,12 +28,14 @@ if(continuous){
  // Seed once; never overwrite or silently promote the accepted baseline.
  fs.mkdirSync(root,{recursive:true});
  const source=path.join(root,'accepted-policy.json');
- const target=path.join(root,'continuous-policy.json');
+ const rewardVersion=process.env.CRAFTLE_TARGET_REWARD_VERSION??'v1';
+ if(!['v1','v2'].includes(rewardVersion))throw Error('Unknown targeted reward version');
+ const target=path.join(root,rewardVersion==='v2'?'continuous-policy-reward-v2.json':'continuous-policy.json');
  if(!fs.existsSync(target)&&fs.existsSync(source))fs.copyFileSync(source,target);
  if(!fs.existsSync(target))throw Error('Continuous mode requires an existing accepted or continuous checkpoint');
  const continuousDir=path.join(root,'continuous');
  fs.mkdirSync(continuousDir,{recursive:true});
- console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,validatedBaselineUntouched:true,referenceVideo:false}));
+ console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,rewardVersion,validatedBaselineUntouched:true,referenceVideo:false}));
  let errors=0;
  try{
   while(!stopping){
