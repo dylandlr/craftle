@@ -14,8 +14,11 @@ $manifest=@{
 }
 function Get-Modrinth([string]$slug) {
   $uri="https://api.modrinth.com/v2/project/$slug/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%221.21.1%22%5D&include_changelog=false"
-  $versions=@(Invoke-RestMethod -Uri $uri -Headers @{'User-Agent'='Craftle-filming/0.1 (Minecraft client setup)'} -TimeoutSec 30)
-  $releases=@($versions | Where-Object { $_.version_type -eq 'release' -and $_.game_versions -contains '1.21.1' -and $_.loaders -contains 'fabric' } | Sort-Object { [DateTime]$_.date_published } -Descending)
+  $response=Invoke-RestMethod -Uri $uri -Headers @{'User-Agent'='Craftle-filming/0.1 (Minecraft client setup)'} -TimeoutSec 30
+  # Windows PowerShell 5.1 can preserve JSON arrays as a single nested Object[].
+  # Unroll them explicitly before filtering; ISO-8601 timestamps sort lexically.
+  $versions=@($response | ForEach-Object { $_ })
+  $releases=@($versions | Where-Object { $_.version_type -eq 'release' -and $_.game_versions -contains '1.21.1' -and $_.loaders -contains 'fabric' } | Sort-Object -Property date_published -Descending)
   if (-not $releases.Count) { throw "No compatible Fabric 1.21.1 release found for $slug" }
   return $releases[0]
 }
