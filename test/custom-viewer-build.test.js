@@ -10,6 +10,9 @@ test('custom viewer build patches actual render loop, without Minecraft actions'
  assert.match(script,/viewer\.camera\.position\.lerp/);
  assert.match(script,/craftleAuto/);
  assert.match(script,/EventSource/);
+ assert.match(script,/craftleFallback = craftleChase\(pos,yaw\)/);
+ assert.match(script,/activeShot=craftleShot/);
+ assert.match(script,/socket\.on\('position'/);
  assert.doesNotMatch(script,/bot\.setControlState|bot\.look\(|bot\.attack\(/);
  assert.match(docker,/patch-prismarine-browser\.js/);
  assert.match(docker,/webpack --config webpack\.config\.js/);
