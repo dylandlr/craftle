@@ -1,3 +1,26 @@
+## Live in-game chat about Turesla (filming server only)
+
+Craftle now includes an **opt-in spectator-only chat commentator**. This is a separate Docker service that tails the filming agent's JSONL log and sends short messages to **your Minecraft username only** using the filming server's RCON. It never broadcasts to Turesla, calls learner methods, or modifies checkpoints. Messages label chosen intentions and attempted attacks/harvests as such, rather than claiming success.
+
+With your Minecraft recorder account already connected to the **isolated** filming server, use your actual username:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = "YOUR_MINECRAFT_USERNAME"
+docker compose -f deploy/filming/compose.yml --profile commentary up -d commentary
+docker compose -f deploy/filming/compose.yml --profile commentary logs -f commentary
+```
+
+When you see `filming_chat_sent`, watch the chat in your real Minecraft client. For example, it may show `[Craftle] Turesla: Exploring the world`, `[Craftle] Turesla: Punched / attacked entity:17 (attempt)`, or `[Craftle] Turesla: Ate apple (hunger 12 -> 16)`. The service rate-limits messages to one every 3.5 seconds by default. The client chat must be visible in Minecraft video settings if you want it to appear in Flashback footage; exact replay-chat capture behavior depends on Flashback's settings and recording coverage. Do not point this service at the production server.
+
+To stop commentary without stopping either Minecraft or the learning process:
+
+```powershell
+docker compose -f deploy/filming/compose.yml --profile commentary stop commentary
+```
+
+The service starts reading at the current log end and reports **new events only**, so historic actions will not flood the chat. Requires `CRAFTLE_CAMERA_USERNAME` to be a valid Minecraft username different from Turesla. Do not use the username of Turesla. The new service is not a truly invisible Minecraft observer or a server-authoritative logger.
+
 # Recommended path: Flashback (Minecraft Java 1.21.1, Fabric)
 
 **Status:** Flashback client setup and recording finalization scripts are committed; **no native video has been captured or verified**. The real Minecraft Java client must still run on your Windows machine. The isolated filming server, not the live persistent learning server, is the target.
