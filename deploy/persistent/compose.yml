@@ -37,6 +37,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/persistent/agent.Dockerfile
+      args:
+        CRAFTLE_CUSTOM_VIEWER: '${CRAFTLE_CUSTOM_VIEWER:-1}'
     restart: unless-stopped
     depends_on:
       minecraft:
