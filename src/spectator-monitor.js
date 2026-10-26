@@ -98,28 +98,51 @@ check();inspect();setInterval(check,3000);setInterval(inspect,2000);
 export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.0.0.1',cameraPort=3000,telemetryRoot=null}={}){
   const page=spectatorHtml();
   let lastPose=null,lastObservedAt=null;
+  const subscribers=new Set();
+  let lastEmitted=null;
+  function directorPayload(){
+    let agent=null;
+    if(telemetryRoot)try{agent=readAgentTelemetry(telemetryRoot).agent;}catch{}
+    const valid=Boolean(agent&&!agent.stale&&agent.motion&&agent.shot);
+    if(valid&&agent.motion.timestamp!==lastObservedAt){
+      lastPose=smoothDirectorPose(lastPose,agent.shot,0.22);
+      lastObservedAt=agent.motion.timestamp;
+    }
+    return {schema:'craftle.director-pose.v1',available:valid,
+      camera:valid?lastPose?.camera:null,target:valid?lastPose?.target:null,
+      distance:valid?agent.shot.distance:null,animation:valid?agent.shot.animation:null,
+      zoomIntent:valid?agent.shot.zoomIntent:null,agentId:valid?agent.id:null,
+      observedAt:valid?agent.motion.timestamp:null,renderApplied:false,
+      control:'read_only',time:new Date().toISOString()};
+  }
+  const streamTimer=setInterval(()=>{
+    if(!subscribers.size)return;
+    const state=directorPayload();
+    const fingerprint=JSON.stringify([state.available,state.observedAt,state.camera,state.target]);
+    if(fingerprint===lastEmitted)return;
+    lastEmitted=fingerprint;
+    const payload='event: director\\ndata: '+JSON.stringify(state)+'\\n\\n';
+    for(const res of subscribers){
+      if(res.destroyed||res.writableLength>65536){subscribers.delete(res);res.end();continue;}
+      res.write(payload);
+    }
+  },200);
   const server=http.createServer(async(req,res)=>{
     const route=(req.url??'/').split('?')[0];
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
-    if(route==='/api/director'){
-      let agent=null;
-      if(telemetryRoot)try{agent=readAgentTelemetry(telemetryRoot).agent;}catch{}
-      // Only a fresh motion report can steer the camera. Never let stale telemetry make it drift.
-      const valid=Boolean(agent&&!agent.stale&&agent.motion&&agent.shot);
-      if(valid&&agent.motion.timestamp!==lastObservedAt){
-        lastPose=smoothDirectorPose(lastPose,agent.shot,0.22);
-        lastObservedAt=agent.motion.timestamp;
-      }
+    if(route==='/api/director/stream'){
+      res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8',
+        'Connection':'keep-alive','X-Accel-Buffering':'no'});
+      res.write('retry: 1500\\n\\n');
+      res.write('event: director\\ndata: '+JSON.stringify(directorPayload())+'\\n\\n');
+      subscribers.add(res);
+      req.on('close',()=>subscribers.delete(res));
+    }else if(route==='/api/director'){
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
-      res.end(JSON.stringify({schema:'craftle.director-pose.v1',available:valid,
-        camera:valid?lastPose?.camera:null,target:valid?lastPose?.target:null,
-        distance:valid?agent.shot.distance:null,animation:valid?agent.shot.animation:null,
-        zoomIntent:valid?agent.shot.zoomIntent:null,agentId:valid?agent.id:null,
-        observedAt:valid?agent.motion.timestamp:null,renderApplied:false,
-        control:'read_only',time:new Date().toISOString()}));
+      res.end(JSON.stringify(directorPayload()));
     }else if(route==='/api/agent'){
       let data={available:false,agent:null};
       if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
@@ -133,6 +156,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(page);
     }else{res.writeHead(404);res.end('Not found');}
   });
+  server.on('close',()=>{clearInterval(streamTimer);for(const res of subscribers)res.end();subscribers.clear();});
   server.listen(port,host);
   return server;
 }
