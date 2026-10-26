@@ -1,3 +1,26 @@
+## Keep native spectator attached after Turesla dies
+
+Vanilla /spectate can detach when its target player dies. On the isolated filming server there is now an opt-in **follow watchdog** that reissues `spectate Turesla <your camera player>` after spawn/death/respawn events and on a 30-second safety heartbeat. It **does not move, attack or change the learner**. The camera may briefly become free-flying between Turesla's death and respawn; automatic reattachment resumes after the new player entity exists. This is not a seamless replay camera cut, and Flashback should keep recording during the gap.
+
+With your real Minecraft filming account already connected and in spectator gamemode, from PowerShell:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = "YOUR_MINECRAFT_USERNAME"
+docker compose -f deploy/filming/compose.yml --profile follow up -d follow
+docker compose -f deploy/filming/compose.yml --profile follow logs -f follow
+```
+
+Ensure the camera account is in spectator mode, using the filming server only:
+
+```powershell
+docker compose -f deploy/filming/compose.yml exec minecraft rcon-cli "gamemode spectator YOUR_MINECRAFT_USERNAME"
+```
+
+To run both optional services, use `--profile follow --profile commentary up -d follow commentary`. The camera follow service can reattach even after you manually leave Turesla's viewpoint (by design); stop it with `docker compose -f deploy/filming/compose.yml --profile follow stop follow` when you want manual freecam.
+
+**Verify empirically:** watch Turesla die and respawn, confirm the follow service logs `filming_follow_lifecycle` and `filming_follow_attempt`, then confirm your native client reattaches. It has not been validated in the user's live session yet. The watchdog only affects the separate filming server; it must not be enabled against the continuous learning world.
+
 ## Live in-game chat about Turesla (filming server only)
 
 Craftle now includes an **opt-in spectator-only chat commentator**. This is a separate Docker service that tails the filming agent's JSONL log and sends short messages to **your Minecraft username only** using the filming server's RCON. It never broadcasts to Turesla, calls learner methods, or modifies checkpoints. Messages label chosen intentions and attempted attacks/harvests as such, rather than claiming success.
