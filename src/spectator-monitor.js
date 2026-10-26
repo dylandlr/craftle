@@ -61,7 +61,11 @@ window.addEventListener('message',event=>{
  const d=event.data;
  document.getElementById('renderer-status').textContent=d.applied?'Applying '+d.source+' · frame '+d.frames:d.auto?'Waiting for position · frame '+d.frames:'Manual camera';
 });
-function resetCamera(){frame.src='http://127.0.0.1:3000/?camera_reset='+Date.now();}
+function resetCamera(){
+ // Never reload a live WebGL iframe for camera handoff: reloading destroys its
+ // canvas, socket subscription and chunk meshes, which can leave it black.
+ frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:'auto'},'http://127.0.0.1:3000');
+}
 function setManual(enabled){
  manual=enabled;
  viewport.dataset.cameraMode=manual?'manual':'auto';
@@ -81,7 +85,7 @@ async function check(){
   if(!response.ok)throw Error('monitor status unavailable');
   const data=await response.json();
   const online=!!data.cameraReachable;
-  if(connected===false&&online)resetCamera();
+  // The viewer owns its reconnection. Do not reload its canvas on status transitions.
   if(!online&&manual)setManual(false);
   connected=online;offline.style.display=online?'none':'grid';
   status.textContent=online?'● Camera server connected':'● Camera offline / reconnecting';
