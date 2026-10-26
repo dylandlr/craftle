@@ -1,3 +1,18 @@
+## Fixed-distance chase camera (experimental, opt-in)
+
+This safer intermediary mode renders a trailing camera based solely on Prismarine Viewer's own `socket.on('position')` events, without the cinematic director EventSource. The browser follows six blocks behind the agent and approximately 4.7 blocks above the agent's feet, with position easing. It never sends movement commands to Mineflayer.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CONTINUOUS_AGENT = "1"
+$env:CRAFTLE_CAMERA_MODE = "third_person"
+$env:CRAFTLE_CUSTOM_VIEWER = "1"
+$env:CRAFTLE_VIEWER_CAMERA_BUILD = "fixed"
+docker compose -f deploy/persistent/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+Open `http://127.0.0.1:3001/` and hard refresh both 3001 and 3000 pages. The inspector's **Camera renderer** should show `Applying viewer-socket` if the custom bundle runs and agent positions arrive. This mode is experimental and **not yet verified with live footage**. If the Minecraft canvas turns black again, restore the proven stock viewer by setting `CRAFTLE_CUSTOM_VIEWER=0` and rebuilding, while leaving server state and checkpoints intact. The older `director` camera build mode remains available for subsequent investigation. Changing the viewer mode restarts the agent container once; it does not reset the world.
+
 ## Camera not following: viewer socket fallback
 
 If the auto drone is static while Turesla moves, the custom viewer now falls back to its direct `socket.on('position')` event from Prismarine Viewer, with a fixed six-block trailing shot. This avoids relying exclusively on the separate 3001 director-event stream. When fresh cinematic director poses are available, those still take priority. **This fix requires rebuilding the agent Docker image**, not just restarting its container. For an animated visible agent rather than first-person view, set `CRAFTLE_CAMERA_MODE=third_person` in the same terminal as the compose command, since its default is `first_person`.
