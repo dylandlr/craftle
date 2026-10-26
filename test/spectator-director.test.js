@@ -51,3 +51,23 @@ test('live director API exposes read-only pose without mutating world',async()=>
   fs.rmSync(root,{force:true,recursive:true});
  }
 });
+
+test('director event stream emits well-formed read-only event and closes',async()=>{
+ const {startSpectatorMonitor}=await import('../src/spectator-monitor.js');
+ const server=startSpectatorMonitor({host:'127.0.0.1',port:0,cameraPort:1});
+ await new Promise(resolve=>server.once('listening',resolve));
+ const controller=new AbortController();
+ try{
+  const response=await fetch('http://127.0.0.1:'+server.address().port+'/api/director/stream',{signal:controller.signal});
+  assert.equal(response.status,200);
+  assert.match(response.headers.get('content-type'),/text\/event-stream/);
+  const {value}=await response.body.getReader().read();
+  const frame=new TextDecoder().decode(value);
+  assert.match(frame,/event: director\ndata: /);
+  const line=frame.split('\n').find(line=>line.startsWith('data: '));
+  const data=JSON.parse(line.slice(6));
+  assert.equal(data.control,'read_only');
+  assert.equal(data.renderApplied,false);
+  assert.equal(data.available,false);
+ }finally{controller.abort();await new Promise(resolve=>server.close(resolve));}
+});
