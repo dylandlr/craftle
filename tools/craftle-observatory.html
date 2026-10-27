@@ -57,11 +57,7 @@ function downsample(rows,limit=900){if(rows.length<=limit)return rows;const step
 function render(view=active,panel=rootPanel){
  if(view==='all'){renderAll();return;}
  const selected=view;
- // All 18 dashboards can be displayed concurrently. Each panel has an
- // independent minimize control and remains visible by default.
- if(selected==='all'){renderAll();return;}
-
- tabbar.innerHTML='<button id="all-views" type="button">✓ Show all views</button>'+tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
+ if(panel===rootPanel)tabbar.innerHTML='<button id="all-views" type="button">✓ Show all views</button>'+tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
  const actions=byType('target_action'),decisions=byType('target_decision'),transitions=byType('target_transition');
  const last=actions.at(-1)||{},decision=decisions.at(-1)||{},positionEvents=events.filter(e=>['pose_sample','target_action'].includes(e.type)&&e.position&&['x','y','z'].every(k=>Number.isFinite(e.position[k])));
  const positions=positionEvents.map(e=>e.position);const lastPos=positions.at(-1);
