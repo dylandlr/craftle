@@ -86,7 +86,7 @@ for(const [index,profile] of activeProfiles.entries()){
  bot._client.on('update_time',packet=>{const raw=packet.age??packet.worldAge??packet.time; if(raw!==undefined)lastWorldAge=String(raw);});
  // Observer-side density signal: nearby solid/leaves blocks around bot head.
  // This is diagnostic only, never fed to the policy or camera controls.
- let densityAt=0,densityMode='third_person';
+ let densityAt=0,densityMode='first_person';
  bot.on('physicsTick',()=>{
   if(process.env.CRAFTLE_FILMING_DENSITY_AUDIT!=='1'||!bot.entity||Date.now()-densityAt<2000)return;
   densityAt=Date.now();const p=bot.entity.position.offset(0,1.6,0);
@@ -99,8 +99,8 @@ for(const [index,profile] of activeProfiles.entries()){
     if(b.name?.includes('leaves'))leaves++;
   }
   const ratio=known?occupied/known:null;
-  if(ratio!==null){if(densityMode==='third_person'&&ratio>=0.52)densityMode='first_person';
-   else if(densityMode==='first_person'&&ratio<=0.32)densityMode='third_person';}
+  if(ratio!==null){if(densityMode==='first_person'&&ratio>=0.52)densityMode='third_person';
+   else if(densityMode==='third_person'&&ratio<=0.32)densityMode='first_person';}
   log(profile.name,'spectator_density_audit',{agent_id:profile.id,
    nearbyBlocksKnown:known,nearbyOccupied:occupied,nearbyLeaves:leaves,
    occupancyRatio:ratio,cameraRecommendation:densityMode,
