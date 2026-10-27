@@ -1,0 +1,15 @@
+{
+ "schemaVersion": 1,
+ "id": "craftle_camera_director",
+ "version": "${version}",
+ "name": "Craftle Camera Director",
+ "description": "Optional spectator-only perspective switching from read-only local Turesla density telemetry.",
+ "environment": "client",
+ "entrypoints": {"client": ["org.craftle.camera.CraftleCameraDirector"]},
+ "depends": {
+  "fabricloader": ">=0.16.0",
+  "minecraft": "~1.21.1",
+  "java": ">=21",
+  "fabric-api": "*"
+ }
+}
