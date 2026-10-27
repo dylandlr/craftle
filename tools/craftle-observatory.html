@@ -48,7 +48,7 @@ function drawHeat(canvas,points){
  const counts=new Map();for(const p of points){const x=Math.floor(p.x/8),z=Math.floor(p.z/8),key=x+','+z;counts.set(key,(counts.get(key)||0)+1);}
  const cells=[...counts].map(([key,n])=>{const [x,z]=key.split(',').map(Number);return {x,z,n};});
  const xs=cells.map(p=>p.x),zs=cells.map(p=>p.z),left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...zs),bottom=Math.max(...zs);
- const unit=Math.min((w-48)/(right-left+1),(h-48)/(bottom-top+1)),max=Math.max(...cells.map(p=>p.n));
+ const unit=Math.min((w-48)/(right-left+1),(h-48)/(bottom-top+1)),max=cells.reduce((v,p)=>Math.max(v,p.n),0);
  for(const p of cells){const alpha=.2+.8*Math.sqrt(p.n/max);c.fillStyle='rgba(77,190,243,'+alpha+')';c.fillRect(24+(p.x-left)*unit,24+(p.z-top)*unit,Math.max(1,unit-1),Math.max(1,unit-1));}
  c.fillStyle='#d5e7fa';c.font='12px system-ui';c.fillText(cells.length+' visited 8-block cells; opacity = revisit frequency',14,h-12);
 }
@@ -76,7 +76,7 @@ function render(view=active,panel=rootPanel){
  const errors=byType('target_navigation_result'),stalls=byType('target_action_rejected');
  panel.innerHTML='<div class="grid">'+card('Movement','<div class="number">'+positions.length+'</div><p>Recorded position samples</p>')+
  card('Navigation errors','<div class="number">'+errors.filter(e=>e.status==='noPath').length+'</div><p>No-path events</p><p>'+stalls.length+' rejected actions</p>')+
- card('Vertical travel','<div class="number">'+(positions.length?num(Math.min(...positions.map(p=>p.y)))+' → '+num(Math.max(...positions.map(p=>p.y))):'—')+'</div><p>Observed Y range</p><p class="caption">Height does not prove that movement took place on leaves.</p>')+'</div>';
+ card('Vertical travel','<div class="number">'+(positions.length?num(positions.reduce((v,p)=>Math.min(v,p.y),Infinity))+' → '+num(positions.reduce((v,p)=>Math.max(v,p.y),-Infinity)):'—')+'</div><p>Observed Y range</p><p class="caption">Height does not prove that movement took place on leaves.</p>')+'</div>';
  }else if(selected==='learning'){
  const sum=transitions.reduce((v,e)=>v+(Number.isFinite(e.reward)?e.reward:0),0);
  panel.innerHTML='<div class="grid">'+card('DQN transitions','<div class="number">'+transitions.length+'</div>')+
@@ -141,7 +141,7 @@ function render(view=active,panel=rootPanel){
     card('Reward component sums','<table>'+types.map(k=>'<tr><td>'+safe(k)+'</td><td>'+num(sums[k],3)+'</td></tr>').join('')+'</table><p class="caption">Only appears if reward-version component events were logged. These sums do not account for every penalty or terminal transition.</p>')+
     card('Outcome evidence','<p>Verified recovery: '+byType('target_verified_recovery').length+'</p><p>Observed food inventory gain: '+byType('food_sequence_inventory_gain').length+'</p><p>Death events: '+byType('death_screen_observed').length+'</p>')+'</div>';
  }else if(selected==='overview'){
-   const timestamps=events.map(e=>Date.parse(e.timestamp)).filter(Number.isFinite),start=timestamps.length?Math.min(...timestamps):null,end=timestamps.length?Math.max(...timestamps):null;
+   const timestamps=events.map(e=>Date.parse(e.timestamp)).filter(Number.isFinite),start=timestamps.length?timestamps.reduce((v,n)=>Math.min(v,n),Infinity):null,end=timestamps.length?timestamps.reduce((v,n)=>Math.max(v,n),-Infinity):null;
    const duration=start!==null?Math.max(0,(end-start)/60000):null;
    const top=Object.entries(hist).sort((a,b)=>b[1]-a[1]).slice(0,5);
    panel.innerHTML='<div class="grid">'+card('Recorded session','<div class="number">'+events.length.toLocaleString()+'</div><p>Events loaded</p><p>Duration: '+(duration===null?'—':num(duration,1)+' minutes')+'</p>')+
