@@ -1,0 +1,23 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {chooseConnectedExploreGoal} from '../src/connected-exploration.js';
+const solid=name=>({name,boundingBox:'block'}),air={name:'air',boundingBox:'empty'};
+test('chooses connected dry ground over tree leaves',()=>{
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:5,blockAt:(x,y,z)=>{
+  if(y===64)return solid(x>1?'oak_leaves':'grass_block');
+  return y===65||y===66?air:null;
+ }});
+ assert.ok(result.selected);assert.equal(result.reason,'known_connected_footing');
+ assert.equal(result.selected.leaves,false);
+});
+test('never selects unsupported unknown blocks across chasm',()=>{
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:3,blockAt:(x,y,z)=>{
+  if(x!==0||z!==0)return null;
+  if(y===64)return solid('stone');if(y===65||y===66)return air;return null;
+ }});
+ assert.equal(result.selected,null);
+});
+test('rejects lava foundation and unknown initial footing',()=>{
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},blockAt:(x,y,z)=>y===64?solid('lava'):air});
+ assert.equal(result.reason,'no_known_start_footing');
+});
