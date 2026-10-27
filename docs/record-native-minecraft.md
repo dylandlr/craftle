@@ -1,3 +1,26 @@
+## Experimental local perception P1 (non-intervening audit)
+
+To preserve Craftle's research objectives, we **do not** immediately grant the current DQN omniscient terrain awareness, Minecraft object taxonomies, a new action space, or additional rewards. The baseline `craftle.targeted.dqn.v1` remains 44 inputs and 15 actions, with its accepted policy checkpoint left unchanged.
+
+A new `craftle.local-perception.v1` observation is an **opt-in recording only**. Every ~1.8 seconds during filming, Mineflayer samples a local 7×7×5 block neighborhood relative to Turesla, separating solid blocks, leaves, liquids, air, other known blocks, and *unknown/unloaded* blocks. It also records nearby observed entity identifiers, positions, names, and types as diagnostic metadata. All data come from the agent's existing Mineflayer loaded-world view, not a server-wide map or an RGB camera. Although entity names appear in the diagnostic records, these labels are **not passed into the policy**.
+
+The goal is to quantify missing affordances (e.g. a safe ground cell underneath leaves, nearby but filtered animals, occlusion) and use the recordings to design a fair **future ablation**:
+- P0: original 44-feature semantic-only DQN (unchanged).
+- P1: same DQN plus observation-only spatial logging (this phase).
+- P2: explicitly versioned *locally observable* spatial feature encoder and newly trained policy, evaluated against P0 on held-out terrain.
+- P3: learned temporal memory or visual RGB perception, separately ablated against P2. No outside pretrained semantic vision weights in the non-LLM control.
+
+To activate P1 for a short isolated filming experiment:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_LOCAL_PERCEPTION_AUDIT = "1"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+docker compose -f deploy/filming/compose.yml --profile learning exec agent sh -lc "grep 'local_perception_sample' /state/agent/continuous/agent.log | tail -2"
+```
+
+Set `CRAFTLE_LOCAL_PERCEPTION_AUDIT=0` and recreate the filming agent afterward if detailed samples are no longer needed. This does not change the production persistent world or checkpoints. Samples may be large; use short trials. Do not claim perceptual learning from P1 alone: it is instrumentation, not a trained perception network.
+
 ## Understanding Turesla tick by tick: observation → choice → execution → reward
 
 Craftle has two clocks. Mineflayer emits `physicsTick` around 20 times a second, while the targeted policy calls `choose()` only about once every 1,800 ms. Between decisions, Mineflayer's *scripted pathfinder* sends controls (forward/jump/etc.). Hence treetop traversal is **not evidence that the DQN trained jumping skills**.
