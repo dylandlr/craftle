@@ -1,3 +1,21 @@
+## Procedural citizen appearances (identity layer v1)
+
+Every Craftle citizen uses `mode: random` by default. The appearance is generated deterministically from world seed + citizen ID + generation and persisted; reconnecting or restarting does **not** reroll the citizen's face, clothing or model. Cosmetic attributes are independent of personality, genes, learned policy and survival reward. For multi-agent populations, allocate a unique citizen ID per individual and generate each identity once.
+
+The persistent runner currently provisions `agent_001` (Turesla) on startup under `/state/agent/citizens/`:
+- `agent_001.json` — identity seed, clothing, colors and appearance metadata.
+- `agent_001.png` — 64×64 Minecraft skin PNG.
+
+For more citizens or preview assets:
+
+```powershell
+node scripts/generate-citizen-skins.js --ids Turesla,Citizen2,Citizen3 --world-seed craftle --output recordings/citizens
+```
+
+After updating and rebuilding the filming agent, the preview skin can be downloaded from `http://127.0.0.1:3011/api/citizens/agent_001/skin.png` and metadata from `/api/citizens/agent_001`.
+
+**Important implementation boundary:** Generated skins exist as PNG assets and are served as read-only previews; they are **not yet applied to offline-mode Mineflayer players in native Minecraft**. This requires an explicit client-side skin renderer or an appropriate server-side skin distribution strategy. The camera-director mod currently only changes POV. Do not describe generated identities as visible on the real agent until a native-client/Flashback integration test verifies it.
+
 # Craftle Native Camera Director (Minecraft Fabric 1.21.1)
 
 Optional **client-only** filming mod. It changes **only the native camera perspective** while the camera player is connected to the dedicated Craftle filming server `127.0.0.1:25575`. It never connects to the Minecraft game protocol or commands the learning agent. The production `25565` server, all other servers and Flashback replays are excluded.
