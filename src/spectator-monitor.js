@@ -30,13 +30,13 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 .events{margin-top:14px;border:1px solid #314052;border-radius:10px;background:#17202c;padding:12px}.events ul{padding:0;list-style:none;margin:8px 0;max-height:260px;overflow:auto}.events li{padding:7px 5px;border-top:1px solid #314052;font-size:13px}.events time{color:#a9b7c8;margin-right:8px}.inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:14px;background:#17202c;border:1px solid #314052;border-radius:10px}.metric{display:flex;flex-direction:column;gap:4px;font-size:14px}.metric strong{font-weight:600}.metric small{font-size:12px}.note{color:#b0c0ce;font-size:13px;line-height:1.5}.obs-frame{height:1100px;max-height:85vh;border:1px solid #35465c;border-radius:12px;width:100%;background:#10151d}.green{color:#7be1ae}.amber{color:#e7c17a}
 </style></head><body><header><div><h1>Craftle · Spectator Monitor</h1><small>Watch-only by default · observer commands never control the learning agent</small></div><small id="mode">AUTO VIEW</small></header>
 <main><section class="viewport" id="viewport" data-camera-mode="auto" aria-label="Live Minecraft spectator viewer">
-<iframe id="viewer" title="Live third-person Prismarine Viewer" src="http://127.0.0.1:3000/" allowfullscreen></iframe>
+<iframe id="viewer" title="Live third-person Prismarine Viewer" src="about:blank" allowfullscreen></iframe>
 <div class="camera-shield" id="camera-shield" aria-hidden="true"></div>
 <div id="offline"><h2>Waiting for camera</h2><p>Agent session is reconnecting. The monitor remains available.</p></div></section>
 <div class="controls">
 <button id="take-camera" type="button">Take Camera · WASD</button>
 <button id="return-auto" type="button" disabled>↺ Return to Auto</button>
-<a href="http://127.0.0.1:3000/" target="_blank" rel="noopener noreferrer">Open raw camera ↗</a>
+<a id="raw-camera" href="#" target="_blank" rel="noopener noreferrer">Open raw camera ↗</a>
 <span class="status" id="status" role="status" aria-live="polite">Checking camera…</span>
 </div>
 <section class="inspector" aria-label="Agent inspector">
@@ -56,12 +56,14 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
 const frame=document.getElementById('viewer'),offline=document.getElementById('offline'),status=document.getElementById('status');
+const viewerOrigin='http://127.0.0.1:'+(window.location.port==='3011'?'3010':'3000');
+frame.src=viewerOrigin+'/';document.getElementById('raw-camera').href=viewerOrigin+'/';
 const viewport=document.getElementById('viewport'),take=document.getElementById('take-camera');
 const back=document.getElementById('return-auto'),mode=document.getElementById('mode');
 const help=document.getElementById('camera-help');
 let connected=null,manual=false,lastRendererReport=0;
 window.addEventListener('message',event=>{
- if(event.origin!=='http://127.0.0.1:3000'||event.source!==frame.contentWindow||event.data?.type!=='craftle-renderer-status')return;
+ if(event.origin!==viewerOrigin||event.source!==frame.contentWindow||event.data?.type!=='craftle-renderer-status')return;
  lastRendererReport=Date.now();
  const d=event.data;
  document.getElementById('renderer-status').textContent=d.applied?'Applying '+d.source+' · frame '+d.frames:d.auto?'Waiting for position · frame '+d.frames:'Manual camera';
@@ -69,7 +71,7 @@ window.addEventListener('message',event=>{
 function resetCamera(){
  // Never reload a live WebGL iframe for camera handoff: reloading destroys its
  // canvas, socket subscription and chunk meshes, which can leave it black.
- frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:'auto'},'http://127.0.0.1:3000');
+ frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:'auto'},viewerOrigin);
 }
 function setManual(enabled){
  manual=enabled;
@@ -173,7 +175,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     const route=(req.url??'/').split('?')[0];
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
-    res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src 'self' http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
+    res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src 'self' http://127.0.0.1:3000 http://127.0.0.1:3010; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
     if(route==='/api/director/stream'){
       res.setHeader('Access-Control-Allow-Origin','http://127.0.0.1:3000');
