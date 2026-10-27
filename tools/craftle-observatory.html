@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Craftle Observatory · Offline Log Explorer</title>
+<style>
+:root{font-family:system-ui,Arial;color:#e5f0fb;background:#0c1420}*{box-sizing:border-box}body{margin:0}header{background:#142235;border-bottom:1px solid #30465f;padding:15px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:20px;margin:0}small{color:#9eb4cc}main{padding:20px;max-width:1450px;margin:auto}nav{display:flex;gap:7px;flex-wrap:wrap;margin:16px 0}button{padding:10px 14px;border:1px solid #3f5875;background:#1a3048;border-radius:9px;color:inherit;cursor:pointer}button[aria-selected=true]{background:#3275b6;border-color:#75bcff}button:focus-visible{outline:2px solid #8cceff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px}.card{border:1px solid #324860;border-radius:12px;background:#132238;padding:16px}.card h2{margin:0 0 12px;font-size:15px;color:#b8d5ee}.number{font-size:29px;font-weight:700}.caption{color:#9eb4cc;font-size:12px}canvas{width:100%;max-height:540px;background:#0b192b;border:1px solid #36516b;border-radius:10px}#panel{min-height:460px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #35475a;text-align:left;padding:8px}code{color:#a6ddff}input{max-width:100%}.notice{border-left:3px solid #edc175;padding:10px;color:#d9e8f8;background:#1c3046;margin:15px 0}ul{line-height:1.8}
+</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Six views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
+<main><div class="notice">Read-only explorer. Grid cells represent recorded positions, not terrain blocks or a genuine visual sensory image. File remains in your browser; nothing is uploaded.</div>
+<nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
+<script>
+const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline']];
+let events=[],active='spatial';const panel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
+const byType=t=>events.filter(e=>e.type===t);
+const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
+const safe=s=>String(s??'—').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const card=(name,body)=>'<article class="card"><h2>'+name+'</h2>'+body+'</article>';
+const latest=t=>byType(t).at(-1);
+function drawGrid(canvas,points){
+ const cx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;cx.clearRect(0,0,w,h);
+ cx.fillStyle='#0b192b';cx.fillRect(0,0,w,h);
+ for(let i=0;i<=12;i++){cx.strokeStyle='#284057';cx.beginPath();cx.moveTo(i*w/12,0);cx.lineTo(i*w/12,h);cx.moveTo(0,i*h/12);cx.lineTo(w,i*h/12);cx.stroke();}
+ if(!points.length){cx.fillStyle='#a5bdd3';cx.font='16px system-ui';cx.fillText('No recorded XYZ positions',24,42);return;}
+ const current=points.at(-1),minX=current.x-48,minZ=current.z-48,scale=w/96;
+ cx.strokeStyle='#78bcef';cx.lineWidth=2;cx.beginPath();
+ for(let i=0;i<points.length;i++){const p=points[i],x=(p.x-minX)*scale,y=h-(p.z-minZ)*scale;if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y);}
+ cx.stroke();cx.fillStyle='#e8b978';cx.beginPath();cx.arc(w/2,h/2,7,0,Math.PI*2);cx.fill();
+ cx.fillStyle='#c5d9e9';cx.font='13px system-ui';cx.fillText('Turesla · latest position',14,h-14);
+}
+function render(){
+ tabbar.innerHTML=tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
+ const actions=byType('target_action'),decisions=byType('target_decision'),transitions=byType('target_transition');
+ const last=actions.at(-1)||{},decision=decisions.at(-1)||{},positionEvents=events.filter(e=>['pose_sample','target_action'].includes(e.type)&&e.position&&['x','y','z'].every(k=>Number.isFinite(e.position[k])));
+ const positions=positionEvents.map(e=>e.position);const lastPos=positions.at(-1);
+ const hist={};for(const e of decisions){const k=e.action??e.skill??'?';hist[k]=(hist[k]??0)+1;}
+ if(active==='spatial'){
+ panel.innerHTML='<div class="grid">'+card('Recorded XY route','<canvas id="map" width="520" height="520" aria-label="Top-down recorded movement track"></canvas><p class="caption">Uses logged X/Z positions. No synthetic terrain or unknown map.</p>')+
+ card('Pose','<div class="number">'+(lastPos?['x','y','z'].map(k=>num(lastPos[k])).join(' / '):'—')+'</div><p>XYZ · blocks</p><p>Route samples: '+positions.length+'</p>')+
+ card('Perception boundary','<p>The grid is a <b>spectator reconstruction</b>, not a map Turesla has learned. Height layers, leaf blocks and obstacles require additional instrumented block observations.</p>')+'</div>';
+ drawGrid(document.getElementById('map'),positions.slice(-500));
+ } else if(active==='perception'){
+ const f=decision.features||[],targets=decision.targets||[],mask=decision.mask||[];
+ panel.innerHTML='<div class="grid">'+card('DQN feature vector','<p>Last recorded decision #'+safe(decision.decisionId)+'</p><table><tbody>'+f.map((x,i)=>'<tr><td>Feature '+i+'</td><td><code>'+num(x,3)+'</code></td></tr>').join('')+'</tbody></table>')+
+ card('Visible structured targets','<table><thead><tr><th>Kind</th><th>Distance</th><th>Reachable</th></tr></thead><tbody>'+targets.map(t=>'<tr><td>'+safe(t.kind)+'</td><td>'+num(t.distance)+'</td><td>'+Boolean(t.reachable)+'</td></tr>').join('')+'</tbody></table><p class="caption">Reported by the Mineflayer perception schema, not inferred from video.</p>')+
+ card('Action availability','<p>'+mask.filter(Boolean).length+' available / '+mask.length+' action slots</p><p class="caption">Features represent structured game state, not RGB input.</p>')+'</div>';
+ } else if(active==='navigation'){
+ const errors=byType('target_navigation_result'),stalls=byType('target_action_rejected');
+ panel.innerHTML='<div class="grid">'+card('Movement','<div class="number">'+positions.length+'</div><p>Recorded position samples</p>')+
+ card('Navigation errors','<div class="number">'+errors.filter(e=>e.status==='noPath').length+'</div><p>No-path events</p><p>'+stalls.length+' rejected actions</p>')+
+ card('Vertical travel','<div class="number">'+(positions.length?num(Math.min(...positions.map(p=>p.y)))+' → '+num(Math.max(...positions.map(p=>p.y))):'—')+'</div><p>Observed Y range</p><p class="caption">Height does not prove that movement took place on leaves.</p>')+'</div>';
+ }else if(active==='learning'){
+ const sum=transitions.reduce((v,e)=>v+(Number.isFinite(e.reward)?e.reward:0),0);
+ panel.innerHTML='<div class="grid">'+card('DQN transitions','<div class="number">'+transitions.length+'</div>')+
+ card('Recorded reward total','<div class="number">'+num(sum,2)+'</div><p class="caption">Sum of logged transition rewards, not independently verified success.</p>')+
+ card('Decision distribution','<table>'+Object.entries(hist).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</table>')+'</div>';
+ }else if(active==='survival'){
+ panel.innerHTML='<div class="grid">'+card('Health and hunger','<div class="number">'+safe(last.health)+' HP</div><p>'+safe(last.food)+' hunger</p>')+
+ card('Outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Verified food recovery: '+byType('target_verified_recovery').length+'</p><p>Consumed: '+byType('target_consumed').length+'</p>')+
+ card('Attempts ≠ successes','<p>Attack attempts: '+byType('target_attack_attempt').length+'</p><p>Harvest attempts: '+byType('target_harvest_attempt').length+'</p><p class="caption">Client-reported attempts do not establish server-confirmed outcomes.</p>')+'</div>';
+ }else{
+ panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
+ }
+}
+tabbar.onclick=e=>{const id=e.target.dataset.tab;if(id){active=id;render();}};
+document.getElementById('load').onchange=async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ const content=await f.text();const parsed=[];
+ for(const line of content.split(/\r?\n/)){try{const x=JSON.parse(line);if(x&&typeof x.type==='string')parsed.push(x);}catch{}}
+ events=parsed;document.getElementById('status').textContent=events.length.toLocaleString()+' events loaded';render();
+};
+render();
+</script></body></html>
