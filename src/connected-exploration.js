@@ -17,10 +17,10 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
  let best=null,examined=0;
  for(let i=0;i<nodes.length&&i<maxNodes;i++){
   const n=nodes[i];examined++;
-  if(n.steps>=2&&!avoid.has(K(n.x,n.y,n.z))){
+  if(n.steps>=2&&!n.leaves&&!avoid.has(K(n.x,n.y,n.z))){
    // Favor stable ground and discovery distance, penalize leaf paths and vertical climbs.
    const netDistance=Math.hypot(n.x-o.x,n.z-o.z);
-   const score=netDistance*1.2-n.cost*.23-(n.leaves?4:0);
+   const score=netDistance*1.2-n.cost*.23;
    if(!best||score>best.score)best={position:{x:n.x,y:n.y,z:n.z},score,ground:n.footing,leaves:n.leaves,steps:n.steps};
   }
   for(const [dx,dz] of directions){
@@ -32,6 +32,8 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
     if(seen.has(key)||avoid.has(key))continue;
     const candidate=inspect(x,y,z);
     if(!candidate)continue;
+    // Leaves are traversable only when starting stranded on them; do not climb onto new canopy footing.
+    if(candidate.leaves&&!(start.leaves&&n.leaves))continue;
     // Blocked at eye level between cells when moving uphill.
     if(dy===1){
      const clearance=blockAt(n.x,n.y+2,n.z);
