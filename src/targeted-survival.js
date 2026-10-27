@@ -6,6 +6,7 @@ import {foodPlantAction} from './food-foraging.js';
 import {attachFoodProvenance} from './food-provenance.js';
 import {createFoodSequenceTracker} from './food-sequence-tracker.js';
 import {chooseGroundedExploreGoal} from './grounded-exploration.js';
+import {chooseConnectedExploreGoal} from './connected-exploration.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -24,9 +25,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
  let previousFoodUnits=null;
- const groundedExplore=process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
+ const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
+ const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
- log({type:'exploration_execution_variant',variant:groundedExplore?'grounded_v1':'legacy_v1',learned:false});
+ log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
  const death=()=>{if(ended||dead)return;dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
@@ -63,8 +65,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    else if(choice.skill==='explore'){
     if(goal?.key!=='explore'||stalls>=3||clock()-goal.at>=15000){
      if(groundedExplore){
-      const choice=chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
+      const choice=connectedExplore
+       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)})
+       : chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
+      if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
       if(choice.selected)setGoal('explore',choice.selected.position,1,false);
       else{clearGoal();log({type:'grounded_exploration_no_safe_goal',decisionId:choice.decisionId??activeDecision?.decisionId});}
      }else{const a=tick*2.399963229728653;setGoal('explore',{x:p.x+Math.cos(a)*16,y:p.y,z:p.z+Math.sin(a)*16},1,true);}
