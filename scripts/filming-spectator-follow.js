@@ -43,7 +43,7 @@ function command(input){
 }
 let offset=0,remaining='';
 try{offset=fs.statSync(logFile).size;}catch{}
-let pending=true,lastAttach=0,busy=false;
+let pending=true,lastAttach=0,busy=false,cameraWasOnline=false;
 function scan(){
  let size;try{size=fs.statSync(logFile).size;}catch{return;}
  if(size<offset){offset=0;remaining='';pending=true;}
@@ -66,6 +66,22 @@ async function tick(){
  if(busy)return;busy=true;
  try{
   scan();
+  // Detect camera reconnects independently of agent lifecycle events.
+  // Running gamemode only upon reconnection avoids repeatedly resetting
+  // the spectator target during normal follow.
+  const onlineReply=await command('list');
+  const online=onlineReply.split(':').slice(1).join(':').split(',').map(x=>x.trim()).includes(camera);
+  if(!online){
+    if(cameraWasOnline)console.log(JSON.stringify({type:'filming_camera_disconnected',camera}));
+    cameraWasOnline=false;pending=true;return;
+  }
+  if(!cameraWasOnline){
+    cameraWasOnline=true;pending=true;
+    console.log(JSON.stringify({type:'filming_camera_reconnected',camera}));
+    // Ensure survival/adventure reconnects return to spectator before /spectate.
+    const mode=await command('gamemode spectator '+camera);
+    console.log(JSON.stringify({type:'filming_camera_spectator_mode',camera,response:mode.slice(0,220)}));
+  }
   // Periodically reassert to recover lost attachment even if a lifecycle event
   // was missed. No bot commands are issued. This is an ALWAYS-ON camera mode.
   if(!pending&&Date.now()-lastAttach<30000)return;
