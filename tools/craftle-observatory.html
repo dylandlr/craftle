@@ -3,11 +3,11 @@
 <title>Craftle Observatory · Offline Log Explorer</title>
 <style>
 :root{font-family:system-ui,Arial;color:#e5f0fb;background:#0c1420}*{box-sizing:border-box}body{margin:0}header{background:#142235;border-bottom:1px solid #30465f;padding:15px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:20px;margin:0}small{color:#9eb4cc}main{padding:20px;max-width:1450px;margin:auto}nav{display:flex;gap:7px;flex-wrap:wrap;margin:16px 0}button{padding:10px 14px;border:1px solid #3f5875;background:#1a3048;border-radius:9px;color:inherit;cursor:pointer}button[aria-selected=true]{background:#3275b6;border-color:#75bcff}button:focus-visible{outline:2px solid #8cceff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px}.card{border:1px solid #324860;border-radius:12px;background:#132238;padding:16px}.card h2{margin:0 0 12px;font-size:15px;color:#b8d5ee}.number{font-size:29px;font-weight:700}.caption{color:#9eb4cc;font-size:12px}canvas{width:100%;max-height:540px;background:#0b192b;border:1px solid #36516b;border-radius:10px}#panel{min-height:460px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #35475a;text-align:left;padding:8px}code{color:#a6ddff}input{max-width:100%}.notice{border-left:3px solid #edc175;padding:10px;color:#d9e8f8;background:#1c3046;margin:15px 0}ul{line-height:1.8}
-</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Nine views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
+</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Fourteen views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
 <main><div class="notice">Read-only explorer. Grid cells represent recorded positions, not terrain blocks or a genuine visual sensory image. File remains in your browser; nothing is uploaded.</div>
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
-const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis']];
+const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview']];
 let events=[],active='spatial';const panel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
@@ -105,6 +105,47 @@ function render(){
   panel.innerHTML='<div class="grid">'+card('Policy choice mix','<table><thead><tr><th>Action</th><th>Count</th><th>Share</th></tr></thead><tbody>'+choices.map(([k,n])=>'<tr><td>'+safe(k)+'</td><td>'+n+'</td><td>'+num(100*n/Math.max(1,total),1)+'%</td></tr>').join('')+'</tbody></table>')+
    card('Opportunity vs choice','<p>Decisions with ≥1 candidate: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length>0).length+'</p><p>Decisions without candidates: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length===0).length+'</p><p>Rejected target actions: '+rejected+'</p><p class="caption">This is descriptive. It does not reconstruct Q-values or causal alternatives.</p>')+
    card('Research caution','<p>Repeated exploration could be due to target scarcity, action masking, reward incentives, or pathfinding constraints. Compare accepted actions and actual targets before attributing the behavior to learning.</p>')+'</div>';
+ }else if(active==='efficiency'){
+   const samples=positionEvents;
+   let length=0,up=0,down=0,stalls=0;const speed=[];
+   for(let i=1;i<samples.length;i++){const a=samples[i-1],b=samples[i],p=a.position,q=b.position;
+    const delta=Math.hypot(q.x-p.x,q.y-p.y,q.z-p.z);const seconds=(Date.parse(b.timestamp)-Date.parse(a.timestamp))/1000;
+    if(seconds>0&&seconds<30){length+=delta;up+=Math.max(0,q.y-p.y);down+=Math.max(0,p.y-q.y);if(delta<.3)stalls++;speed.push({y:delta/seconds});}
+   }
+   const first=positions[0],final=positions.at(-1),net=first&&final?Math.hypot(final.x-first.x,final.z-first.z):null;
+   panel.innerHTML='<div class="grid">'+card('Travel efficiency','<div class="number">'+(net===null?'—':num(net/Math.max(length,.01),3))+'</div><p>Net horizontal displacement / cumulative 3D travel distance</p><p>Measured path: '+num(length)+' blocks</p>')+
+    card('Vertical movement','<div class="number">+'+num(up)+' / -'+num(down)+'</div><p>Climb / descent blocks observed</p><p>Near-stationary intervals: '+stalls+'</p>')+
+    card('Movement rate','<canvas id="speedgraph" width="620" height="260"></canvas><p class="caption">Consecutive pose or action samples with gaps under 30 seconds.</p>')+'</div>';
+   plot(document.getElementById('speedgraph'),[{label:'Blocks / second',color:'#7dd5b0',points:downsample(speed)}],{zero:true});
+ }else if(active==='opportunities'){
+   const withTargets=decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length);
+   const types={};for(const e of withTargets)for(const t of e.targets){types[t.kind]=(types[t.kind]||0)+1;}
+   const unused=withTargets.filter(e=>['explore','retreat'].includes(e.action));
+   const table=Object.entries(types).sort((a,b)=>b[1]-a[1]);
+   panel.innerHTML='<div class="grid">'+card('Detected opportunities','<div class="number">'+withTargets.length+'</div><p>Decisions with candidate targets</p><p>'+unused.length+' chose explore/retreat despite candidate presence</p>')+
+    card('Target exposures','<table><thead><tr><th>Type</th><th>Observations</th></tr></thead><tbody>'+table.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</tbody></table><p class="caption">Target appearances per decision, not distinct persistent entities.</p>')+
+    card('Opportunity interpretation','<p>Candidate presence does not prove reachability, safety, or availability of an unmasked skill. Inspect the original action masks for each decision before judging avoidance.</p>')+'</div>';
+ }else if(active==='mortality'){
+   const deaths=byType('death_screen_observed'),terminal=byType('target_terminal');
+   const deathRows=deaths.map(d=>{const t=Date.parse(d.timestamp),previous=actions.filter(a=>Date.parse(a.timestamp)<=t).at(-1);return {d,previous};});
+   panel.innerHTML='<div class="grid">'+card('Deaths recorded','<div class="number">'+deaths.length+'</div><p>Terminal rewards: '+terminal.length+'</p>')+
+   card('Pre-death observations','<table><thead><tr><th>Time</th><th>Last HP</th><th>Last hunger</th><th>Previous action</th></tr></thead><tbody>'+deathRows.slice(-40).reverse().map(({d,previous})=>'<tr><td>'+safe(d.timestamp)+'</td><td>'+safe(previous?.health)+'</td><td>'+safe(previous?.food)+'</td><td>'+safe(previous?.skill??previous?.action)+'</td></tr>').join('')+'</tbody></table><p class="caption">Previous action is temporally nearby, not an established cause of death.</p>')+'</div>';
+ }else if(active==='rewards'){
+   const rewardEvents=byType('target_reward_components');const types=['novelty','inventoryProgress','movement'];
+   const sums=Object.fromEntries(types.map(k=>[k,rewardEvents.reduce((a,e)=>a+(Number.isFinite(e[k])?e[k]:0),0)]));
+   const min=transitions.reduce((x,e)=>Number.isFinite(e.reward)?Math.min(x,e.reward):x,Infinity);
+   const max=transitions.reduce((x,e)=>Number.isFinite(e.reward)?Math.max(x,e.reward):x,-Infinity);
+   panel.innerHTML='<div class="grid">'+card('Reward distribution','<div class="number">'+transitions.length+'</div><p>Minimum: '+(Number.isFinite(min)?num(min,3):'—')+'</p><p>Maximum: '+(Number.isFinite(max)?num(max,3):'—')+'</p>')+
+    card('Reward component sums','<table>'+types.map(k=>'<tr><td>'+safe(k)+'</td><td>'+num(sums[k],3)+'</td></tr>').join('')+'</table><p class="caption">Only appears if reward-version component events were logged. These sums do not account for every penalty or terminal transition.</p>')+
+    card('Outcome evidence','<p>Verified recovery: '+byType('target_verified_recovery').length+'</p><p>Observed food inventory gain: '+byType('food_sequence_inventory_gain').length+'</p><p>Death events: '+byType('death_screen_observed').length+'</p>')+'</div>';
+ }else if(active==='overview'){
+   const timestamps=events.map(e=>Date.parse(e.timestamp)).filter(Number.isFinite),start=timestamps.length?Math.min(...timestamps):null,end=timestamps.length?Math.max(...timestamps):null;
+   const duration=start!==null?Math.max(0,(end-start)/60000):null;
+   const top=Object.entries(hist).sort((a,b)=>b[1]-a[1]).slice(0,5);
+   panel.innerHTML='<div class="grid">'+card('Recorded session','<div class="number">'+events.length.toLocaleString()+'</div><p>Events loaded</p><p>Duration: '+(duration===null?'—':num(duration,1)+' minutes')+'</p>')+
+    card('Most selected actions','<table>'+top.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</table>')+
+    card('Survival outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Successful consumption: '+byType('target_consumed').length+'</p><p>Rejected target actions: '+byType('target_action_rejected').length+'</p>')+
+    card('Data provenance','<p>Source: manually loaded agent JSONL.</p><p>Observed events may be attempts or local-client observations, not server-authoritative confirmations. Recording a long continuous session does not guarantee complete pose coverage.</p>')+'</div>';
  }else{
  panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
  }
