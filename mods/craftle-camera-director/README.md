@@ -1,3 +1,27 @@
+## F10 policy-view diagnostics (experimental)
+
+**F9:** toggle basic Minecraft research HUD. **F10:** toggle explicit *DQN-visible target count* and a warning that displayed terrain diagnostics are *observer-only*, not part of current DQN inputs. **F8:** automatic filming camera. F10 is an early perception inspector, not yet a raycast-aligned 3D or first-person sensory overlay. It consumes `/api/hud/state` and cannot change policy actions.
+
+## Tree-navigation ablation
+
+The filming Compose now exposes `CRAFTLE_TREE_NAVIGATION=1` as a **separate, opt-in scripted execution baseline**. With the flag enabled, `src/connected-exploration.js` searches a bounded neighborhood of Mineflayer's locally loaded blocks for connected nonhazardous footing and picks a conservative goal. Unknown terrain remains unknown; it does not mine, build, jump through barriers, teleport or provide map data to the 44-feature DQN. This is not proof of learned navigation or guaranteed route success: Minecraft Pathfinder validates actual routes and will still emit `noPath` when appropriate.
+
+To test against the unchanged baseline in the isolated filming world:
+
+```powershell
+git pull origin main
+node --check src/spectator-monitor.js
+node --test test/connected-exploration.test.js
+$env:CRAFTLE_TREE_NAVIGATION = "1"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+```
+
+Set `CRAFTLE_TREE_NAVIGATION=0` and recreate the agent to return to the original behavior. Do not wipe the persistent state. Preserve action/reward logging and compare matched world seeds and frozen-policy trials, not one anecdotal run.
+
+## Footage sync workflow
+
+For automatic upload from the Windows filming machine, configure **Google Drive for desktop** to sync the local recording folder into a dedicated private Google Drive folder such as `Craftle/filming-footage`. Configure Flashback exports to write there (or copy finished MP4s into the synced folder). Wait for the desktop application's sync-complete indicator before requesting a review; partial files can otherwise be unreadable. In ChatGPT, say **"Review the newest video in my Craftle filming-footage folder on Google Drive"**. The connected Drive connector can find accessible uploaded files when asked, but it does *not* monitor uploads automatically, and no unattended Windows-side sync was provisioned by these repository changes. Never store API credentials in the repository or make footage publicly shared merely for review.
+
 ## Multi-citizen client skins (experimental)
 
 The client now requests `GET http://127.0.0.1:3011/api/citizens` and associates registered player usernames with their persistent citizen IDs. Each skin is loaded separately from `/api/citizens/<id>/skin.png`. Other Minecraft players retain vanilla skins; the override is filming-server only, client-side and read-only.
