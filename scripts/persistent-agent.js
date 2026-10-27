@@ -3,12 +3,25 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {preparePersistentSession,promotePersistentSession} from '../src/persistent-session.js';
 import {startSpectatorMonitor} from '../src/spectator-monitor.js';
+import {generateCitizenAppearance} from '../src/citizen-appearance.js';
+import {makeSkin} from './generate-citizen-skins.js';
 const root=path.resolve(process.env.CRAFTLE_PERSISTENT_ROOT??'deploy/persistent/state/agent');
 const monitor=startSpectatorMonitor({telemetryRoot:root});
 monitor.on('error',error=>console.error(JSON.stringify({type:'spectator_monitor_error',message:error.message})));
 const duration=Number(process.env.CRAFTLE_PERSISTENT_SESSION_MS??180000);
 if(!Number.isInteger(duration)||duration<80000||duration>300000)throw Error('Persistent session must be 80000..300000 ms');
 fs.writeFileSync('config.json',JSON.stringify({host:process.env.CRAFTLE_SERVER_HOST??'127.0.0.1',port:Number(process.env.CRAFTLE_SERVER_PORT??25565),version:process.env.CRAFTLE_MC_VERSION??'1.21.1',agents:[{id:'agent_001',name:'Turesla'}]},null,2));
+// Cosmetic citizen identities persist across agent sessions; nothing touches policy inputs.
+const citizenDir=path.join(root,'citizens');
+fs.mkdirSync(citizenDir,{recursive:true});
+for(const citizen of [{id:'agent_001',name:'Turesla'}]){
+ const profilePath=path.join(citizenDir,citizen.id+'.json'),skinPath=path.join(citizenDir,citizen.id+'.png');
+ let appearance;
+ try{appearance=JSON.parse(fs.readFileSync(profilePath,'utf8'));}
+ catch{appearance=generateCitizenAppearance({citizenId:citizen.id,worldSeed:process.env.CRAFTLE_CITIZEN_WORLD_SEED??'craftle'});fs.writeFileSync(profilePath,JSON.stringify(appearance,null,2)+'\\n');}
+ if(!fs.existsSync(skinPath))fs.writeFileSync(skinPath,makeSkin(appearance));
+ console.log(JSON.stringify({type:'citizen_appearance_ready',id:citizen.id,name:citizen.name,model:appearance.model,seed:appearance.seed,skinFile:skinPath,cosmeticOnly:true,skinAppliedInClient:false}));
+}
 // Docker runs this process under a kernel flock; it is released on crashes/reboots.
 let stopping=false,child=null;
 const terminate=()=>{if(child)try{process.kill(-child.pid,'SIGTERM');}catch{}};
