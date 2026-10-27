@@ -28,7 +28,7 @@ export function createOptionDQN({random=Math.random,epsilon=0.3,alpha=0.002,gamm
  const eligible=mask=>{const ids=mask.flatMap((yes,i)=>yes?[i]:[]);if(mask.length!==outputs||!ids.length)throw Error('Invalid action mask');return ids;};
  const sample=n=>Math.floor(random()*n);
  return {
-  choose(x,mask){validate(x);const ids=eligible(mask),q=forward(x).q;const best=Math.max(...ids.map(i=>q[i]));const ties=ids.filter(i=>q[i]===best);const index=training&&random()<epsilon?ids[sample(ids.length)]:ties[sample(ties.length)];return {index,action:options[index]};},
+  choose(x,mask){validate(x);const ids=eligible(mask),{h,q}=forward(x);const best=Math.max(...ids.map(i=>q[i]));const ties=ids.filter(i=>q[i]===best);const exploratory=training&&random()<epsilon;const index=exploratory?ids[sample(ids.length)]:ties[sample(ties.length)];return {index,action:options[index],trace:{qValues:q,hiddenActivations:h,eligibleIndices:ids,greedyIndices:ties,selectedIndex:index,epsilon,exploratory,selectionReason:exploratory?'epsilon_random':'greedy_max_q',selectedQ:q[index],maxEligibleQ:best}};},
   observe(t){
    if(!training)throw Error('Frozen option policy cannot train');
    validate(t.state);if(!Number.isInteger(t.index)||t.index<0||t.index>=outputs||!Number.isFinite(t.reward))throw Error('Invalid option transition');
