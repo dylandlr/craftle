@@ -29,6 +29,8 @@ public final class CraftleResearchHud {
     private static long ticks=0;
     private static KeyBinding toggle;
     private static KeyBinding perceptionToggle;
+    private static KeyBinding gazeToggle;
+    private static volatile boolean showGaze=false;
     private static volatile boolean showPolicyPerception=false;
 
     public static void install(){
@@ -36,7 +38,10 @@ public final class CraftleResearchHud {
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F9,"category.craftle.camera"));
         perceptionToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.perception",
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F10,"category.craftle.camera"));
+        gazeToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.gaze",
+                InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F7,"category.craftle.camera"));
         ClientTickEvents.END_CLIENT_TICK.register(client->{
+            while(gazeToggle.wasPressed())showGaze=!showGaze;
             while(perceptionToggle.wasPressed())showPolicyPerception=!showPolicyPerception;
             while(toggle.wasPressed()){
                 enabled=!enabled;
@@ -87,7 +92,32 @@ public final class CraftleResearchHud {
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("FOOTING: "+nested(s,"density","underfoot","unknown")),x,y+53,0xe9c682);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("NAV: "+nested(s,"latestNavigation","status","—")+
            "   TARGETS "+(s.has("targets")?s.getAsJsonArray("targets").size():0)),x,y+66,0xffffff);
-        ctx.drawTextWithShadow(client.textRenderer,Text.literal("F9 HUD  |  F10 perception  |  F8 POV"),x,y+79,0x9fb1c7);
+        ctx.drawTextWithShadow(client.textRenderer,Text.literal("F7 gaze  |  F9 HUD  |  F10 policy"),x,y+79,0x9fb1c7);
+        if(showGaze){
+            JsonObject g=s.has("gaze")&&s.get("gaze").isJsonObject()?s.getAsJsonObject("gaze"):null;
+            int gx=ctx.getScaledWindowWidth()-176,gy=10,gw=164,gh=112;
+            ctx.fill(gx-4,gy-4,gx+gw,gy+gh,0xd915202e);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("AGENT HEAD GAZE / F7"),gx,gy,0x8bd7fa);
+            if(g==null){
+                ctx.drawTextWithShadow(client.textRenderer,Text.literal("NO RECENT HEAD POSE"),gx,gy+18,0xffab8e);
+            }else{
+                try{
+                    double yaw=Double.parseDouble(value(g,"yaw","0"));
+                    double pitch=Double.parseDouble(value(g,"pitch","0"));
+                    int cx=gx+80,cy=gy+59;
+                    // Horizontal: raw camera heading on a wraparound yaw scale.
+                    // Vertical: look elevation. NOT learned saliency, eye movement, or ray-hit evidence.
+                    int rx=(int)Math.round(Math.sin(Math.toRadians(yaw))*53);
+                    int ry=(int)Math.round(Math.max(-90,Math.min(90,pitch))/90.0*27);
+                    ctx.fill(cx-55,cy-29,cx+56,cy+30,0x99303e50);
+                    ctx.fill(cx-1,cy-29,cx+1,cy+30,0xff6c829a);
+                    ctx.fill(cx-55,cy-1,cx+56,cy+1,0xff6c829a);
+                    ctx.fill(cx+rx-4,cy+ry-1,cx+rx+5,cy+ry+2,0xff7be1ae);
+                    ctx.fill(cx+rx-1,cy+ry-4,cx+rx+2,cy+ry+5,0xff7be1ae);
+                    ctx.drawTextWithShadow(client.textRenderer,Text.literal("Y "+Math.round(yaw)+"  P "+Math.round(pitch)),gx,gy+94,0xffffff);
+                }catch(NumberFormatException ignored){}
+            }
+        }
         if(showPolicyPerception){
             JsonObject view=s.has("perception")&&s.get("perception").isJsonObject()
                  ?s.getAsJsonObject("perception"):null;
