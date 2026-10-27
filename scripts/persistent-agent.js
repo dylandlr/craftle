@@ -18,7 +18,7 @@ for(const citizen of [{id:'agent_001',name:'Turesla'}]){
  const profilePath=path.join(citizenDir,citizen.id+'.json'),skinPath=path.join(citizenDir,citizen.id+'.png');
  let appearance;
  try{appearance=JSON.parse(fs.readFileSync(profilePath,'utf8'));}
- catch{appearance=generateCitizenAppearance({citizenId:citizen.id,worldSeed:process.env.CRAFTLE_CITIZEN_WORLD_SEED??'craftle'});fs.writeFileSync(profilePath,JSON.stringify(appearance,null,2)+'\\n');}
+ catch{appearance=generateCitizenAppearance({citizenId:citizen.id,worldSeed:process.env.CRAFTLE_CITIZEN_WORLD_SEED??'craftle'});fs.writeFileSync(profilePath,JSON.stringify(appearance,null,2)+'\n');}
  if(!fs.existsSync(skinPath))fs.writeFileSync(skinPath,makeSkin(appearance));
  console.log(JSON.stringify({type:'citizen_appearance_ready',id:citizen.id,name:citizen.name,model:appearance.model,seed:appearance.seed,skinFile:skinPath,cosmeticOnly:true,skinAppliedInClient:false}));
 }
