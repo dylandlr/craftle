@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import {readAgentTelemetry} from './spectator-telemetry.js';
@@ -24,7 +25,7 @@ export function spectatorHtml(){
 h1{font-size:17px;margin:0}small{color:#a9b7c8}main{max-width:1600px;margin:0 auto;padding:16px}.viewport{position:relative;background:#080c12;aspect-ratio:16/9;border:1px solid #35465c;border-radius:12px;overflow:hidden}
 iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode='auto'] iframe{pointer-events:none}.viewport[data-camera-mode='manual'] iframe{pointer-events:auto}.camera-shield{position:absolute;inset:0;z-index:2;pointer-events:none}.viewport[data-camera-mode='manual'] .camera-shield{display:none}#offline{position:absolute;inset:0;display:none;place-content:center;text-align:center;background:#10151dee;pointer-events:none}
 .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0}button,a{background:#27394e;color:#f0f7ff;border:1px solid #547397;border-radius:8px;padding:10px 14px;font:inherit;text-decoration:none;cursor:pointer}button:hover,a:hover{background:#334e6b}button:focus-visible,a:focus-visible{outline:2px solid #9bc7ff} .status{margin-left:auto;font-size:13px;color:#bed0df}
-.events{margin-top:14px;border:1px solid #314052;border-radius:10px;background:#17202c;padding:12px}.events ul{padding:0;list-style:none;margin:8px 0;max-height:260px;overflow:auto}.events li{padding:7px 5px;border-top:1px solid #314052;font-size:13px}.events time{color:#a9b7c8;margin-right:8px}.inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:14px;background:#17202c;border:1px solid #314052;border-radius:10px}.metric{display:flex;flex-direction:column;gap:4px;font-size:14px}.metric strong{font-weight:600}.metric small{font-size:12px}.note{color:#b0c0ce;font-size:13px;line-height:1.5}.green{color:#7be1ae}.amber{color:#e7c17a}
+.events{margin-top:14px;border:1px solid #314052;border-radius:10px;background:#17202c;padding:12px}.events ul{padding:0;list-style:none;margin:8px 0;max-height:260px;overflow:auto}.events li{padding:7px 5px;border-top:1px solid #314052;font-size:13px}.events time{color:#a9b7c8;margin-right:8px}.inspector{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:14px;background:#17202c;border:1px solid #314052;border-radius:10px}.metric{display:flex;flex-direction:column;gap:4px;font-size:14px}.metric strong{font-weight:600}.metric small{font-size:12px}.note{color:#b0c0ce;font-size:13px;line-height:1.5}.obs-frame{height:1100px;max-height:85vh;border:1px solid #35465c;border-radius:12px;width:100%;background:#10151d}.green{color:#7be1ae}.amber{color:#e7c17a}
 </style></head><body><header><div><h1>Craftle · Spectator Monitor</h1><small>Watch-only by default · observer commands never control the learning agent</small></div><small id="mode">AUTO VIEW</small></header>
 <main><section class="viewport" id="viewport" data-camera-mode="auto" aria-label="Live Minecraft spectator viewer">
 <iframe id="viewer" title="Live third-person Prismarine Viewer" src="http://127.0.0.1:3000/" allowfullscreen></iframe>
@@ -48,7 +49,7 @@ iframe{display:block;width:100%;height:100%;border:0}.viewport[data-camera-mode=
 <div class="metric"><small>Drone distance / height</small><strong id="drone-pose">—</strong></div>
 <div class="metric"><small>Recent particles / sounds</small><strong id="effect">—</strong></div>
 </section>
-<section class="events" aria-label="Observed gameplay events"><strong>Live action annotations · read-only</strong><ul id="event-list"><li>Waiting for agent events…</li></ul></section>
+<section aria-label="All agent research views"><h2>Agent Observatory · All 18 diagnostic views</h2><p class="note">The local interactive workspace is available below; load a filming agent log in its file picker. It does not control Turesla.</p><iframe class="obs-frame" title="Craftle Agent Observatory" src="/observatory"></iframe></section>\n<section class="events" aria-label="Observed gameplay events"><strong>Live action annotations · read-only</strong><ul id="event-list"><li>Waiting for agent events…</li></ul></section>
 <p class="note" id="camera-help">Auto mode: spectator camera is watch-only. Take Camera enables the viewer’s built-in free navigation. WASD move, Space up, Shift down, drag mouse to orbit.</p>
 <p class="note">This page watches the current Prismarine Viewer camera. Return to Auto reloads the viewer's default follow camera; it does not alter AI movement, training or checkpoints. The current camera is still attached to each agent session: actual sound playback, particles, avatar animation and applying drone camera poses to Prismarine Viewer are not implemented yet. The inspector shows observed effects and a desired camera shot, not rendered effects.</p>
 </main><script>
@@ -170,7 +171,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
     const route=(req.url??'/').split('?')[0];
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
-    res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
+    res.setHeader('Content-Security-Policy',"default-src 'none'; frame-src 'self' http://127.0.0.1:3000; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");
     if(req.method!=='GET'){res.writeHead(405);res.end();return;}
     if(route==='/api/director/stream'){
       res.setHeader('Access-Control-Allow-Origin','http://127.0.0.1:3000');
@@ -192,6 +193,11 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       const events=telemetryRoot?readEventAnnotations(telemetryRoot):[];
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-annotations.v1',events,source:'agent_observed_not_authoritative_server_log'}));
+    }else if(route==='/observatory'){
+      // This is the bundled read-only local diagnostics workstation.
+      try{const html=fs.readFileSync(new URL('../tools/craftle-observatory.html',import.meta.url),'utf8');
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html);}
+      catch{res.writeHead(503);res.end('Observatory asset unavailable');}
     }else if(route==='/api/status'){
       const reachable=await cameraReachable({host:cameraHost,port:cameraPort});
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
