@@ -3,11 +3,11 @@
 <title>Craftle Observatory · Offline Log Explorer</title>
 <style>
 :root{font-family:system-ui,Arial;color:#e5f0fb;background:#0c1420}*{box-sizing:border-box}body{margin:0}header{background:#142235;border-bottom:1px solid #30465f;padding:15px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:20px;margin:0}small{color:#9eb4cc}main{padding:20px;max-width:1450px;margin:auto}nav{display:flex;gap:7px;flex-wrap:wrap;margin:16px 0}button{padding:10px 14px;border:1px solid #3f5875;background:#1a3048;border-radius:9px;color:inherit;cursor:pointer}button[aria-selected=true]{background:#3275b6;border-color:#75bcff}button:focus-visible{outline:2px solid #8cceff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px}.card{border:1px solid #324860;border-radius:12px;background:#132238;padding:16px}.card h2{margin:0 0 12px;font-size:15px;color:#b8d5ee}.number{font-size:29px;font-weight:700}.caption{color:#9eb4cc;font-size:12px}canvas{width:100%;max-height:540px;background:#0b192b;border:1px solid #36516b;border-radius:10px}#panel{min-height:460px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #35475a;text-align:left;padding:8px}code{color:#a6ddff}input{max-width:100%}.notice{border-left:3px solid #edc175;padding:10px;color:#d9e8f8;background:#1c3046;margin:15px 0}ul{line-height:1.8}
-</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Six views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
+</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Nine views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
 <main><div class="notice">Read-only explorer. Grid cells represent recorded positions, not terrain blocks or a genuine visual sensory image. File remains in your browser; nothing is uploaded.</div>
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
-const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline']];
+const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis']];
 let events=[],active='spatial';const panel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
@@ -25,6 +25,35 @@ function drawGrid(canvas,points){
  cx.stroke();cx.fillStyle='#e8b978';cx.beginPath();cx.arc(w/2,h/2,7,0,Math.PI*2);cx.fill();
  cx.fillStyle='#c5d9e9';cx.font='13px system-ui';cx.fillText('Turesla · latest position',14,h-14);
 }
+
+function plot(canvas,series,{min=null,max=null,zero=false}={}){
+ const c=canvas.getContext('2d'),w=canvas.width,h=canvas.height,pad=38;
+ c.clearRect(0,0,w,h);c.fillStyle='#0b192b';c.fillRect(0,0,w,h);
+ const all=series.flatMap(s=>s.points.map(x=>x.y)).filter(Number.isFinite);
+ if(!all.length){c.fillStyle='#9eb4cc';c.font='15px system-ui';c.fillText('No recorded measurements for this chart',16,38);return;}
+ const low=min??Math.min(...all,zero?0:Infinity),high=max??Math.max(...all,zero?0:-Infinity);
+ const span=Math.max(1e-9,high-low),longest=Math.max(...series.map(s=>s.points.length),1);
+ c.strokeStyle='#344960';c.fillStyle='#9eb4cc';c.font='11px system-ui';c.lineWidth=1;
+ for(let i=0;i<=4;i++){const y=pad+(h-2*pad)*i/4;c.beginPath();c.moveTo(pad,y);c.lineTo(w-pad,y);c.stroke();c.fillText((high-span*i/4).toFixed(1),4,y+4);}
+ for(const item of series){
+  c.strokeStyle=item.color;c.lineWidth=2;c.beginPath();
+  item.points.forEach((pt,i)=>{const x=pad+(w-2*pad)*(longest===1?0:i/(longest-1));const y=h-pad-(pt.y-low)/span*(h-2*pad);if(i===0)c.moveTo(x,y);else c.lineTo(x,y);});
+  c.stroke();
+ }
+ series.forEach((item,i)=>{c.fillStyle=item.color;c.fillRect(pad+i*140,7,9,9);c.fillStyle='#d5e7fa';c.fillText(item.label,pad+13+i*140,16);});
+}
+function drawHeat(canvas,points){
+ const c=canvas.getContext('2d'),w=canvas.width,h=canvas.height;c.fillStyle='#0b192b';c.fillRect(0,0,w,h);
+ if(!points.length){c.fillStyle='#9eb4cc';c.fillText('No recorded positions',18,32);return;}
+ const counts=new Map();for(const p of points){const x=Math.floor(p.x/8),z=Math.floor(p.z/8),key=x+','+z;counts.set(key,(counts.get(key)||0)+1);}
+ const cells=[...counts].map(([key,n])=>{const [x,z]=key.split(',').map(Number);return {x,z,n};});
+ const xs=cells.map(p=>p.x),zs=cells.map(p=>p.z),left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...zs),bottom=Math.max(...zs);
+ const unit=Math.min((w-48)/(right-left+1),(h-48)/(bottom-top+1)),max=Math.max(...cells.map(p=>p.n));
+ for(const p of cells){const alpha=.2+.8*Math.sqrt(p.n/max);c.fillStyle='rgba(77,190,243,'+alpha+')';c.fillRect(24+(p.x-left)*unit,24+(p.z-top)*unit,Math.max(1,unit-1),Math.max(1,unit-1));}
+ c.fillStyle='#d5e7fa';c.font='12px system-ui';c.fillText(cells.length+' visited 8-block cells; opacity = revisit frequency',14,h-12);
+}
+function downsample(rows,limit=900){if(rows.length<=limit)return rows;const step=Math.ceil(rows.length/limit);return rows.filter((_,i)=>i%step===0||i===rows.length-1);}
+
 function render(){
  tabbar.innerHTML=tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
  const actions=byType('target_action'),decisions=byType('target_decision'),transitions=byType('target_transition');
@@ -55,6 +84,27 @@ function render(){
  panel.innerHTML='<div class="grid">'+card('Health and hunger','<div class="number">'+safe(last.health)+' HP</div><p>'+safe(last.food)+' hunger</p>')+
  card('Outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Verified food recovery: '+byType('target_verified_recovery').length+'</p><p>Consumed: '+byType('target_consumed').length+'</p>')+
  card('Attempts ≠ successes','<p>Attack attempts: '+byType('target_attack_attempt').length+'</p><p>Harvest attempts: '+byType('target_harvest_attempt').length+'</p><p class="caption">Client-reported attempts do not establish server-confirmed outcomes.</p>')+'</div>';
+ }else if(active==='charts'){
+  const rewards=downsample(transitions.filter(e=>Number.isFinite(e.reward)));
+  const vitals=downsample(actions.filter(e=>Number.isFinite(e.health)||Number.isFinite(e.food)));
+  const elevation=downsample(positionEvents.filter(e=>Number.isFinite(e.position.y)));
+  panel.innerHTML='<div class="grid">'+card('Reward over transitions','<canvas id="rewardgraph" width="620" height="250"></canvas><p class="caption">Recorded reward per transition; not success attribution.</p>')+
+  card('Health and hunger over actions','<canvas id="vitalsgraph" width="620" height="250"></canvas><p class="caption">Missing measurements are not interpolated.</p>')+
+  card('Elevation over recorded samples','<canvas id="heightgraph" width="620" height="250"></canvas><p class="caption">Y alone cannot establish which blocks Turesla stands on.</p>')+
+  card('Data coverage','<p>'+rewards.length+' reward points · '+vitals.length+' vital observations · '+elevation.length+' position samples plotted.</p>')+'</div>';
+  plot(document.getElementById('rewardgraph'),[{label:'Reward',color:'#86c9ff',points:rewards.map(e=>({y:e.reward}))}],{zero:true});
+  plot(document.getElementById('vitalsgraph'),[{label:'Health',color:'#f68a90',points:vitals.filter(e=>Number.isFinite(e.health)).map(e=>({y:e.health}))},{label:'Hunger',color:'#ecc27f',points:vitals.filter(e=>Number.isFinite(e.food)).map(e=>({y:e.food}))}],{min:0,max:20});
+  plot(document.getElementById('heightgraph'),[{label:'Y elevation',color:'#7dd5b0',points:elevation.map(e=>({y:e.position.y}))}]);
+ }else if(active==='heatmap'){
+  panel.innerHTML='<div class="grid">'+card('Spatial visitation heatmap','<canvas id="visitmap" width="620" height="520"></canvas><p class="caption">8×8-block bins based on recorded positions only. Empty does not mean inaccessible; brighter means more samples.</p>')+
+  card('What this can tell us','<p>Repeated treetop routes will form bright corridors if matching positions were logged.</p><p>It cannot identify trees without actual block observations or video frames.</p><p>Samples: '+positions.length+'</p>')+'</div>';
+  drawHeat(document.getElementById('visitmap'),positions);
+ }else if(active==='compare'){
+  const total=decisions.length,choices=Object.entries(hist).sort((a,b)=>b[1]-a[1]);
+  const rejected=byType('target_action_rejected').length;
+  panel.innerHTML='<div class="grid">'+card('Policy choice mix','<table><thead><tr><th>Action</th><th>Count</th><th>Share</th></tr></thead><tbody>'+choices.map(([k,n])=>'<tr><td>'+safe(k)+'</td><td>'+n+'</td><td>'+num(100*n/Math.max(1,total),1)+'%</td></tr>').join('')+'</tbody></table>')+
+   card('Opportunity vs choice','<p>Decisions with ≥1 candidate: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length>0).length+'</p><p>Decisions without candidates: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length===0).length+'</p><p>Rejected target actions: '+rejected+'</p><p class="caption">This is descriptive. It does not reconstruct Q-values or causal alternatives.</p>')+
+   card('Research caution','<p>Repeated exploration could be due to target scarcity, action masking, reward incentives, or pathfinding constraints. Compare accepted actions and actual targets before attributing the behavior to learning.</p>')+'</div>';
  }else{
  panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
  }
