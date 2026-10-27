@@ -121,7 +121,7 @@ services:
       CRAFTLE_RCON_HOST: minecraft
       CRAFTLE_RCON_PORT: '25575'
       CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
-      CRAFTLE_CHAT_INTERVAL_MS: '${CRAFTLE_CHAT_INTERVAL_MS:-3500}'
+      CRAFTLE_CHAT_INTERVAL_MS: '${CRAFTLE_CHAT_INTERVAL_MS:-1200}'
     volumes:
       - ../../scripts:/app/scripts:ro
       - ./state/agent:/state/agent:ro
