@@ -11,9 +11,10 @@ const host=process.env.CRAFTLE_RCON_HOST??'minecraft';
 const port=Number(process.env.CRAFTLE_RCON_PORT??25575);
 const password=fs.readFileSync(process.env.CRAFTLE_RCON_PASSWORD_FILE??'/run/secrets/rcon_password','utf8').trim();
 if(!password)throw Error('Missing RCON password');
-const minimumMs=Math.max(1500,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??3500));
+const minimumMs=Math.max(750,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??1200));
 let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
-const maxAgeMs=6500;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
+let lastDecisionAnnouncement=null,lastDecisionAnnouncedAt=0,lastVitalsWarningAt=0;
+const maxAgeMs=4000;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
 function describe(e){
  if(!e||!e.timestamp||typeof e.type!=='string')return null;
  if(e.type==='target_decision'){
@@ -100,11 +101,24 @@ async function poll(){
      if(e.type==='target_action')lastVitals={health:e.health,food:e.food};
      if(e.type==='target_decision')lastDecision=e;
      if(e.type==='target_transition')lastReward=e.reward;
-     const message=describe(e);if(!message)continue;
+     let message=describe(e);
+     if(e.type==='target_decision'){
+       const kind=String(e.action??'unknown');
+       const changed=kind!==lastDecisionAnnouncement;
+       if(!changed&&Date.now()-lastDecisionAnnouncedAt<12000)continue;
+       lastDecisionAnnouncement=kind;lastDecisionAnnouncedAt=Date.now();
+       message=changed?message:'Still '+kind.toUpperCase()+'; latest decision #'+(e.decisionId??'?');
+     }
+     if(e.type==='health'&&message){
+       if(Date.now()-lastVitalsWarningAt<12000)continue;
+       lastVitalsWarningAt=Date.now();
+     }
+     if(!message)continue;
      const key=[e.timestamp,e.type,e.decisionId??'',e.targetId??''].join('|');
      if(seen.has(key))continue;seen.add(key);if(seen.size>5000)seen.clear();
      // Keep important outcomes even when rapid decisions occur.
-     if(e.type==='target_decision'&&queued.length>=2)continue;
+     // Latest-state messages replace older summaries instead of forming backlog.
+     if(e.type==='target_decision')queued=queued.filter(item=>item.type!=='target_decision');
      const age=Date.now()-Date.parse(e.timestamp);
      if(!Number.isFinite(age)||age>maxAgeMs||age< -30000)continue;
      const entry={message,time:Date.parse(e.timestamp),type:e.type};
@@ -114,12 +128,12 @@ async function poll(){
      }else{
        queued.push(entry);
      }
-     if(queued.length>12)queued=queued.filter(item=>criticalTypes.has(item.type)).concat(queued.filter(item=>!criticalTypes.has(item.type)).slice(-8));
+     if(queued.length>6)queued=queued.filter(item=>criticalTypes.has(item.type)).concat(queued.filter(item=>!criticalTypes.has(item.type)).slice(-4));
     }
    }finally{fs.closeSync(fd);}
   }
   // Slow telemetry summary: ground in observed position and decision, never invent terrain type.
-  if(Date.now()-lastSummary>=15000&&lastDecision){
+  if(Date.now()-lastSummary>=15000&&lastDecision&&Date.now()-Date.parse(lastDecision.timestamp)<10000){
    lastSummary=Date.now();
    const pos=lastPosition&&[lastPosition.x,lastPosition.y,lastPosition.z].every(Number.isFinite)?
      [lastPosition.x,lastPosition.y,lastPosition.z].map(v=>v.toFixed(1)).join(','):'unknown';
@@ -130,6 +144,8 @@ async function poll(){
      (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''),time:Date.now(),type:'status'});
   }
   queued=queued.filter(e=>Date.now()-e.time<=maxAgeMs);
+  // Prefer a recent event over a routine summary when both are available.
+  queued.sort((a,b)=>(Number(criticalTypes.has(b.type))-Number(criticalTypes.has(a.type)))||a.time-b.time);
   if(queued.length&&(criticalTypes.has(queued[0].type)||Date.now()-lastSent>=minimumMs)){
    const entry=queued.shift();
    await rcon(chatCommand(entry.message));lastSent=Date.now();
