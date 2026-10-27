@@ -83,6 +83,27 @@ services:
     secrets:
       - rcon_password
     init: true
+  hud:
+    image: node:22-alpine
+    profiles: [hud]
+    restart: unless-stopped
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    command: ['node', '/app/scripts/filming-hud.js']
+    environment:
+      CRAFTLE_CAMERA_USERNAME: '${CRAFTLE_CAMERA_USERNAME:-dyl_is_here}'
+      CRAFTLE_COMMENTARY_LOG: /state/agent/continuous/agent.log
+      CRAFTLE_RCON_HOST: minecraft
+      CRAFTLE_RCON_PORT: '25575'
+      CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
+      CRAFTLE_HUD_INTERVAL_MS: '2500'
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ./state/agent:/state/agent:ro
+    secrets:
+      - rcon_password
+    init: true
   commentary:
     image: node:22-alpine
     profiles: [commentary]
