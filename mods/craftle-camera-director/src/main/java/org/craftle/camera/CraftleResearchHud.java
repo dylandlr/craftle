@@ -76,7 +76,7 @@ public final class CraftleResearchHud {
         MinecraftClient client=MinecraftClient.getInstance();
         if(!enabled||!CraftleCameraDirector.filmingServer(client)||client.options.hudHidden)return;
         int x=8,y=8,w=228;
-        ctx.fill(x-4,y-4,x+w,y+(showPolicyPerception?143:90),0xb915202e);
+        ctx.fill(x-4,y-4,x+w,y+(showPolicyPerception?162:109),0xb915202e);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("CRAFTLE  /  CITIZEN OBSERVER"),x,y,0x8bd7fa);
         JsonObject s=state;
         if(s==null||System.currentTimeMillis()-receivedAt>4500){
@@ -92,7 +92,9 @@ public final class CraftleResearchHud {
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("FOOTING: "+nested(s,"density","underfoot","unknown")),x,y+53,0xe9c682);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("NAV: "+nested(s,"latestNavigation","status","—")+
            "   TARGETS "+(s.has("targets")?s.getAsJsonArray("targets").size():0)),x,y+66,0xffffff);
-        ctx.drawTextWithShadow(client.textRenderer,Text.literal("F7 gaze  |  F9 HUD  |  F10 policy"),x,y+79,0x9fb1c7);
+        ctx.drawTextWithShadow(client.textRenderer,Text.literal("POLICY "+nested(s,"lifecycle","policy","?")+
+           "  POSE "+nested(s,"lifecycle","pose","?")),x,y+79,0x9fb1c7);
+        ctx.drawTextWithShadow(client.textRenderer,Text.literal("CAMERA: UNVERIFIED | F7 GAZE"),x,y+92,0xffc47b);
         if(showGaze){
             JsonObject g=s.has("gaze")&&s.get("gaze").isJsonObject()?s.getAsJsonObject("gaze"):null;
             int gx=ctx.getScaledWindowWidth()-176,gy=10,gw=164,gh=112;
@@ -121,9 +123,9 @@ public final class CraftleResearchHud {
         if(showPolicyPerception){
             JsonObject view=s.has("perception")&&s.get("perception").isJsonObject()
                  ?s.getAsJsonObject("perception"):null;
-            ctx.drawTextWithShadow(client.textRenderer,Text.literal("DQN TARGETS (NOT CAMERA VISION)"),x,y+96,0x8bd7fa);
-            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Policy targets: "+value(view,"targetCount","?")),x,y+110,0xffffff);
-            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Terrain is OBSERVER-ONLY"),x,y+124,0xe9c682);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("DQN TARGETS (NOT CAMERA VISION)"),x,y+115,0x8bd7fa);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Policy targets: "+value(view,"targetCount","?")),x,y+129,0xffffff);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Terrain is OBSERVER-ONLY"),x,y+143,0xe9c682);
         }
     }
 }
