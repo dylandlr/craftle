@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
 import {readAgentTelemetry} from './spectator-telemetry.js';
@@ -193,7 +194,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       let latest=null;
       if(telemetryRoot){
         try{
-          const name=new URL('file://'+(telemetryRoot.endsWith('/')?telemetryRoot:telemetryRoot+'/')+'continuous/agent.log');
+          const name=path.join(telemetryRoot,'continuous','agent.log');
           const fd=fs.openSync(name,'r');
           try{
             const size=fs.fstatSync(fd).size,length=Math.min(size,512*1024);
