@@ -51,10 +51,11 @@ public final class CraftleCameraDirector implements ClientModInitializer {
                 "category.craftle.camera"
         ));
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
+        CraftleResearchHud.install();
         LOG.info("Craftle camera director installed; F8 toggles automatic perspective");
     }
 
-    private static boolean filmingServer(MinecraftClient client) {
+    static boolean filmingServer(MinecraftClient client) {
         if (client.world == null || client.player == null) return false;
         var info = client.getCurrentServerEntry();
         if (info == null || info.address == null) return false;
