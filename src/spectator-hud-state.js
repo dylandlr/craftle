@@ -22,11 +22,25 @@ export function readHudState(root){
    x:t.position.x-current.x,z:t.position.z-current.z}:null
  }));
  const newest=events.at(-1);
+ const age=e=>e?.timestamp&&Number.isFinite(Date.parse(e.timestamp))?Math.max(0,Date.now()-Date.parse(e.timestamp)):null;
+ const decisionAgeMs=age(decision),poseAgeMs=age(pose),actionAgeMs=age(action);
+ const decisionActive=decisionAgeMs!==null&&decisionAgeMs<12000;
+ const poseFresh=poseAgeMs!==null&&poseAgeMs<12000;
+ const poseWindow=events.filter(e=>e.type==='pose_sample'&&e.position&&age(e)!==null&&age(e)<30000);
+ const firstPose=poseWindow[0]?.position,lastPose=poseWindow.at(-1)?.position;
+ const cameraDisplacement=firstPose&&lastPose?Math.hypot(firstPose.x-lastPose.x,firstPose.y-lastPose.y,firstPose.z-lastPose.z):null;
+ // Pose is the agent's orientation, NOT proof of spectator-camera attachment.
+ const lifecycle={policy:decisionActive?'active':decisionAgeMs===null?'unknown':'stale',
+   pose:poseFresh?'fresh':poseAgeMs===null?'unknown':'stale',
+   camera:'unverified',cameraAttachmentVerified:false,
+   decisionAgeMs,poseAgeMs,actionAgeMs,
+   movement30s:cameraDisplacement,source:'agent_log_only'};
+
  return {schema:'craftle.native-hud.v1',readOnly:true,source:'filming_agent_jsonl',
   timestamp:newest?.timestamp??null,ageMs:newest?Date.now()-Date.parse(newest.timestamp):null,
   agent:'Turesla',decisionId:decision?.decisionId??null,
   action:decision?.action??action?.skill??null,health:action?.health??null,food:action?.food??null,
-  position:current,points,targets,gaze,availableActions:decision?.mask?.filter(Boolean).length??null,
+  position:current,points,targets,gaze,lifecycle,availableActions:decision?.mask?.filter(Boolean).length??null,
   reward:Number.isFinite(transition?.reward)?transition.reward:null,
   updates:transition?.updates??null,
   latestNavigation:navigation?{status:navigation.status,decisionId:navigation.decisionId,at:navigation.timestamp}:null,
