@@ -20,7 +20,7 @@ node scripts/generate-citizen-skins.js --ids Turesla,Citizen2,Citizen3 --world-s
 
 After updating and rebuilding the filming agent, the preview skin can be downloaded from `http://127.0.0.1:3011/api/citizens/agent_001/skin.png` and metadata from `/api/citizens/agent_001`.
 
-**Important implementation boundary:** Generated skins exist as PNG assets and are served as read-only previews; they are **not yet applied to offline-mode Mineflayer players in native Minecraft**. This requires an explicit client-side skin renderer or an appropriate server-side skin distribution strategy. The camera-director mod currently only changes POV. Do not describe generated identities as visible on the real agent until a native-client/Flashback integration test verifies it.
+**Native skin integration (experimental):** The Fabric client includes a read-only `AbstractClientPlayerEntity#getSkinTextures` mixin for player name `Turesla`, restricted to the isolated filming server. It fetches the local generated PNG and model metadata and installs a Minecraft texture on the render thread. This is client-only: no server skin profile changes and no modification to the policy. This integration has **not yet passed a reported Fabric build or live-client/Flashback test**. Other citizen names still need a dynamic identity registry and matching URL routes. If the local endpoint is unavailable, the vanilla skin should remain visible.
 
 # Craftle Native Camera Director (Minecraft Fabric 1.21.1)
 
