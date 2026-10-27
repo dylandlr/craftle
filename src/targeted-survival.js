@@ -28,10 +28,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const death=()=>{if(ended||dead)return;dead=true;life++;sequences.death();decisionController.terminal();cancel();};
  const spawn=()=>{if(ended)return;dead=false;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
- const pathUpdate=result=>{if(result.status==='noPath'&&goal){clearGoal();log({type:'target_navigation_result',status:'noPath',life});}};
+ const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
  const setGoal=(key,p,range=1,horizontal=false)=>{
   if(goal?.key===key&&Math.hypot(p.x-goal.x,p.y-goal.y,p.z-goal.z)<=1&&clock()-goal.at<15000&&stalls<3)return;
   goal={key,x:p.x,y:p.y,z:p.z,at:clock()};
+  log({type:'target_navigation_goal',decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:{...goal},range,horizontal});
   bot.pathfinder.setGoal(horizontal?new GoalXZ(Math.floor(p.x),Math.floor(p.z)):new GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range));
  };
  const step=async()=>{
@@ -40,6 +41,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   try{
    let p=bot.entity.position;const displacement=lastPosition?Math.hypot(p.x-lastPosition.x,p.z-lastPosition.z):0;
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
+   if(stalls===3||stalls===8)log({type:'target_navigation_stall',decisionId:activeDecision?.decisionId??null,stalls,displacement,goal:goal?{...goal}:null,position:{x:p.x,y:p.y,z:p.z}});
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const proposed=decisionController.choose(observation);
    const choice=typeof proposed?.then==='function'?await proposed:proposed;
