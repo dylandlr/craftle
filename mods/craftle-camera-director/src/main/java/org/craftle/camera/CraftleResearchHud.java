@@ -28,11 +28,16 @@ public final class CraftleResearchHud {
     private static volatile boolean enabled=true;
     private static long ticks=0;
     private static KeyBinding toggle;
+    private static KeyBinding perceptionToggle;
+    private static volatile boolean showPolicyPerception=false;
 
     public static void install(){
         toggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.toggle",
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F9,"category.craftle.camera"));
+        perceptionToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.perception",
+                InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F10,"category.craftle.camera"));
         ClientTickEvents.END_CLIENT_TICK.register(client->{
+            while(perceptionToggle.wasPressed())showPolicyPerception=!showPolicyPerception;
             while(toggle.wasPressed()){
                 enabled=!enabled;
                 if(client.player!=null)client.player.sendMessage(
@@ -66,7 +71,7 @@ public final class CraftleResearchHud {
         MinecraftClient client=MinecraftClient.getInstance();
         if(!enabled||!CraftleCameraDirector.filmingServer(client)||client.options.hudHidden)return;
         int x=8,y=8,w=228;
-        ctx.fill(x-4,y-4,x+w,y+90,0xb915202e);
+        ctx.fill(x-4,y-4,x+w,y+(showPolicyPerception?143:90),0xb915202e);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("CRAFTLE  /  CITIZEN OBSERVER"),x,y,0x8bd7fa);
         JsonObject s=state;
         if(s==null||System.currentTimeMillis()-receivedAt>4500){
@@ -82,6 +87,13 @@ public final class CraftleResearchHud {
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("FOOTING: "+nested(s,"density","underfoot","unknown")),x,y+53,0xe9c682);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("NAV: "+nested(s,"latestNavigation","status","—")+
            "   TARGETS "+(s.has("targets")?s.getAsJsonArray("targets").size():0)),x,y+66,0xffffff);
-        ctx.drawTextWithShadow(client.textRenderer,Text.literal("F9 hide  |  F8 auto camera"),x,y+79,0x9fb1c7);
+        ctx.drawTextWithShadow(client.textRenderer,Text.literal("F9 HUD  |  F10 perception  |  F8 POV"),x,y+79,0x9fb1c7);
+        if(showPolicyPerception){
+            JsonObject view=s.has("perception")&&s.get("perception").isJsonObject()
+                 ?s.getAsJsonObject("perception"):null;
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("DQN TARGETS (NOT CAMERA VISION)"),x,y+96,0x8bd7fa);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Policy targets: "+value(view,"targetCount","?")),x,y+110,0xffffff);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("Terrain is OBSERVER-ONLY"),x,y+124,0xe9c682);
+        }
     }
 }
