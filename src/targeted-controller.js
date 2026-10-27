@@ -39,17 +39,18 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
     if(mode==='training')learner.observe({...pending,state:pending.state,reward,nextState:features,nextMask:mask,steps:1});
     log({type:'target_transition',decisionId:pending.decisionId,action:pending.action,reward,...stats()});
    }
-   let index;
+   let index,neuralTrace=null;
    if(mode==='random'){const ids=mask.flatMap((yes,i)=>yes?[i]:[]);index=ids[Math.floor(random()*ids.length)];}
    else if(mode==='scripted'||mode==='auto_eat'){
     let action=o.hostileDistance<8?'retreat':mode==='scripted'&&mask[0]?'eat':null;
     if(!action){for(let i=0;i<o.targets.length;i++){const t=o.targets[i];const name=t.reachable&&t.kind==='plant'?`harvest_${i}`:t.reachable&&t.kind==='animal'?`attack_${i}`:`approach_${i}`;if(mask[TARGET_ACTIONS.indexOf(name)]){action=name;break;}}}
     index=TARGET_ACTIONS.indexOf(action??'explore');
     if(mode==='auto_eat'&&index===0)throw Error('Auto-eat control cannot choose neural eat action');
-   }else index=learner.choose(features,mask).index;
+   }else {const selected=learner.choose(features,mask);index=selected.index;neuralTrace=selected.trace;}
    const choice=decodeTargetAction(index,o),decisionId=++serial;
    pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,credit:0,decisionId};
    log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,capabilityTier:'scripted_targeted_skills'});
+   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,source:'assisted_semantic_mineflayer_no_pixels'});
    if(mode==='training'&&stats().updates%40===0)save();
    return {...choice,decisionId};
   },
