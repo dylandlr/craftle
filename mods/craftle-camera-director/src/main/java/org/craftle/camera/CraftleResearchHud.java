@@ -94,7 +94,22 @@ public final class CraftleResearchHud {
            "   TARGETS "+(s.has("targets")?s.getAsJsonArray("targets").size():0)),x,y+66,0xffffff);
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("POLICY "+nested(s,"lifecycle","policy","?")+
            "  POSE "+nested(s,"lifecycle","pose","?")),x,y+79,0x9fb1c7);
-        ctx.drawTextWithShadow(client.textRenderer,Text.literal("CAMERA: UNVERIFIED | F7 GAZE"),x,y+92,0xffc47b);
+        // Minecraft's actual camera entity is independent of agent-log freshness.
+        // Match the spectator target by name; "UNVERIFIED" is not evidence of a dead agent.
+        String cameraStatus="UNVERIFIED";
+        int cameraColor=0xffc47b;
+        if(client.world!=null&&client.getCameraEntity()!=null){
+            boolean tureslaLoaded=client.world.getPlayers().stream()
+                .anyMatch(player->"Turesla".equalsIgnoreCase(player.getName().getString()));
+            if("Turesla".equalsIgnoreCase(client.getCameraEntity().getName().getString())){
+                cameraStatus="FOLLOWING TURESLA";cameraColor=0x7be1ae;
+            }else if(tureslaLoaded){
+                cameraStatus="NOT FOLLOWING";cameraColor=0xffab8e;
+            }else{
+                cameraStatus="TARGET NOT LOADED";cameraColor=0xffc47b;
+            }
+        }
+        ctx.drawTextWithShadow(client.textRenderer,Text.literal("CAMERA: "+cameraStatus+" | F7"),x,y+92,cameraColor);
         if(showGaze){
             JsonObject g=s.has("gaze")&&s.get("gaze").isJsonObject()?s.getAsJsonObject("gaze"):null;
             int gx=ctx.getScaledWindowWidth()-176,gy=10,gw=164,gh=112;
