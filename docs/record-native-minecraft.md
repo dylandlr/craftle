@@ -1,3 +1,14 @@
+## Nine-view offline observatory
+
+`tools/craftle-observatory.html` now offers nine tabs: Spatial Grid, Actual Inputs, Navigation, Learning, Survival, Timeline, Charts, Heatmap and Decision Analysis. New plots show logged transition rewards, health/hunger series, vertical elevation, 8-block spatial visit frequency and policy action distribution. All charts are computed locally in the browser from an explicitly loaded `agent.log`, without contacting the Minecraft server.
+
+```powershell
+git pull origin main
+start .\tools\craftle-observatory.html
+```
+
+Load `recordings/native/filming-agent.log` (or a raw copied continuous agent log). Missing telemetry is not silently fabricated. The heatmap represents positions Turesla visited, **not visible terrain or a learned mental map**. Elevation alone cannot prove that it is standing on leaves. The decision comparison shows how often food/animal/plant targets were available when the DQN selected actions. A live data source and video frame alignment are planned separately; this is not yet a Fabric overlay in Flashback.
+
 ## Native in-game spectator HUD (filming only)
 
 The optional `hud` service renders a **private actionbar** in the real Java client's HUD, sourced exclusively from the filming agent's JSONL log. It shows the latest action/decision ID, health, hunger, XYZ, last observed reward and learner update count. The service uses only `title dyl_is_here actionbar <json>` over filming-server RCON: it does **not** create a scoreboard, mutate the learner, broadcast chat, or send telemetry to Turesla. Values may show `?` until a fresh event arrives, and stale action telemetry is labeled.
