@@ -199,7 +199,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       const citizens=telemetryRoot?readCitizenRoster(telemetryRoot):[];
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.citizens.v1',readOnly:true,citizens}));
-    }else if(/^\\/api\\/citizens\\/[a-zA-Z0-9_-]{1,32}(?:\\/skin\\.png)?$/.test(route)){
+    }else if(new RegExp('^/api/citizens/[a-zA-Z0-9_-]{1,32}(/skin[.]png)?$').test(route)){
       const parts=route.split('/'),id=parts[3];
       const entry=(telemetryRoot?readCitizenRoster(telemetryRoot):[]).find(item=>item.id===id);
       if(!entry){res.writeHead(404);res.end('Citizen unavailable');}
