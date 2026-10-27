@@ -1,3 +1,20 @@
+## Multi-citizen client skins (experimental)
+
+The client now requests `GET http://127.0.0.1:3011/api/citizens` and associates registered player usernames with their persistent citizen IDs. Each skin is loaded separately from `/api/citizens/<id>/skin.png`. Other Minecraft players retain vanilla skins; the override is filming-server only, client-side and read-only.
+
+By default the continuous filming agent is still Turesla alone. The `CRAFTLE_CITIZEN_ROSTER_JSON` environment variable may provision **additional cosmetic registry entries** (example: `[{"id":"agent_001","name":"Turesla"},{"id":"agent_002","name":"Citizen2"}]`), but DOES NOT spawn additional agents into Minecraft. Treat roster size and Minecraft agent count separately until population spawning and autonomous controls are implemented.
+
+From the Craftle repository root, after a successful Fabric CI build:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = "dyl_is_here"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+Invoke-RestMethod "http://127.0.0.1:3011/api/citizens"
+```
+
+Download the rebuilt client JAR from the workflow, replace the existing JAR in the CraftleFlashback `mods` folder, restart Fabric 1.21.1, and observe Turesla on `127.0.0.1:25575`. Skin overrides and F9 HUD still require compile and live gameplay verification. Flashback replay rendering must also be tested separately.
+
 ## Native in-game research HUD (experimental)
 
 After installing the rebuilt Fabric mod, **F9** toggles a compact six-line native HUD overlay. It displays health/hunger, active DQN decision, reward and training updates, block beneath the agent, navigation result and visible target count. The UI polls the local filming monitor's `/api/hud/state` once per second and indicates stale data. It is available only when connected to the isolated `127.0.0.1:25575` server and cannot issue commands to Turesla. **F8** independently controls the POV switch. This is a first compact native overlay, not the previously envisioned fully collapsible six-panel HUD.
