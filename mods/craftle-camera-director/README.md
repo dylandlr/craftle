@@ -1,0 +1,43 @@
+# Craftle Native Camera Director (Minecraft Fabric 1.21.1)
+
+Optional **client-only** filming mod. It changes **only the native camera perspective** while the camera player is connected to the dedicated Craftle filming server `127.0.0.1:25575`. It never connects to the Minecraft game protocol or commands the learning agent. The production `25565` server, all other servers and Flashback replays are excluded.
+
+## Behavior
+
+- Automatically enabled on the **filming server only** when valid fresh telemetry is available.
+- At surrounding solid/leaf block occupancy **≥ 52%**: use third-person rear view.
+- Once occupancy **≤ 32%**: return to first-person, using hysteresis to avoid rapid flicker.
+- Sample source: read-only `http://127.0.0.1:3011/api/density` from filming spectator monitor.
+- Ignores data older than 8 seconds. Network outage means no additional perspective changes.
+- Press **F8** to toggle this option off/on. Manual F5 remains available when auto mode is off.
+- The camera may briefly show a transition during entity death/respawn. The existing `follow` watchdog performs player spectating; the mod only sets camera perspective.
+
+## Build and install
+
+Requires Java 21 and Gradle 8.10.2, or download the successful build artifact from the repository's **Build Fabric camera director** GitHub Actions workflow.
+
+```powershell
+cd mods/craftle-camera-director
+gradle --no-daemon build
+```
+
+Copy the non-`-sources` jar from `build/libs` to `C:\Users\delar\Games\CraftleFlashback\mods`, alongside Fabric API and Flashback. Restart Minecraft with the Fabric 1.21.1 profile. Do not install this in the server mods directory or in the production world.
+
+In another terminal:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME="dyl_is_here"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build agent
+docker compose -f deploy/filming/compose.yml --profile follow up -d follow
+```
+
+Open the filming spectator monitor at `http://127.0.0.1:3011/observatory` and check that `http://127.0.0.1:3011/api/density` reports `available:true` after the bot connects. It may initially report `false` while the log is warming up.
+
+## Validation and caveats
+
+This implementation has been committed as source, **not yet verified running in the user's Minecraft client**. The CI workflow is intended to catch compile regressions; a successful build would not replace an actual native recording test.
+
+Block density is calculated from Turesla's Mineflayer-loaded block cache in a 5×3×5 neighborhood around head height; unknown/unloaded blocks do not count. It is **not a rendered camera raycast**, so obstruction behind the camera can differ from this proxy. Default thresholds are provisional and can be tuned after footage review. The monitor also exposes diagnostics and all 18 observatory views but these **are browser views**, not in-game HUD panels.
+
+For Flashback: test an export to verify any camera-mode changes are preserved. Flashback's replay camera can override perspectives, so a client-side filming camera toggle is not guaranteed to survive replay editing. Use the original recording as evidence.
