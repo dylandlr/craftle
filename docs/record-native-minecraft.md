@@ -1,3 +1,30 @@
+## Fixing delayed deaths/chat and unavailable density telemetry (October 27, 2026)
+
+A long-standing commentary queue used a 3.5-second message throttle but could accumulate 40 queued actions, making deaths appear well after the actual game event. The updated filming commentator:
+
+- Discards chat items older than 6.5 seconds.
+- Clears obsolete queued death/recovery messages and prioritizes fresh death, food consumption and verified recovery messages.
+- Sends critical events immediately instead of waiting for routine chat throttle.
+- Records `ageMs` on every delivered message for latency debugging.
+- Uses `target_action` events to update HUD vitals (the previous reader watched an unrelated `health` type).
+- Updates HUD state on death/respawn and visibly marks stale telemetry.
+
+The `/api/density` response now includes `reason`, `ageMs` and the latest density event even if its `occupancyRatio` is null. `available:true` requires a finite, fresh ratio. `available:false` is possible when there are no density events in recent logs, the filming agent wasn't restarted with `CRAFTLE_FILMING_DENSITY_AUDIT=1`, nearby block cache has no valid blocks, or a source is stale. Do **not** assume that `pose_sample` implies the separate density audit is enabled.
+
+Update the *filming copy only*:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = 'dyl_is_here'
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+docker compose -f deploy/filming/compose.yml --profile commentary --profile hud up -d --force-recreate commentary hud
+Invoke-RestMethod 'http://127.0.0.1:3011/api/density' | Format-List *
+docker compose -f deploy/filming/compose.yml --profile learning exec agent sh -lc "grep 'spectator_density_audit' /state/agent/continuous/agent.log | tail -3"
+docker compose -f deploy/filming/compose.yml --profile commentary logs --tail 30 commentary
+```
+
+This requires a real restart of the **filming agent container** for the environment-variable change and new code to reach the running agent; recreating the HUD/chat services alone will not enable block-density instrumentation. Captured source timestamps are UTC and may not match local clocks or Flashback's replay-relative time. Actual frame-accurate sync still requires a Flashback recording start anchor; this fix addresses stale/delayed overlays, **not** frame-exact replay synchronization.
+
 ## Built-in 18-panel observatory and optional automatic native POV (main branch)
 
 The filming spectator monitor now includes **all 18 diagnostic views**, visible by default. Each panel has an independent **×** (minimize) and **✓** (expand) button. The same views remain accessible individually from its tabs. The default layout initially displays recent live telemetry (bounded log tail, up to 1,200 diagnostic events, refreshing every five seconds). Load a complete `agent.log` with the observatory file picker to inspect historical runs; this switches the browser session to the selected local file.
