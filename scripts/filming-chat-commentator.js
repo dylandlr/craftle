@@ -13,6 +13,7 @@ const password=fs.readFileSync(process.env.CRAFTLE_RCON_PASSWORD_FILE??'/run/sec
 if(!password)throw Error('Missing RCON password');
 const minimumMs=Math.max(1500,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??3500));
 let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
+const maxAgeMs=6500;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
 function describe(e){
  if(!e||!e.timestamp||typeof e.type!=='string')return null;
  if(e.type==='target_decision'){
@@ -96,7 +97,7 @@ async function poll(){
      if(!line.startsWith('{"timestamp":'))continue;
      let e;try{e=JSON.parse(line);}catch{continue;}
      if(e.type==='pose_sample'&&e.position)lastPosition=e.position;
-     if(e.type==='health')lastVitals={health:e.health,food:e.food};
+     if(e.type==='target_action')lastVitals={health:e.health,food:e.food};
      if(e.type==='target_decision')lastDecision=e;
      if(e.type==='target_transition')lastReward=e.reward;
      const message=describe(e);if(!message)continue;
@@ -104,7 +105,16 @@ async function poll(){
      if(seen.has(key))continue;seen.add(key);if(seen.size>5000)seen.clear();
      // Keep important outcomes even when rapid decisions occur.
      if(e.type==='target_decision'&&queued.length>=2)continue;
-     queued.push(message);if(queued.length>40)queued.shift();
+     const age=Date.now()-Date.parse(e.timestamp);
+     if(!Number.isFinite(age)||age>maxAgeMs||age< -30000)continue;
+     const entry={message,time:Date.parse(e.timestamp),type:e.type};
+     if(criticalTypes.has(e.type)){
+       queued=queued.filter(item=>!criticalTypes.has(item.type));queued.unshift(entry);
+       console.log(JSON.stringify({type:'filming_chat_priority_event',event:e.type,ageMs:age}));
+     }else{
+       queued.push(entry);
+     }
+     if(queued.length>12)queued=queued.filter(item=>criticalTypes.has(item.type)).concat(queued.filter(item=>!criticalTypes.has(item.type)).slice(-8));
     }
    }finally{fs.closeSync(fd);}
   }
@@ -115,14 +125,15 @@ async function poll(){
      [lastPosition.x,lastPosition.y,lastPosition.z].map(v=>v.toFixed(1)).join(','):'unknown';
    const vit=lastVitals&&Number.isFinite(lastVitals.health)&&Number.isFinite(lastVitals.food)?
      ' HP='+lastVitals.health+' food='+lastVitals.food:'';
-   queued.push('STATUS action='+(lastDecision.action??'?')+' pos='+pos+vit+
-     (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''));
+   queued=queued.filter(item=>item.type!=='status');
+   queued.push({message:'STATUS action='+(lastDecision.action??'?')+' pos='+pos+vit+
+     (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''),time:Date.now(),type:'status'});
   }
+  queued=queued.filter(e=>Date.now()-e.time<=maxAgeMs);
   if(queued.length&&Date.now()-lastSent>=minimumMs){
-   const msg=queued[0];
-   await rcon(chatCommand(msg));
-   queued.shift();lastSent=Date.now();
-   console.log(JSON.stringify({type:'filming_chat_sent',message:msg,recipient:username}));
+   const entry=queued.shift();
+   await rcon(chatCommand(entry.message));lastSent=Date.now();
+   console.log(JSON.stringify({type:'filming_chat_sent',eventType:entry.type,message:entry.message,ageMs:Date.now()-entry.time,recipient:username}));
   }
  }catch(e){console.error(JSON.stringify({type:'filming_chat_error',message:e.message}));}
  finally{busy=false;}
