@@ -44,8 +44,9 @@ function consume(e){
  if(e.type==='target_transition'){
   latest.reward=e.reward;latest.updates=e.updates??latest.updates;
  }
- if(e.type==='target_terminal'||e.type==='death_screen_observed')latest.action='DEAD / respawning';
+ if(e.type==='target_terminal'||e.type==='death_screen_observed'){latest.action='DEAD / respawning';latest.updatedAt=e.timestamp;latest.health=0;}
  if(e.type==='death_screen_observed')latest.deaths++;
+ if(e.type==='life_feedback_available'){latest.action='RESPAWNED';latest.updatedAt=e.timestamp;latest.reward=null;latest.health=null;latest.food=null;}
 }
 function poll(){
  const size=fs.statSync(file).size;
@@ -63,7 +64,7 @@ function hud(){
  const p=latest.position;
  const pos=p&&[p.x,p.y,p.z].every(Number.isFinite)?[p.x,p.y,p.z].map(v=>Math.round(v)).join(','):'?';
  const age=latest.updatedAt?Math.floor((Date.now()-Date.parse(latest.updatedAt))/1000):null;
- const stale=age!==null&&age>15?' [STALE '+age+'s]':'';
+ const stale=age===null?' [NO TELEMETRY]':age>8?' [STALE '+age+'s]':'';
  const line='TURESLA | '+String(latest.action).slice(0,19)+' #'+(latest.decisionId??'?')+
   ' | HP '+fmt(latest.health)+'/20 | Food '+fmt(latest.food)+'/20'+
   ' | XYZ '+pos+' | R '+fmt(latest.reward)+' | Updates '+(latest.updates??'?')+stale;
