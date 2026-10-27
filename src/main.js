@@ -21,6 +21,7 @@ import {startSurvivalReference} from './survival-reference.js';
 import {createLearningOptionController} from './learning-options.js';
 import {createTargetedController} from './targeted-controller.js';
 import {startTargetedSurvival} from './targeted-survival.js';
+import {observeLocalPerception} from './local-perception.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -84,6 +85,16 @@ for(const [index,profile] of activeProfiles.entries()){
  // Minecraft time_update packets provide an authoritative but periodic world-age anchor.
  let lastWorldAge=null;
  bot._client.on('update_time',packet=>{const raw=packet.age??packet.worldAge??packet.time; if(raw!==undefined)lastWorldAge=String(raw);});
+ // Phase P1: local perception recorded without affecting DQN state, policy or rewards.
+ let localPerceptionAt=0;
+ bot.on('physicsTick',()=>{
+  if(process.env.CRAFTLE_LOCAL_PERCEPTION_AUDIT!=='1'||!bot.entity||Date.now()-localPerceptionAt<1800)return;
+  localPerceptionAt=Date.now();
+  const sample=observeLocalPerception(bot,{radius:3,vertical:2,maxEntities:24});
+  log(profile.name,'local_perception_sample',{agent_id:profile.id,
+   decisionId:bot.__craftleActiveDecision?.decisionId??null,
+   ...sample});
+ });
  // Observer-side density signal: nearby solid/leaves blocks around bot head.
  // This is diagnostic only, never fed to the policy or camera controls.
  let densityAt=0,densityMode='first_person';
