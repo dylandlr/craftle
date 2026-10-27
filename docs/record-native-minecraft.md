@@ -1,3 +1,42 @@
+## Built-in 18-panel observatory and optional automatic native POV (main branch)
+
+The filming spectator monitor now includes **all 18 diagnostic views**, visible by default. Each panel has an independent **×** (minimize) and **✓** (expand) button. The same views remain accessible individually from its tabs. The default layout initially displays recent live telemetry (bounded log tail, up to 1,200 diagnostic events, refreshing every five seconds). Load a complete `agent.log` with the observatory file picker to inspect historical runs; this switches the browser session to the selected local file.
+
+The main browser monitor is at `http://127.0.0.1:3011/` on the isolated filming server; direct all-views route: `http://127.0.0.1:3011/observatory`. These are **browser research panels**, not 18 native Minecraft on-screen widgets. The existing game actionbar/chat remain separate and private to `dyl_is_here`.
+
+New diagnostic events written to the filming agent JSONL: navigation goal with decision/skill/position, navigation no-path failures and stalls, 4 Hz pose samples, and 2-second block-density reports including leaves, block beneath Turesla, position, a world-age anchor and recommended POV mode. Rewards, chosen actions, transitions, death and verified eating continue logging through existing event contracts. The data are collected observer-side; do not confuse logged observations with a server-authoritative record.
+
+To run the updated system, from the repository:
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = 'dyl_is_here'
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build agent
+docker compose -f deploy/filming/compose.yml --profile follow --profile commentary --profile hud up -d follow commentary hud
+Start-Process 'http://127.0.0.1:3011/'
+```
+
+### Native camera switcher (separately installed client mod)
+
+The optional **Craftle Camera Director** Fabric 1.21.1 client-only mod is maintained under `mods/craftle-camera-director`. It polls `http://127.0.0.1:3011/api/density` and switches the *native* spectator POV: **third-person rear** at ≥52% nearby occupied blocks, **first-person** again at ≤32%. Hysteresis avoids rapid toggling. **F8** disables or enables automatic mode. It only operates on the filming server `127.0.0.1:25575`, ignores stale data, and never controls Turesla.
+
+The mod's Java source and CI build workflow were committed, but the JAR still needs to be built and installed on your actual Minecraft Fabric client. See [the Camera Director readme](../mods/craftle-camera-director/README.md) for build/installation details and GitHub Actions artifact instructions. **No client-side switching has been observed or verified yet.** Flashback may override or omit live perspective changes during replay export; test a short recording to confirm.
+
+### Verification checks
+
+```powershell
+# Native filming server and agent running?
+docker compose -f deploy/filming/compose.yml --profile learning ps
+# Density endpoint should become available after a few seconds.
+Invoke-RestMethod 'http://127.0.0.1:3011/api/density'
+# Recent event readout should contain diagnostic events.
+(Invoke-RestMethod 'http://127.0.0.1:3011/api/observatory/events').events | Select-Object -Last 5
+# Agent log should show navigation and density diagnostics:
+docker compose -f deploy/filming/compose.yml --profile learning exec agent sh -lc "grep -E 'target_navigation_|spectator_density_audit' /state/agent/continuous/agent.log | tail -15"
+```
+
+Note: Docker image rebuild/recreation resets the **filming agent process** and its in-memory state. It does not overwrite the saved filmed-world files or production world. Use the isolated filming server for the first test.
+
 ## Return to spectator follow after reconnecting
 
 The optional `follow` watchdog now checks whether `dyl_is_here` is connected. On a new connection, it issues `gamemode spectator dyl_is_here`, then `spectate Turesla dyl_is_here`. It also recovers after Turesla death/respawn. It does not control the learning agent and only operates on the separate filming server. There can be a delay of one polling interval (6 seconds by default) and the camera may briefly detach while the target respawns.
