@@ -130,7 +130,7 @@ async function poll(){
      (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''),time:Date.now(),type:'status'});
   }
   queued=queued.filter(e=>Date.now()-e.time<=maxAgeMs);
-  if(queued.length&&Date.now()-lastSent>=minimumMs){
+  if(queued.length&&(criticalTypes.has(queued[0].type)||Date.now()-lastSent>=minimumMs)){
    const entry=queued.shift();
    await rcon(chatCommand(entry.message));lastSent=Date.now();
    console.log(JSON.stringify({type:'filming_chat_sent',eventType:entry.type,message:entry.message,ageMs:Date.now()-entry.time,recipient:username}));
