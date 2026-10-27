@@ -124,6 +124,9 @@ for(const [index,profile] of activeProfiles.entries()){
      controls[key]=Boolean(bot.getControlState?.(key));
    log(profile.name,'physics_tick_trace_v1',{
      agent_id:profile.id,physicsTickSerial,worldAgeAnchor:lastWorldAge,
+     activeDecisionId:bot.__craftleActiveDecision?.decisionId??null,
+     activeSkill:bot.__craftleActiveDecision?.skill??null,
+     activeTargetId:bot.__craftleActiveDecision?.targetId??null,
      position:{x:p.x,y:p.y,z:p.z},velocity:v?{x:v.x,y:v.y,z:v.z}:null,
      yaw:bot.entity.yaw,pitch:bot.entity.pitch,onGround:bot.entity.onGround??null,
      underfootBlock:below?.name??null,health:bot.health,food:bot.food,
