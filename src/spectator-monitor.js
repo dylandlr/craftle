@@ -194,6 +194,17 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-agent.v1',...data}));
+    }else if(route==='/api/citizens/agent_001/skin.png'){
+      const skin=telemetryRoot?path.join(telemetryRoot,'citizens','agent_001.png'):null;
+      try{const png=fs.readFileSync(skin);res.writeHead(200,{'Content-Type':'image/png'});res.end(png);}
+      catch{res.writeHead(404);res.end('Citizen skin unavailable');}
+    }else if(route==='/api/citizens/agent_001'){
+      let appearance=null;
+      if(telemetryRoot)try{appearance=JSON.parse(fs.readFileSync(path.join(telemetryRoot,'citizens','agent_001.json'),'utf8'));}catch{}
+      res.writeHead(appearance?200:404,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({schema:'craftle.citizen-public.v1',id:'agent_001',name:'Turesla',
+        appearance,skinUrl:appearance?'/api/citizens/agent_001/skin.png':null,
+        skinAppliedInClient:false,cosmeticOnly:true}));
     }else if(route==='/api/hud/state'){
       const state=telemetryRoot?readHudState(telemetryRoot):{schema:'craftle.native-hud.v1',readOnly:true,source:'unavailable',timestamp:null};
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
