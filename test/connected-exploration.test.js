@@ -32,3 +32,11 @@ test('avoids previously failed destinations when other connected ground exists',
  assert.ok(second.selected);
  assert.notDeepEqual(second.selected.position,g);
 });
+
+test('connected exploration favors net progress rather than wandering in circles',()=>{
+ const blockAt=(x,y,z)=>y===64?solid('grass_block'):(y===65||y===66?air:null);
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:5,maxNodes:220,blockAt});
+ assert.ok(result.selected);
+ const {x,z}=result.selected.position;
+ assert.ok(Math.hypot(x,z)>=2.5,'expected meaningful net displacement from start');
+});
