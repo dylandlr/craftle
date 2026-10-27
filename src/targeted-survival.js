@@ -29,8 +29,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  log({type:'exploration_execution_variant',variant:groundedExplore?'grounded_v1':'legacy_v1',learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
- const death=()=>{if(ended||dead)return;dead=true;life++;sequences.death();decisionController.terminal();cancel();};
- const spawn=()=>{if(ended)return;dead=false;life++;decisionController.truncate?.();cancel();};
+ const death=()=>{if(ended||dead)return;dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
+ const spawn=()=>{if(ended)return;dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};if(groundedExplore&&failed.key==='explore'){failedExplore.add([Math.floor(failed.x),Math.floor(failed.z)].join(','));if(failedExplore.size>256)failedExplore.clear();}clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
  const setGoal=(key,p,range=1,horizontal=false)=>{
@@ -55,6 +55,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    previousFoodUnits=observation.foodUnits;
    sequences.decision(choice);
    activeDecision={decisionId:choice.decisionId,skill:choice.skill,targetId:choice.targetId};
+   bot.__craftleActiveDecision=activeDecision;
    const current=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const target=current.targets.find(t=>t.id===choice.targetId);
    if(['approach','harvest','attack'].includes(choice.skill)&&!target){clearGoal();log({type:'target_action_rejected',decisionId:choice.decisionId,reason:'target_no_longer_available'});return;}
@@ -100,7 +101,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;ended=true;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
+ const stop=()=>{if(ended)return;ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
