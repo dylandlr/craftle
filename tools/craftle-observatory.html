@@ -55,7 +55,11 @@ function drawHeat(canvas,points){
 function downsample(rows,limit=900){if(rows.length<=limit)return rows;const step=Math.ceil(rows.length/limit);return rows.filter((_,i)=>i%step===0||i===rows.length-1);}
 
 function render(){
- tabbar.innerHTML=tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
+ // All 18 dashboards can be displayed concurrently. Each panel has an
+ // independent minimize control and remains visible by default.
+ if(active==='all'){renderAll();return;}
+
+ tabbar.innerHTML='<button id="all-views" type="button">✓ Show all views</button>'+tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
  const actions=byType('target_action'),decisions=byType('target_decision'),transitions=byType('target_transition');
  const last=actions.at(-1)||{},decision=decisions.at(-1)||{},positionEvents=events.filter(e=>['pose_sample','target_action'].includes(e.type)&&e.position&&['x','y','z'].every(k=>Number.isFinite(e.position[k])));
  const positions=positionEvents.map(e=>e.position);const lastPos=positions.at(-1);
@@ -181,7 +185,38 @@ function render(){
  panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
  }
 }
-tabbar.onclick=e=>{const id=e.target.dataset.tab;if(id){active=id;render();}};
+let showAll=false;
+document.addEventListener('click',e=>{
+ const toggle=e.target.closest('[data-collapse]');
+ if(!toggle)return;
+ const id=toggle.dataset.collapse;
+ const section=document.getElementById('panel-'+id);
+ if(!section)return;
+ const hidden=section.hidden;section.hidden=!hidden;
+ toggle.textContent=hidden?'× Minimize':'✓ Expand';
+ toggle.setAttribute('aria-expanded',String(hidden));
+});
+tabbar.onclick=e=>{
+ if(e.target.id==='all-views'){
+  const shown=document.getElementById('all-views-content');
+  if(shown){shown.remove();e.target.textContent='✓ Show all views';return;}
+  const block=document.createElement('div');block.id='all-views-content';block.className='grid';
+  for(const [id,label] of tabs){
+   const card=document.createElement('section');card.className='card';
+   const heading=document.createElement('div');heading.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px';
+   const h=document.createElement('h2');h.textContent=label;h.style.margin='0';
+   const btn=document.createElement('button');btn.textContent='×';btn.title='Minimize '+label;
+   const content=document.createElement('div');content.style.marginTop='12px';
+   btn.onclick=()=>{content.hidden=!content.hidden;btn.textContent=content.hidden?'✓':'×';};
+   heading.append(h,btn);card.append(heading,content);
+   const open=document.createElement('button');open.textContent='Open '+label;open.onclick=()=>{block.remove();active=id;render();};
+   content.append(open);block.append(card);
+  }
+  document.querySelector('main').append(block);e.target.textContent='× Hide all views';
+  return;
+ }
+ const id=e.target.dataset.tab;if(id){active=id;render();}
+};
 document.getElementById('load').onchange=async e=>{
  const f=e.target.files?.[0];if(!f)return;
  const content=await f.text();const parsed=[];
