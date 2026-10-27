@@ -21,3 +21,14 @@ test('rejects lava foundation and unknown initial footing',()=>{
  const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},blockAt:(x,y,z)=>y===64?solid('lava'):air});
  assert.equal(result.reason,'no_known_start_footing');
 });
+
+test('avoids previously failed destinations when other connected ground exists',()=>{
+ const blockAt=(x,y,z)=>y===64?solid('grass_block'):(y===65||y===66?air:null);
+ const first=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:3,blockAt});
+ assert.ok(first.selected);
+ const g=first.selected.position;
+ const avoid=new Set([[g.x,g.y,g.z].join(',')]);
+ const second=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:3,blockAt,avoid});
+ assert.ok(second.selected);
+ assert.notDeepEqual(second.selected.position,g);
+});
