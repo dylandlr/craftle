@@ -40,3 +40,24 @@ test('connected exploration favors net progress rather than wandering in circles
  const {x,z}=result.selected.position;
  assert.ok(Math.hypot(x,z)>=2.5,'expected meaningful net displacement from start');
 });
+
+test('never deliberately chooses leaf canopy when stable ground is reachable',()=>{
+ const blockAt=(x,y,z)=>{
+  if(y===64)return solid(x>0?'oak_leaves':'grass_block');
+  if(y===65||y===66)return air;
+  return null;
+ };
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:65,z:0},radius:5,blockAt});
+ assert.ok(result.selected);
+ assert.equal(result.selected.leaves,false);
+ assert.ok(result.selected.position.x<=0);
+});
+test('does not invent a safe exit from an isolated leaf canopy',()=>{
+ const blockAt=(x,y,z)=>{
+  if(y===70&&x===0&&z===0)return solid('oak_leaves');
+  if(y===71||y===72)return air;
+  return null;
+ };
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:71,z:0},radius:4,blockAt});
+ assert.equal(result.selected,null);
+});
