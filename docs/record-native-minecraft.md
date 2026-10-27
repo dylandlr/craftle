@@ -1,3 +1,37 @@
+## Understanding Turesla tick by tick: observation → choice → execution → reward
+
+Craftle has two clocks. Mineflayer emits `physicsTick` around 20 times a second, while the targeted policy calls `choose()` only about once every 1,800 ms. Between decisions, Mineflayer's *scripted pathfinder* sends controls (forward/jump/etc.). Hence treetop traversal is **not evidence that the DQN trained jumping skills**.
+
+For a *short isolated filming run*, enable opt-in traces (never silently enable on production):
+
+```powershell
+git pull origin main
+$env:CRAFTLE_DECISION_TRACE = "1"
+$env:CRAFTLE_TICK_TRACE = "1"
+$env:CRAFTLE_GROUNDED_EXPLORATION = "0" # preserve legacy baseline for diagnosis
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+
+# After capturing a representative few minutes, copy the log:
+New-Item -ItemType Directory -Force recordings/diagnostics | Out-Null
+docker compose -f deploy/filming/compose.yml --profile learning cp agent:/state/agent/continuous/agent.log recordings/diagnostics/filming-agent.log
+python scripts/explain-agent-ticks.py --log recordings/diagnostics/filming-agent.log --out recordings/diagnostics/tick-report.json --limit 40
+```
+
+The `physics_tick_trace_v1` event records physics-tick serial, approximate server age anchor, XYZ, velocity, yaw/pitch, underfoot cached block, health/hunger and Mineflayer movement control states. The `decision_trace_v1` event records the exact eight general and four-by-nine target features (44 total), action mask, available action names, target candidates, network hidden activations, all 15 Q-values, selected Q, greedy argmax and whether selection came from ε random exploration or Q maximization. `target_decision`, `target_navigation_goal`, `target_navigation_result`, `target_navigation_stall`, `target_transition` and `target_reward_components` complete the observed chain.
+
+**Important limits:** raw client packets and every server tick are NOT logged here; physics ticks are the Mineflayer client's clock. A 1,800 ms DQN decision means roughly 36 physics ticks per high-level action, although scheduling and async work can change this. Logs can grow quickly. The feature set uses privileged semantic observations from Mineflayer, **not visual pixels**. The DQN has 44 input features, 16 tanh hidden units and 15 output Q-values; no recurrent memory or LLM reasoning.
+
+A major reason for aimless exploration can be checked directly: when target detection returns zero eligible targets, `explore` is always available and `retreat` is only available when a hostile exists. If hunger is low and inventory contains no edible food, the policy may literally have **no valid food action**. Also, the legacy exploration executor chooses an XZ-only destination 16 blocks away, leaving vertical traversal to pathfinding.
+
+To compare grounded exploration as an **execution ablation** while preserving the original policy architecture, set `CRAFTLE_GROUNDED_EXPLORATION=1` on another filming copy/trial. The candidate selector reads a local block cache, rejects failed destinations and penalizes leaf footing. This is a hand-coded movement intervention, not learned intelligence. Keep a frozen checkpoint and identical world snapshots for a rigorous comparison. Do not run on the scientific baseline until tested.
+
+To restore low-volume logging after the diagnostic run:
+```powershell
+$env:CRAFTLE_TICK_TRACE = "0"
+$env:CRAFTLE_DECISION_TRACE = "0"
+docker compose -f deploy/filming/compose.yml --profile learning up -d --force-recreate agent
+```
+
 ## Fixing delayed deaths/chat and unavailable density telemetry (October 27, 2026)
 
 A long-standing commentary queue used a 3.5-second message throttle but could accumulate 40 queued actions, making deaths appear well after the actual game event. The updated filming commentator:
