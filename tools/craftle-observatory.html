@@ -90,13 +90,17 @@ function render(view=active,panel=rootPanel){
   const rewards=downsample(transitions.filter(e=>Number.isFinite(e.reward)));
   const vitals=downsample(actions.filter(e=>Number.isFinite(e.health)||Number.isFinite(e.food)));
   const elevation=downsample(positionEvents.filter(e=>Number.isFinite(e.position.y)));
+  const density=downsample(byType('spectator_density_audit').filter(e=>Number.isFinite(e.occupancyRatio)));
   panel.innerHTML='<div class="grid">'+card('Reward over transitions','<canvas id="rewardgraph" width="620" height="250"></canvas><p class="caption">Recorded reward per transition; not success attribution.</p>')+
   card('Health and hunger over actions','<canvas id="vitalsgraph" width="620" height="250"></canvas><p class="caption">Missing measurements are not interpolated.</p>')+
   card('Elevation over recorded samples','<canvas id="heightgraph" width="620" height="250"></canvas><p class="caption">Y alone cannot establish which blocks Turesla stands on.</p>')+
+  card('Block density and camera threshold','<canvas id="densitygraph" width="620" height="250"></canvas><p class="caption">Measured occupied fraction (0–1). High occupancy recommends third-person; cameraApplied=false indicates an advisory before client mod installation.</p>')+
+  card('Ground contact evidence','<p>Latest block beneath Turesla: '+safe(density.at(-1)?.underfootBlock??'unknown')+'</p><p>'+density.length+' density observations</p><p class="caption">Mineflayer block-cache sampling only, not server-authoritative collisions.</p>')+
   card('Data coverage','<p>'+rewards.length+' reward points · '+vitals.length+' vital observations · '+elevation.length+' position samples plotted.</p>')+'</div>';
   plot(document.getElementById('rewardgraph'),[{label:'Reward',color:'#86c9ff',points:rewards.map(e=>({y:e.reward}))}],{zero:true});
   plot(document.getElementById('vitalsgraph'),[{label:'Health',color:'#f68a90',points:vitals.filter(e=>Number.isFinite(e.health)).map(e=>({y:e.health}))},{label:'Hunger',color:'#ecc27f',points:vitals.filter(e=>Number.isFinite(e.food)).map(e=>({y:e.food}))}],{min:0,max:20});
   plot(document.getElementById('heightgraph'),[{label:'Y elevation',color:'#7dd5b0',points:elevation.map(e=>({y:e.position.y}))}]);
+  plot(document.getElementById('densitygraph'),[{label:'Occupancy',color:'#a0d8fa',points:density.map(e=>({y:e.occupancyRatio}))},{label:'3rd person on',color:'#e5b980',points:density.map(()=>({y:0.52}))},{label:'1st person on',color:'#c59ee7',points:density.map(()=>({y:0.32}))}],{min:0,max:1});
  }else if(selected==='heatmap'){
   panel.innerHTML='<div class="grid">'+card('Spatial visitation heatmap','<canvas id="visitmap" width="620" height="520"></canvas><p class="caption">8×8-block bins based on recorded positions only. Empty does not mean inaccessible; brighter means more samples.</p>')+
   card('What this can tell us','<p>Repeated treetop routes will form bright corridors if matching positions were logged.</p><p>It cannot identify trees without actual block observations or video frames.</p><p>Samples: '+positions.length+'</p>')+'</div>';
