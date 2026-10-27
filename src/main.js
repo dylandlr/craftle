@@ -84,6 +84,28 @@ for(const [index,profile] of activeProfiles.entries()){
  // Minecraft time_update packets provide an authoritative but periodic world-age anchor.
  let lastWorldAge=null;
  bot._client.on('update_time',packet=>{const raw=packet.age??packet.worldAge??packet.time; if(raw!==undefined)lastWorldAge=String(raw);});
+ // Observer-side density signal: nearby solid/leaves blocks around bot head.
+ // This is diagnostic only, never fed to the policy or camera controls.
+ let densityAt=0,densityMode='third_person';
+ bot.on('physicsTick',()=>{
+  if(process.env.CRAFTLE_FILMING_DENSITY_AUDIT!=='1'||!bot.entity||Date.now()-densityAt<2000)return;
+  densityAt=Date.now();const p=bot.entity.position.offset(0,1.6,0);
+  let known=0,occupied=0,leaves=0;
+  for(let dx=-2;dx<=2;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-2;dz<=2;dz++){
+    if(dx===0&&dy===0&&dz===0)continue;
+    const b=bot.blockAt(p.offset(dx,dy,dz),false);
+    if(!b)continue;known++;
+    if(b.boundingBox==='block'||b.name?.includes('leaves'))occupied++;
+    if(b.name?.includes('leaves'))leaves++;
+  }
+  const ratio=known?occupied/known:null;
+  if(ratio!==null){if(densityMode==='third_person'&&ratio>=0.52)densityMode='first_person';
+   else if(densityMode==='first_person'&&ratio<=0.32)densityMode='third_person';}
+  log(profile.name,'spectator_density_audit',{agent_id:profile.id,
+   nearbyBlocksKnown:known,nearbyOccupied:occupied,nearbyLeaves:leaves,
+   occupancyRatio:ratio,cameraRecommendation:densityMode,
+   evidence:'mineflayer_local_block_cache',cameraApplied:false});
+ });
  let lastSample=0;
  bot.on('physicsTick',()=>{
    if(process.env.CRAFTLE_CAPTURE_TELEMETRY!=='1'||!bot.entity)return;
