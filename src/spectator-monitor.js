@@ -5,6 +5,7 @@ import net from 'node:net';
 import {readAgentTelemetry} from './spectator-telemetry.js';
 import {smoothDirectorPose} from './spectator-director.js';
 import {readEventAnnotations} from './spectator-annotations.js';
+import {readObservatoryEvents} from './spectator-observatory-data.js';
 
 export function cameraReachable({host='127.0.0.1',port=3000,timeoutMs=700}={}){
   return new Promise(resolve=>{
@@ -190,6 +191,11 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-agent.v1',...data}));
+    }else if(route==='/api/observatory/events'){
+      const events=telemetryRoot?readObservatoryEvents(telemetryRoot):[];
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({schema:'craftle.observatory-events.v1',source:'agent_jsonl_recent_window',
+        readOnly:true,events}));
     }else if(route==='/api/density'){
       let latest=null;
       if(telemetryRoot){
