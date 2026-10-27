@@ -3,11 +3,11 @@
 <title>Craftle Observatory · Offline Log Explorer</title>
 <style>
 :root{font-family:system-ui,Arial;color:#e5f0fb;background:#0c1420}*{box-sizing:border-box}body{margin:0}header{background:#142235;border-bottom:1px solid #30465f;padding:15px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:20px;margin:0}small{color:#9eb4cc}main{padding:20px;max-width:1450px;margin:auto}nav{display:flex;gap:7px;flex-wrap:wrap;margin:16px 0}button{padding:10px 14px;border:1px solid #3f5875;background:#1a3048;border-radius:9px;color:inherit;cursor:pointer}button[aria-selected=true]{background:#3275b6;border-color:#75bcff}button:focus-visible{outline:2px solid #8cceff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:13px}.card{border:1px solid #324860;border-radius:12px;background:#132238;padding:16px}.card h2{margin:0 0 12px;font-size:15px;color:#b8d5ee}.number{font-size:29px;font-weight:700}.caption{color:#9eb4cc;font-size:12px}canvas{width:100%;max-height:540px;background:#0b192b;border:1px solid #36516b;border-radius:10px}#panel{min-height:460px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #35475a;text-align:left;padding:8px}code{color:#a6ddff}input{max-width:100%}.notice{border-left:3px solid #edc175;padding:10px;color:#d9e8f8;background:#1c3046;margin:15px 0}ul{line-height:1.8}
-</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Fourteen views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
+</style></head><body><header><div><h1>◉ Craftle Observatory</h1><small>Eighteen views · local JSONL replay · observational data only</small></div><label>Load Turesla agent.log <input id="load" type="file" accept=".jsonl,.log,.txt"></label><span id="status">No file loaded</span></header>
 <main><div class="notice">Read-only explorer. Grid cells represent recorded positions, not terrain blocks or a genuine visual sensory image. File remains in your browser; nothing is uploaded.</div>
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
-const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview']];
+const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview'],['transitions','Action Transitions'],['reachability','Target Reachability'],['coverage','Exploration Coverage'],['inspector','Event Inspector']];
 let events=[],active='spatial';const panel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
@@ -146,6 +146,37 @@ function render(){
     card('Most selected actions','<table>'+top.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</table>')+
     card('Survival outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Successful consumption: '+byType('target_consumed').length+'</p><p>Rejected target actions: '+byType('target_action_rejected').length+'</p>')+
     card('Data provenance','<p>Source: manually loaded agent JSONL.</p><p>Observed events may be attempts or local-client observations, not server-authoritative confirmations. Recording a long continuous session does not guarantee complete pose coverage.</p>')+'</div>';
+ }else if(active==='transitions'){
+   const keys=['eat','explore','retreat','approach','harvest','attack'];
+   const category=a=>{const k=String(a??'unknown').split('_')[0];return keys.includes(k)?k:'other';};
+   const edges=new Map();let prev=null;for(const e of decisions){const now=category(e.action??e.skill);if(prev){const key=prev+' → '+now;edges.set(key,(edges.get(key)||0)+1);}prev=now;}
+   const top=[...edges].sort((a,b)=>b[1]-a[1]).slice(0,24);
+   panel.innerHTML='<div class="grid">'+card('Action transition matrix','<table><thead><tr><th>From → To</th><th>Count</th></tr></thead><tbody>'+top.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</tbody></table>')+
+    card('Loop diagnostics','<p>Consecutive explore → explore: '+(edges.get('explore → explore')||0)+'</p><p>Consecutive retreat → retreat: '+(edges.get('retreat → retreat')||0)+'</p><p class="caption">Counts are consecutive logged policy choices, not independent behavioral episodes.</p>')+'</div>';
+ }else if(active==='reachability'){
+   const exposures={};for(const e of decisions)for(const t of e.targets??[]){const kind=t.kind??'unknown';const item=exposures[kind]??={seen:0,reachable:0,visible:0};
+    item.seen++;if(t.reachable)item.reachable++;if(t.visible)item.visible++;
+   }
+   panel.innerHTML='<div class="grid">'+card('Target reachability by type','<table><thead><tr><th>Kind</th><th>Observed</th><th>Reachable</th><th>Visible</th></tr></thead><tbody>'+Object.entries(exposures).map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v.seen+'</td><td>'+v.reachable+'</td><td>'+v.visible+'</td></tr>').join('')+'</tbody></table>')+
+    card('Target rejection','<p>Rejected actions: '+byType('target_action_rejected').length+'</p><p>Observed harvest attempts: '+byType('target_harvest_attempt').length+'</p><p>Observed attack attempts: '+byType('target_attack_attempt').length+'</p><p class="caption">Reachability comes from the agent observation schema; it is not independently path-verified.</p>')+'</div>';
+ }else if(active==='coverage'){
+   const cellSet=new Set(),heights=new Map();const progress=[];
+   for(const e of positionEvents){const p=e.position,key=Math.floor(p.x/8)+','+Math.floor(p.z/8);cellSet.add(key);
+    const band=Math.floor(p.y/8)*8;heights.set(band,(heights.get(band)||0)+1);
+    if(progress.length===0||cellSet.size!==progress.at(-1).y)progress.push({y:cellSet.size});
+   }
+   const bands=[...heights].sort((a,b)=>a[0]-b[0]);
+   panel.innerHTML='<div class="grid">'+card('Unique area coverage','<div class="number">'+cellSet.size+'</div><p>Distinct 8×8 X/Z cells touched in logged samples</p><canvas id="coveragegraph" width="620" height="240"></canvas>')+
+    card('Height-band visitation','<table><thead><tr><th>Height band</th><th>Samples</th></tr></thead><tbody>'+bands.map(([y,n])=>'<tr><td>Y '+y+' to '+(y+7)+'</td><td>'+n+'</td></tr>').join('')+'</tbody></table><p class="caption">Height bands are not terrain classifications.</p>')+'</div>';
+   plot(document.getElementById('coveragegraph'),[{label:'Unique cells',color:'#8bdac3',points:downsample(progress)}],{zero:true});
+ }else if(active==='inspector'){
+   panel.innerHTML='<div class="grid">'+card('Search recorded events','<label for="event-filter">Filter by event type or text</label><p><input id="event-filter" type="search" placeholder="target_decision, noPath, death..." style="padding:10px;background:#0b192b;color:#fff;border:1px solid #547397;border-radius:7px;width:100%"></p><p class="caption">Newest 150 matching JSONL events; select a row for full recorded fields.</p><div id="matches"></div>')+
+   card('Selected record','<pre id="record" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">Select an event to inspect its recorded fields.</pre>')+'</div>';
+   const field=document.getElementById('event-filter'),matches=document.getElementById('matches'),record=document.getElementById('record');
+   function refresh(){const query=field.value.toLowerCase(),found=events.filter(e=>JSON.stringify(e).toLowerCase().includes(query)).slice(-150).reverse();
+    matches.innerHTML='<div style="max-height:420px;overflow:auto">'+found.map((e,i)=>'<button type="button" data-i="'+i+'" style="display:block;width:100%;text-align:left;margin-bottom:4px">'+safe(e.timestamp)+' · '+safe(e.type)+'</button>').join('')+'</div>';
+    matches.onclick=ev=>{const i=Number(ev.target.dataset.i);if(Number.isInteger(i)&&found[i])record.textContent=JSON.stringify(found[i],null,2);};
+   }field.oninput=refresh;refresh();
  }else{
  panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
  }
