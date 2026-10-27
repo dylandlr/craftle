@@ -101,9 +101,14 @@ for(const [index,profile] of activeProfiles.entries()){
   const ratio=known?occupied/known:null;
   if(ratio!==null){if(densityMode==='first_person'&&ratio>=0.52)densityMode='third_person';
    else if(densityMode==='third_person'&&ratio<=0.32)densityMode='first_person';}
+  const underfoot=bot.blockAt(bot.entity.position.offset(0,-0.3,0),false);
   log(profile.name,'spectator_density_audit',{agent_id:profile.id,
    nearbyBlocksKnown:known,nearbyOccupied:occupied,nearbyLeaves:leaves,
    occupancyRatio:ratio,cameraRecommendation:densityMode,
+   underfootBlock:underfoot?.name??null,
+   underfootKnown:!!underfoot,
+   worldAgeAnchor:lastWorldAge,
+   position:{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z},
    evidence:'mineflayer_local_block_cache',cameraApplied:false});
  });
  let lastSample=0;
