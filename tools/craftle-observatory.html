@@ -8,7 +8,7 @@
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
 const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview'],['transitions','Action Transitions'],['reachability','Target Reachability'],['coverage','Exploration Coverage'],['inspector','Event Inspector']];
-let events=[],active='spatial';const panel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
+let events=[],active='all';const rootPanel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
 const safe=s=>String(s??'—').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -54,41 +54,43 @@ function drawHeat(canvas,points){
 }
 function downsample(rows,limit=900){if(rows.length<=limit)return rows;const step=Math.ceil(rows.length/limit);return rows.filter((_,i)=>i%step===0||i===rows.length-1);}
 
-function render(){
+function render(view=active,panel=rootPanel){
+ if(view==='all'){renderAll();return;}
+ const selected=view;
  // All 18 dashboards can be displayed concurrently. Each panel has an
  // independent minimize control and remains visible by default.
- if(active==='all'){renderAll();return;}
+ if(selected==='all'){renderAll();return;}
 
  tabbar.innerHTML='<button id="all-views" type="button">✓ Show all views</button>'+tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="'+(id===active)+'">'+label+'</button>').join('');
  const actions=byType('target_action'),decisions=byType('target_decision'),transitions=byType('target_transition');
  const last=actions.at(-1)||{},decision=decisions.at(-1)||{},positionEvents=events.filter(e=>['pose_sample','target_action'].includes(e.type)&&e.position&&['x','y','z'].every(k=>Number.isFinite(e.position[k])));
  const positions=positionEvents.map(e=>e.position);const lastPos=positions.at(-1);
  const hist={};for(const e of decisions){const k=e.action??e.skill??'?';hist[k]=(hist[k]??0)+1;}
- if(active==='spatial'){
+ if(selected==='spatial'){
  panel.innerHTML='<div class="grid">'+card('Recorded XY route','<canvas id="map" width="520" height="520" aria-label="Top-down recorded movement track"></canvas><p class="caption">Uses logged X/Z positions. No synthetic terrain or unknown map.</p>')+
  card('Pose','<div class="number">'+(lastPos?['x','y','z'].map(k=>num(lastPos[k])).join(' / '):'—')+'</div><p>XYZ · blocks</p><p>Route samples: '+positions.length+'</p>')+
  card('Perception boundary','<p>The grid is a <b>spectator reconstruction</b>, not a map Turesla has learned. Height layers, leaf blocks and obstacles require additional instrumented block observations.</p>')+'</div>';
  drawGrid(document.getElementById('map'),positions.slice(-500));
- } else if(active==='perception'){
+ } else if(selected==='perception'){
  const f=decision.features||[],targets=decision.targets||[],mask=decision.mask||[];
  panel.innerHTML='<div class="grid">'+card('DQN feature vector','<p>Last recorded decision #'+safe(decision.decisionId)+'</p><table><tbody>'+f.map((x,i)=>'<tr><td>Feature '+i+'</td><td><code>'+num(x,3)+'</code></td></tr>').join('')+'</tbody></table>')+
  card('Visible structured targets','<table><thead><tr><th>Kind</th><th>Distance</th><th>Reachable</th></tr></thead><tbody>'+targets.map(t=>'<tr><td>'+safe(t.kind)+'</td><td>'+num(t.distance)+'</td><td>'+Boolean(t.reachable)+'</td></tr>').join('')+'</tbody></table><p class="caption">Reported by the Mineflayer perception schema, not inferred from video.</p>')+
  card('Action availability','<p>'+mask.filter(Boolean).length+' available / '+mask.length+' action slots</p><p class="caption">Features represent structured game state, not RGB input.</p>')+'</div>';
- } else if(active==='navigation'){
+ } else if(selected==='navigation'){
  const errors=byType('target_navigation_result'),stalls=byType('target_action_rejected');
  panel.innerHTML='<div class="grid">'+card('Movement','<div class="number">'+positions.length+'</div><p>Recorded position samples</p>')+
  card('Navigation errors','<div class="number">'+errors.filter(e=>e.status==='noPath').length+'</div><p>No-path events</p><p>'+stalls.length+' rejected actions</p>')+
  card('Vertical travel','<div class="number">'+(positions.length?num(Math.min(...positions.map(p=>p.y)))+' → '+num(Math.max(...positions.map(p=>p.y))):'—')+'</div><p>Observed Y range</p><p class="caption">Height does not prove that movement took place on leaves.</p>')+'</div>';
- }else if(active==='learning'){
+ }else if(selected==='learning'){
  const sum=transitions.reduce((v,e)=>v+(Number.isFinite(e.reward)?e.reward:0),0);
  panel.innerHTML='<div class="grid">'+card('DQN transitions','<div class="number">'+transitions.length+'</div>')+
  card('Recorded reward total','<div class="number">'+num(sum,2)+'</div><p class="caption">Sum of logged transition rewards, not independently verified success.</p>')+
  card('Decision distribution','<table>'+Object.entries(hist).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</table>')+'</div>';
- }else if(active==='survival'){
+ }else if(selected==='survival'){
  panel.innerHTML='<div class="grid">'+card('Health and hunger','<div class="number">'+safe(last.health)+' HP</div><p>'+safe(last.food)+' hunger</p>')+
  card('Outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Verified food recovery: '+byType('target_verified_recovery').length+'</p><p>Consumed: '+byType('target_consumed').length+'</p>')+
  card('Attempts ≠ successes','<p>Attack attempts: '+byType('target_attack_attempt').length+'</p><p>Harvest attempts: '+byType('target_harvest_attempt').length+'</p><p class="caption">Client-reported attempts do not establish server-confirmed outcomes.</p>')+'</div>';
- }else if(active==='charts'){
+ }else if(selected==='charts'){
   const rewards=downsample(transitions.filter(e=>Number.isFinite(e.reward)));
   const vitals=downsample(actions.filter(e=>Number.isFinite(e.health)||Number.isFinite(e.food)));
   const elevation=downsample(positionEvents.filter(e=>Number.isFinite(e.position.y)));
@@ -99,17 +101,17 @@ function render(){
   plot(document.getElementById('rewardgraph'),[{label:'Reward',color:'#86c9ff',points:rewards.map(e=>({y:e.reward}))}],{zero:true});
   plot(document.getElementById('vitalsgraph'),[{label:'Health',color:'#f68a90',points:vitals.filter(e=>Number.isFinite(e.health)).map(e=>({y:e.health}))},{label:'Hunger',color:'#ecc27f',points:vitals.filter(e=>Number.isFinite(e.food)).map(e=>({y:e.food}))}],{min:0,max:20});
   plot(document.getElementById('heightgraph'),[{label:'Y elevation',color:'#7dd5b0',points:elevation.map(e=>({y:e.position.y}))}]);
- }else if(active==='heatmap'){
+ }else if(selected==='heatmap'){
   panel.innerHTML='<div class="grid">'+card('Spatial visitation heatmap','<canvas id="visitmap" width="620" height="520"></canvas><p class="caption">8×8-block bins based on recorded positions only. Empty does not mean inaccessible; brighter means more samples.</p>')+
   card('What this can tell us','<p>Repeated treetop routes will form bright corridors if matching positions were logged.</p><p>It cannot identify trees without actual block observations or video frames.</p><p>Samples: '+positions.length+'</p>')+'</div>';
   drawHeat(document.getElementById('visitmap'),positions);
- }else if(active==='compare'){
+ }else if(selected==='compare'){
   const total=decisions.length,choices=Object.entries(hist).sort((a,b)=>b[1]-a[1]);
   const rejected=byType('target_action_rejected').length;
   panel.innerHTML='<div class="grid">'+card('Policy choice mix','<table><thead><tr><th>Action</th><th>Count</th><th>Share</th></tr></thead><tbody>'+choices.map(([k,n])=>'<tr><td>'+safe(k)+'</td><td>'+n+'</td><td>'+num(100*n/Math.max(1,total),1)+'%</td></tr>').join('')+'</tbody></table>')+
    card('Opportunity vs choice','<p>Decisions with ≥1 candidate: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length>0).length+'</p><p>Decisions without candidates: '+decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length===0).length+'</p><p>Rejected target actions: '+rejected+'</p><p class="caption">This is descriptive. It does not reconstruct Q-values or causal alternatives.</p>')+
    card('Research caution','<p>Repeated exploration could be due to target scarcity, action masking, reward incentives, or pathfinding constraints. Compare accepted actions and actual targets before attributing the behavior to learning.</p>')+'</div>';
- }else if(active==='efficiency'){
+ }else if(selected==='efficiency'){
    const samples=positionEvents;
    let length=0,up=0,down=0,stalls=0;const speed=[];
    for(let i=1;i<samples.length;i++){const a=samples[i-1],b=samples[i],p=a.position,q=b.position;
@@ -121,7 +123,7 @@ function render(){
     card('Vertical movement','<div class="number">+'+num(up)+' / -'+num(down)+'</div><p>Climb / descent blocks observed</p><p>Near-stationary intervals: '+stalls+'</p>')+
     card('Movement rate','<canvas id="speedgraph" width="620" height="260"></canvas><p class="caption">Consecutive pose or action samples with gaps under 30 seconds.</p>')+'</div>';
    plot(document.getElementById('speedgraph'),[{label:'Blocks / second',color:'#7dd5b0',points:downsample(speed)}],{zero:true});
- }else if(active==='opportunities'){
+ }else if(selected==='opportunities'){
    const withTargets=decisions.filter(e=>Array.isArray(e.targets)&&e.targets.length);
    const types={};for(const e of withTargets)for(const t of e.targets){types[t.kind]=(types[t.kind]||0)+1;}
    const unused=withTargets.filter(e=>['explore','retreat'].includes(e.action));
@@ -129,12 +131,12 @@ function render(){
    panel.innerHTML='<div class="grid">'+card('Detected opportunities','<div class="number">'+withTargets.length+'</div><p>Decisions with candidate targets</p><p>'+unused.length+' chose explore/retreat despite candidate presence</p>')+
     card('Target exposures','<table><thead><tr><th>Type</th><th>Observations</th></tr></thead><tbody>'+table.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</tbody></table><p class="caption">Target appearances per decision, not distinct persistent entities.</p>')+
     card('Opportunity interpretation','<p>Candidate presence does not prove reachability, safety, or availability of an unmasked skill. Inspect the original action masks for each decision before judging avoidance.</p>')+'</div>';
- }else if(active==='mortality'){
+ }else if(selected==='mortality'){
    const deaths=byType('death_screen_observed'),terminal=byType('target_terminal');
    const deathRows=deaths.map(d=>{const t=Date.parse(d.timestamp),previous=actions.filter(a=>Date.parse(a.timestamp)<=t).at(-1);return {d,previous};});
    panel.innerHTML='<div class="grid">'+card('Deaths recorded','<div class="number">'+deaths.length+'</div><p>Terminal rewards: '+terminal.length+'</p>')+
    card('Pre-death observations','<table><thead><tr><th>Time</th><th>Last HP</th><th>Last hunger</th><th>Previous action</th></tr></thead><tbody>'+deathRows.slice(-40).reverse().map(({d,previous})=>'<tr><td>'+safe(d.timestamp)+'</td><td>'+safe(previous?.health)+'</td><td>'+safe(previous?.food)+'</td><td>'+safe(previous?.skill??previous?.action)+'</td></tr>').join('')+'</tbody></table><p class="caption">Previous action is temporally nearby, not an established cause of death.</p>')+'</div>';
- }else if(active==='rewards'){
+ }else if(selected==='rewards'){
    const rewardEvents=byType('target_reward_components');const types=['novelty','inventoryProgress','movement'];
    const sums=Object.fromEntries(types.map(k=>[k,rewardEvents.reduce((a,e)=>a+(Number.isFinite(e[k])?e[k]:0),0)]));
    const min=transitions.reduce((x,e)=>Number.isFinite(e.reward)?Math.min(x,e.reward):x,Infinity);
@@ -142,7 +144,7 @@ function render(){
    panel.innerHTML='<div class="grid">'+card('Reward distribution','<div class="number">'+transitions.length+'</div><p>Minimum: '+(Number.isFinite(min)?num(min,3):'—')+'</p><p>Maximum: '+(Number.isFinite(max)?num(max,3):'—')+'</p>')+
     card('Reward component sums','<table>'+types.map(k=>'<tr><td>'+safe(k)+'</td><td>'+num(sums[k],3)+'</td></tr>').join('')+'</table><p class="caption">Only appears if reward-version component events were logged. These sums do not account for every penalty or terminal transition.</p>')+
     card('Outcome evidence','<p>Verified recovery: '+byType('target_verified_recovery').length+'</p><p>Observed food inventory gain: '+byType('food_sequence_inventory_gain').length+'</p><p>Death events: '+byType('death_screen_observed').length+'</p>')+'</div>';
- }else if(active==='overview'){
+ }else if(selected==='overview'){
    const timestamps=events.map(e=>Date.parse(e.timestamp)).filter(Number.isFinite),start=timestamps.length?Math.min(...timestamps):null,end=timestamps.length?Math.max(...timestamps):null;
    const duration=start!==null?Math.max(0,(end-start)/60000):null;
    const top=Object.entries(hist).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -150,20 +152,20 @@ function render(){
     card('Most selected actions','<table>'+top.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</table>')+
     card('Survival outcomes','<p>Deaths: '+byType('death_screen_observed').length+'</p><p>Successful consumption: '+byType('target_consumed').length+'</p><p>Rejected target actions: '+byType('target_action_rejected').length+'</p>')+
     card('Data provenance','<p>Source: manually loaded agent JSONL.</p><p>Observed events may be attempts or local-client observations, not server-authoritative confirmations. Recording a long continuous session does not guarantee complete pose coverage.</p>')+'</div>';
- }else if(active==='transitions'){
+ }else if(selected==='transitions'){
    const keys=['eat','explore','retreat','approach','harvest','attack'];
    const category=a=>{const k=String(a??'unknown').split('_')[0];return keys.includes(k)?k:'other';};
    const edges=new Map();let prev=null;for(const e of decisions){const now=category(e.action??e.skill);if(prev){const key=prev+' → '+now;edges.set(key,(edges.get(key)||0)+1);}prev=now;}
    const top=[...edges].sort((a,b)=>b[1]-a[1]).slice(0,24);
    panel.innerHTML='<div class="grid">'+card('Action transition matrix','<table><thead><tr><th>From → To</th><th>Count</th></tr></thead><tbody>'+top.map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v+'</td></tr>').join('')+'</tbody></table>')+
     card('Loop diagnostics','<p>Consecutive explore → explore: '+(edges.get('explore → explore')||0)+'</p><p>Consecutive retreat → retreat: '+(edges.get('retreat → retreat')||0)+'</p><p class="caption">Counts are consecutive logged policy choices, not independent behavioral episodes.</p>')+'</div>';
- }else if(active==='reachability'){
+ }else if(selected==='reachability'){
    const exposures={};for(const e of decisions)for(const t of e.targets??[]){const kind=t.kind??'unknown';const item=exposures[kind]??={seen:0,reachable:0,visible:0};
     item.seen++;if(t.reachable)item.reachable++;if(t.visible)item.visible++;
    }
    panel.innerHTML='<div class="grid">'+card('Target reachability by type','<table><thead><tr><th>Kind</th><th>Observed</th><th>Reachable</th><th>Visible</th></tr></thead><tbody>'+Object.entries(exposures).map(([k,v])=>'<tr><td>'+safe(k)+'</td><td>'+v.seen+'</td><td>'+v.reachable+'</td><td>'+v.visible+'</td></tr>').join('')+'</tbody></table>')+
     card('Target rejection','<p>Rejected actions: '+byType('target_action_rejected').length+'</p><p>Observed harvest attempts: '+byType('target_harvest_attempt').length+'</p><p>Observed attack attempts: '+byType('target_attack_attempt').length+'</p><p class="caption">Reachability comes from the agent observation schema; it is not independently path-verified.</p>')+'</div>';
- }else if(active==='coverage'){
+ }else if(selected==='coverage'){
    const cellSet=new Set(),heights=new Map();const progress=[];
    for(const e of positionEvents){const p=e.position,key=Math.floor(p.x/8)+','+Math.floor(p.z/8);cellSet.add(key);
     const band=Math.floor(p.y/8)*8;heights.set(band,(heights.get(band)||0)+1);
@@ -173,7 +175,7 @@ function render(){
    panel.innerHTML='<div class="grid">'+card('Unique area coverage','<div class="number">'+cellSet.size+'</div><p>Distinct 8×8 X/Z cells touched in logged samples</p><canvas id="coveragegraph" width="620" height="240"></canvas>')+
     card('Height-band visitation','<table><thead><tr><th>Height band</th><th>Samples</th></tr></thead><tbody>'+bands.map(([y,n])=>'<tr><td>Y '+y+' to '+(y+7)+'</td><td>'+n+'</td></tr>').join('')+'</tbody></table><p class="caption">Height bands are not terrain classifications.</p>')+'</div>';
    plot(document.getElementById('coveragegraph'),[{label:'Unique cells',color:'#8bdac3',points:downsample(progress)}],{zero:true});
- }else if(active==='inspector'){
+ }else if(selected==='inspector'){
    panel.innerHTML='<div class="grid">'+card('Search recorded events','<label for="event-filter">Filter by event type or text</label><p><input id="event-filter" type="search" placeholder="target_decision, noPath, death..." style="padding:10px;background:#0b192b;color:#fff;border:1px solid #547397;border-radius:7px;width:100%"></p><p class="caption">Newest 150 matching JSONL events; select a row for full recorded fields.</p><div id="matches"></div>')+
    card('Selected record','<pre id="record" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">Select an event to inspect its recorded fields.</pre>')+'</div>';
    const field=document.getElementById('event-filter'),matches=document.getElementById('matches'),record=document.getElementById('record');
@@ -185,38 +187,23 @@ function render(){
  panel.innerHTML=card('Event timeline · newest first','<table><thead><tr><th>Timestamp</th><th>Type</th><th>Decision</th><th>Action</th></tr></thead><tbody>'+events.slice(-120).reverse().map(e=>'<tr><td>'+safe(e.timestamp)+'</td><td>'+safe(e.type)+'</td><td>'+safe(e.decisionId)+'</td><td>'+safe(e.action??e.skill??e.status)+'</td></tr>').join('')+'</tbody></table>');
  }
 }
-let showAll=false;
+function renderAll(){
+ tabbar.innerHTML='<button data-tab="all" aria-selected="true">All 18 panels</button>'+
+  tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="false">'+label+'</button>').join('');
+ rootPanel.innerHTML='<div class="grid">'+tabs.map(([id,label])=>
+  '<section class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+  '<h2 style="margin:0">'+label+'</h2><button type="button" data-collapse="'+id+'" aria-expanded="true" title="Minimize or expand">×</button></div>'+
+  '<div style="margin-top:10px" id="view-'+id+'"></div></section>').join('')+'</div>';
+ for(const [id] of tabs){const mount=document.getElementById('view-'+id);render(id,mount);}
+}
 document.addEventListener('click',e=>{
- const toggle=e.target.closest('[data-collapse]');
- if(!toggle)return;
- const id=toggle.dataset.collapse;
- const section=document.getElementById('panel-'+id);
- if(!section)return;
- const hidden=section.hidden;section.hidden=!hidden;
- toggle.textContent=hidden?'× Minimize':'✓ Expand';
- toggle.setAttribute('aria-expanded',String(hidden));
+ const toggle=e.target.closest('[data-collapse]');if(!toggle)return;
+ const section=document.getElementById('view-'+toggle.dataset.collapse);if(!section)return;
+ section.hidden=!section.hidden;
+ toggle.textContent=section.hidden?'✓':'×';
+ toggle.setAttribute('aria-expanded',String(!section.hidden));
 });
-tabbar.onclick=e=>{
- if(e.target.id==='all-views'){
-  const shown=document.getElementById('all-views-content');
-  if(shown){shown.remove();e.target.textContent='✓ Show all views';return;}
-  const block=document.createElement('div');block.id='all-views-content';block.className='grid';
-  for(const [id,label] of tabs){
-   const card=document.createElement('section');card.className='card';
-   const heading=document.createElement('div');heading.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px';
-   const h=document.createElement('h2');h.textContent=label;h.style.margin='0';
-   const btn=document.createElement('button');btn.textContent='×';btn.title='Minimize '+label;
-   const content=document.createElement('div');content.style.marginTop='12px';
-   btn.onclick=()=>{content.hidden=!content.hidden;btn.textContent=content.hidden?'✓':'×';};
-   heading.append(h,btn);card.append(heading,content);
-   const open=document.createElement('button');open.textContent='Open '+label;open.onclick=()=>{block.remove();active=id;render();};
-   content.append(open);block.append(card);
-  }
-  document.querySelector('main').append(block);e.target.textContent='× Hide all views';
-  return;
- }
- const id=e.target.dataset.tab;if(id){active=id;render();}
-};
+tabbar.onclick=e=>{const id=e.target.dataset.tab;if(id){active=id;render();}};
 document.getElementById('load').onchange=async e=>{
  const f=e.target.files?.[0];if(!f)return;
  const content=await f.text();const parsed=[];
