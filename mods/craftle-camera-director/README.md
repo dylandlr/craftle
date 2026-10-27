@@ -1,3 +1,9 @@
+## Native in-game research HUD (experimental)
+
+After installing the rebuilt Fabric mod, **F9** toggles a compact six-line native HUD overlay. It displays health/hunger, active DQN decision, reward and training updates, block beneath the agent, navigation result and visible target count. The UI polls the local filming monitor's `/api/hud/state` once per second and indicates stale data. It is available only when connected to the isolated `127.0.0.1:25575` server and cannot issue commands to Turesla. **F8** independently controls the POV switch. This is a first compact native overlay, not the previously envisioned fully collapsible six-panel HUD.
+
+**Build/validation status:** the Java source has been committed, but no successful local Fabric compilation or Windows gameplay test has been observed in this conversation. A successful GitHub Actions artifact build and a live filming-client test are needed before asserting full compatibility.
+
 ## Procedural citizen appearances (identity layer v1)
 
 Every Craftle citizen uses `mode: random` by default. The appearance is generated deterministically from world seed + citizen ID + generation and persisted; reconnecting or restarting does **not** reroll the citizen's face, clothing or model. Cosmetic attributes are independent of personality, genes, learned policy and survival reward. For multi-agent populations, allocate a unique citizen ID per individual and generate each identity once.
@@ -18,7 +24,7 @@ After updating and rebuilding the filming agent, the preview skin can be downloa
 
 # Craftle Native Camera Director (Minecraft Fabric 1.21.1)
 
-Optional **client-only** filming mod. It changes **only the native camera perspective** while the camera player is connected to the dedicated Craftle filming server `127.0.0.1:25575`. It never connects to the Minecraft game protocol or commands the learning agent. The production `25565` server, all other servers and Flashback replays are excluded.
+Optional **client-only** filming mod. It changes the native camera perspective and draws a read-only research HUD while the camera player is connected to the dedicated Craftle filming server `127.0.0.1:25575`. It never connects to the Minecraft game protocol or commands the learning agent. The production `25565` server, all other servers and Flashback replays are excluded.
 
 ## Behavior
 
