@@ -189,6 +189,33 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       if(telemetryRoot)try{data=readAgentTelemetry(telemetryRoot);}catch{}
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-agent.v1',...data}));
+    }else if(route==='/api/density'){
+      let latest=null;
+      if(telemetryRoot){
+        try{
+          const name=new URL('file://'+(telemetryRoot.endsWith('/')?telemetryRoot:telemetryRoot+'/')+'continuous/agent.log');
+          const fd=fs.openSync(name,'r');
+          try{
+            const size=fs.fstatSync(fd).size,length=Math.min(size,512*1024);
+            const buf=Buffer.alloc(length);fs.readSync(fd,buf,0,length,size-length);
+            const data=buf.toString('utf8');
+            for(const line of data.split('\\n').reverse()){
+              if(!line.startsWith('{"timestamp":'))continue;
+              try{
+                const e=JSON.parse(line);
+                if(e.type==='spectator_density_audit'&&Number.isFinite(e.occupancyRatio)){
+                  latest={timestamp:e.timestamp,occupancyRatio:e.occupancyRatio,
+                    known:e.nearbyBlocksKnown,occupied:e.nearbyOccupied,leaves:e.nearbyLeaves,
+                    cameraRecommendation:e.cameraRecommendation,cameraApplied:false,source:'mineflayer_block_cache'};
+                  break;
+                }
+              }catch{}
+            }
+          }finally{fs.closeSync(fd);}
+        }catch{}
+      }
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({schema:'craftle.filming-density.v1',available:!!latest,density:latest,readOnly:true}));
     }else if(route==='/api/annotations'){
       const events=telemetryRoot?readEventAnnotations(telemetryRoot):[];
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
