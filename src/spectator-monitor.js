@@ -199,7 +199,8 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       res.end(JSON.stringify({schema:'craftle.observatory-events.v1',source:'agent_jsonl_recent_window',
         readOnly:true,events}));
     }else if(route==='/api/density'){
-      let latest=null;
+      let latest=null,reason='no_density_events_in_recent_log';
+      if(!telemetryRoot)reason='telemetry_root_missing';
       if(telemetryRoot){
         try{
           const name=path.join(telemetryRoot,'continuous','agent.log');
@@ -212,19 +213,23 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
               if(!line.startsWith('{"timestamp":'))continue;
               try{
                 const e=JSON.parse(line);
-                if(e.type==='spectator_density_audit'&&Number.isFinite(e.occupancyRatio)){
-                  latest={timestamp:e.timestamp,occupancyRatio:e.occupancyRatio,
+                if(e.type==='spectator_density_audit'){
+                  latest={timestamp:e.timestamp,occupancyRatio:Number.isFinite(e.occupancyRatio)?e.occupancyRatio:null,
                     known:e.nearbyBlocksKnown,occupied:e.nearbyOccupied,leaves:e.nearbyLeaves,
                     cameraRecommendation:e.cameraRecommendation,cameraApplied:false,source:'mineflayer_block_cache'};
+                  reason=latest.occupancyRatio===null?'no_loaded_blocks_for_density':'ok';
                   break;
                 }
               }catch{}
             }
           }finally{fs.closeSync(fd);}
-        }catch{}
+        }catch(error){reason='density_log_unreadable';}
       }
+      const ageMs=latest?Date.now()-Date.parse(latest.timestamp):null;
+      if(latest&&Number.isFinite(ageMs)&&ageMs>10000)reason='density_sample_stale';
+      const available=!!latest&&Number.isFinite(latest.occupancyRatio)&&Number.isFinite(ageMs)&&ageMs>=-30000&&ageMs<=10000;
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
-      res.end(JSON.stringify({schema:'craftle.filming-density.v1',available:!!latest,density:latest,readOnly:true}));
+      res.end(JSON.stringify({schema:'craftle.filming-density.v1',available,density:latest,ageMs,reason,readOnly:true}));
     }else if(route==='/api/annotations'){
       const events=telemetryRoot?readEventAnnotations(telemetryRoot):[];
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
