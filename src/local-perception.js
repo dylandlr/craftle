@@ -9,7 +9,7 @@ export function observeLocalPerception(bot,{radius=3,vertical=2,maxEntities=24}=
  const blocks=[],counts={known:0,unknown:0,solid:0,air:0,liquid:0,leaves:0,other:0};
  for(let dy=-vertical;dy<=vertical;dy++)for(let dz=-radius;dz<=radius;dz++)for(let dx=-radius;dx<=radius;dx++){
   let b=null;
-  try{b=bot.blockAt?.({x:origin.x+dx,y:origin.y+dy,z:origin.z+dz},false)??null;}catch{}
+  try{b=bot.blockAt?.(p.offset(origin.x+dx-p.x,origin.y+dy-p.y,origin.z+dz-p.z),false)??null;}catch{}
   let type='unknown';
   if(b){
    counts.known++;
