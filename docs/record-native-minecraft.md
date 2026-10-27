@@ -1,3 +1,15 @@
+## Fourteen-view research dashboard
+
+The local `tools/craftle-observatory.html` now has 14 views (six original + Charts, Heatmap, Decision Analysis + Movement Efficiency, Opportunities, Death Analysis, Reward Diagnostics, Session Overview). The five newest panels report:
+
+- **Movement efficiency:** logged path length versus net displacement, vertical climbing and descent, sampled velocity.
+- **Opportunities:** number of decision instants with food/animal/plant targets, target-category exposures, explore/retreat choices despite candidates.
+- **Death analysis:** death timestamps, previous observed health/hunger and last action; temporal adjacency is **not** causal attribution.
+- **Reward diagnostics:** logged reward range, sums of available v2 component events, observed survival outcomes.
+- **Session overview:** observed event count, duration, top actions, source/provenance limitations.
+
+The views read only a user-selected local JSONL log; they do not have network access, send Minecraft commands or change learner behavior. Missing observations are shown as absent, not generated. Significant future work remains: truly synchronized video playback, camera HUD integration, Q-value capture and block-underfoot instrumentation to verify treetop movement.
+
 ## Nine-view offline observatory
 
 `tools/craftle-observatory.html` now offers nine tabs: Spatial Grid, Actual Inputs, Navigation, Learning, Survival, Timeline, Charts, Heatmap and Decision Analysis. New plots show logged transition rewards, health/hunger series, vertical elevation, 8-block spatial visit frequency and policy action distribution. All charts are computed locally in the browser from an explicitly loaded `agent.log`, without contacting the Minecraft server.
