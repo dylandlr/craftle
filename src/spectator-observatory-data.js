@@ -5,6 +5,7 @@ import path from 'node:path';
 const TYPES=new Set([
  'target_decision','target_action','target_transition','target_reward_components',
  'target_navigation_goal','target_navigation_result','target_navigation_stall',
+ 'connected_navigation_recovery','connected_exploration_audit',
  'target_action_rejected','target_runtime_error','target_terminal',
  'target_attack_attempt','target_harvest_attempt','target_consumed',
  'target_verified_recovery','food_sequence_inventory_gain',
