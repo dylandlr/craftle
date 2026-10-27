@@ -1,3 +1,16 @@
+## Return to spectator follow after reconnecting
+
+The optional `follow` watchdog now checks whether `dyl_is_here` is connected. On a new connection, it issues `gamemode spectator dyl_is_here`, then `spectate Turesla dyl_is_here`. It also recovers after Turesla death/respawn. It does not control the learning agent and only operates on the separate filming server. There can be a delay of one polling interval (6 seconds by default) and the camera may briefly detach while the target respawns.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME = "dyl_is_here"
+docker compose -f deploy/filming/compose.yml --profile follow up -d --force-recreate follow
+docker compose -f deploy/filming/compose.yml --profile follow logs -f follow
+```
+
+Look for `filming_camera_reconnected`, `filming_camera_spectator_mode` and `filming_follow_attempt`. Stop the optional follow service when you want manual spectator freecam without automatic reattachment.
+
 ## Fourteen-view research dashboard
 
 The local `tools/craftle-observatory.html` now has 14 views (six original + Charts, Heatmap, Decision Analysis + Movement Efficiency, Opportunities, Death Analysis, Reward Diagnostics, Session Overview). The five newest panels report:
