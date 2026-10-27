@@ -8,7 +8,7 @@
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
 const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview'],['transitions','Action Transitions'],['reachability','Target Reachability'],['coverage','Exploration Coverage'],['inspector','Event Inspector']];
-let events=[],active='all';const rootPanel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
+let events=[],active='all',manualFile=false,liveFingerprint='';const rootPanel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
 const safe=s=>String(s??'—').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -204,7 +204,22 @@ document.getElementById('load').onchange=async e=>{
  const f=e.target.files?.[0];if(!f)return;
  const content=await f.text();const parsed=[];
  for(const line of content.split(/\r?\n/)){try{const x=JSON.parse(line);if(x&&typeof x.type==='string')parsed.push(x);}catch{}}
- events=parsed;document.getElementById('status').textContent=events.length.toLocaleString()+' events loaded';render();
+ manualFile=true;events=parsed;document.getElementById('status').textContent=events.length.toLocaleString()+' local-file events loaded';render();
 };
-render();
+async function pollLive(){
+ if(manualFile||window.location.protocol==='file:')return;
+ try{
+  const reply=await fetch('/api/observatory/events',{cache:'no-store'});
+  if(!reply.ok)return;
+  const payload=await reply.json();
+  if(!Array.isArray(payload.events))return;
+  const last=payload.events.at(-1);
+  const fingerprint=payload.events.length+'|'+(last?.timestamp??'')+'|'+(last?.type??'');
+  if(fingerprint===liveFingerprint)return;
+  liveFingerprint=fingerprint;events=payload.events;
+  document.getElementById('status').textContent=events.length.toLocaleString()+' recent live events (rolling window)';
+  render();
+ }catch{}
+}
+render();void pollLive();setInterval(()=>void pollLive(),5000);
 </script></body></html>
