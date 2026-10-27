@@ -1,3 +1,16 @@
+## Native in-game spectator HUD (filming only)
+
+The optional `hud` service renders a **private actionbar** in the real Java client's HUD, sourced exclusively from the filming agent's JSONL log. It shows the latest action/decision ID, health, hunger, XYZ, last observed reward and learner update count. The service uses only `title dyl_is_here actionbar <json>` over filming-server RCON: it does **not** create a scoreboard, mutate the learner, broadcast chat, or send telemetry to Turesla. Values may show `?` until a fresh event arrives, and stale action telemetry is labeled.
+
+```powershell
+git pull origin main
+$env:CRAFTLE_CAMERA_USERNAME="dyl_is_here"
+docker compose -f deploy/filming/compose.yml --profile hud up -d hud
+docker compose -f deploy/filming/compose.yml --profile hud logs --tail 30 hud
+```
+
+Run with follow and commentary services using `--profile hud --profile follow --profile commentary up -d hud follow commentary`. This service is **optional** and runs only on the copy of the world on port 25575. Stop it with `docker compose -f deploy/filming/compose.yml --profile hud stop hud`. The actionbar appears above the hotbar and is intentionally compact; it is **not** a fully customizable client-side graphical overlay. Its visibility in exported Flashback replay video depends on Flashback's HUD/render settings; record a short test export to validate before a multi-hour filming session.
+
 ## Verbose commentary and diagnosing treetop wandering
 
 The filming-only commentator now sends more informative messages to the configured camera player `dyl_is_here`: DQN decision ID, choice, available action mask count, detected target count, skill failures, pathfinding failures, substantial rewards, and a periodic position/vitals/reward summary. This uses a targeted `tellraw dyl_is_here` command (no global broadcast) from a separate observer tool. Turesla's current targeted DQN cannot press Tab or issue chat commands, and the commentary service does not inject messages into its policy. Keep this service restricted to the filming world because vanilla chat events and RCON still add some server workload.
