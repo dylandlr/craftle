@@ -8,7 +8,7 @@
 <nav id="tabs"></nav><section id="panel" aria-live="polite"></section></main>
 <script>
 const tabs=[['spatial','Spatial Grid'],['perception','Actual Inputs'],['navigation','Navigation'],['learning','Learning'],['survival','Survival'],['timeline','Timeline'],['charts','Charts'],['heatmap','Heatmap'],['compare','Decision Analysis'],['efficiency','Movement Efficiency'],['opportunities','Opportunities'],['mortality','Death Analysis'],['rewards','Reward Diagnostics'],['overview','Session Overview'],['transitions','Action Transitions'],['reachability','Target Reachability'],['coverage','Exploration Coverage'],['inspector','Event Inspector']];
-let events=[],active='all',manualFile=false,liveFingerprint='';const rootPanel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
+let events=[],active='all',manualFile=false,liveFingerprint='',collapsedViews=new Set();const rootPanel=document.getElementById('panel'),tabbar=document.getElementById('tabs');
 const byType=t=>events.filter(e=>e.type===t);
 const num=(x,n=1)=>Number.isFinite(x)?x.toFixed(n):'—';
 const safe=s=>String(s??'—').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -188,14 +188,15 @@ function renderAll(){
   tabs.map(([id,label])=>'<button data-tab="'+id+'" aria-selected="false">'+label+'</button>').join('');
  rootPanel.innerHTML='<div class="grid">'+tabs.map(([id,label])=>
   '<section class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
-  '<h2 style="margin:0">'+label+'</h2><button type="button" data-collapse="'+id+'" aria-expanded="true" title="Minimize or expand">×</button></div>'+
-  '<div style="margin-top:10px" id="view-'+id+'"></div></section>').join('')+'</div>';
+  '<h2 style="margin:0">'+label+'</h2><button type="button" data-collapse="'+id+'" aria-expanded="'+(!collapsedViews.has(id))+'" title="Minimize or expand">'+(collapsedViews.has(id)?'✓':'×')+'</button></div>'+
+  '<div style="margin-top:10px" id="view-'+id+'"'+(collapsedViews.has(id)?' hidden':'')+'></div></section>').join('')+'</div>';
  for(const [id] of tabs){const mount=document.getElementById('view-'+id);render(id,mount);}
 }
 document.addEventListener('click',e=>{
  const toggle=e.target.closest('[data-collapse]');if(!toggle)return;
  const section=document.getElementById('view-'+toggle.dataset.collapse);if(!section)return;
  section.hidden=!section.hidden;
+ if(section.hidden)collapsedViews.add(toggle.dataset.collapse);else collapsedViews.delete(toggle.dataset.collapse);
  toggle.textContent=section.hidden?'✓':'×';
  toggle.setAttribute('aria-expanded',String(!section.hidden));
 });
