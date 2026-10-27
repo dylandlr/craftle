@@ -111,6 +111,25 @@ for(const [index,profile] of activeProfiles.entries()){
    position:{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z},
    evidence:'mineflayer_local_block_cache',cameraApplied:false});
  });
+ // Opt-in fine-grained tick trace. This is a physical state snapshot, not a DQN decision.
+ // Set only for short isolated experiments: ~20 events/second, significant log volume.
+ let physicsTickSerial=0;
+ bot.on('physicsTick',()=>{
+   if(process.env.CRAFTLE_TICK_TRACE!=='1'||!bot.entity)return;
+   physicsTickSerial++;
+   const p=bot.entity.position,v=bot.entity.velocity;
+   const below=bot.blockAt(p.offset(0,-0.25,0),false);
+   const controls={};
+   for(const key of ['forward','back','left','right','jump','sprint','sneak'])
+     controls[key]=Boolean(bot.getControlState?.(key));
+   log(profile.name,'physics_tick_trace_v1',{
+     agent_id:profile.id,physicsTickSerial,worldAgeAnchor:lastWorldAge,
+     position:{x:p.x,y:p.y,z:p.z},velocity:v?{x:v.x,y:v.y,z:v.z}:null,
+     yaw:bot.entity.yaw,pitch:bot.entity.pitch,onGround:bot.entity.onGround??null,
+     underfootBlock:below?.name??null,health:bot.health,food:bot.food,
+     controls,source:'mineflayer_physics_tick_local_state',
+     policyDecision:false});
+ });
  let lastSample=0;
  bot.on('physicsTick',()=>{
    if(process.env.CRAFTLE_CAPTURE_TELEMETRY!=='1'||!bot.entity)return;
