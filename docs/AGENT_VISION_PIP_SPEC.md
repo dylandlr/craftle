@@ -23,3 +23,23 @@ While a human spectator flies a free camera in the filming Minecraft client, a l
 
 ## Status
 Specification only. Existing F7 yaw/pitch reticle is **not** this visual feature. Existing Prismarine Viewer camera is **not** a verified second render in the native Fabric HUD. Do not describe either as a functioning Agent Vision PIP.
+
+## Approved visual reference and implementation plan (2026-10-28)
+The user approved the high-density cyan-on-dark research dashboard concept: dominant live spectator canvas, large yellow-accented first-person POV upper right, 3D voxel grids, FOV cone, object detection rectangles with spatial connectors, top and side projections, depth and segmentation views, bottom controls and agent status. Match the visual hierarchy and panel proportions, not just the feature names.
+
+### Implemented UI shell
+`/vision` serves `tools/craftle-vision-dashboard.html`, which can show the existing Prismarine Viewer spectator iframe and read-only `/api/hud/state` values including head yaw/pitch. The frustum is an illustrative heading projection, not a calibrated 3D renderer. No second agent camera, real bounding boxes, semantic masks or depth textures exist yet. All missing feeds are explicitly labeled unavailable.
+
+### Remaining blockers, in dependency order
+1. **Real second render**: implement an isolated Fabric 1.21.1 camera framebuffer with correct eye pose, FOV, world dimension and lifetime handling. Do not change the spectator's main camera or agent controls. Add a low-FPS frame bridge ONLY if the web dashboard needs it; leave streaming disabled until resource budgets, encoding, auth, and format are verified.
+2. **2D/3D projection matrices**: unify actual render camera transforms so frustum and labels align in both spectator and agent views; add projection tests and tests for occlusion, off-screen targets, and changing aspect ratios.
+3. **Geometry source provenance**: name observer-cache geometry, agent-sensed targets, and policy-input fields distinctly. Visual highlights must not suggest DQN sees rendered pixels.
+4. **Depth, segmentation, boxes**: render scene depth and segmentation safely or show explicit no-data states; don't construct colored masks from arbitrary guessing.
+5. **Verification**: Fabric Gradle 1.21.1 compile, native Minecraft screenshot comparisons at multiple angles, JavaScript smoke tests, instrumented lag, frozen-agent and spectator motion tests, and stale/death/reconnect behavior.
+
+### Local preview
+```powershell
+git pull origin main
+docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
+```
+Open http://127.0.0.1:3011/vision. The Minecraft server and its volumes do not need reset.
