@@ -48,3 +48,18 @@ Open http://127.0.0.1:3011/vision. The Minecraft server and its volumes do not n
 The `/vision` dashboard now renders an actual agent-relative 2D XY-screen/XZ-world spatial projection using `pose_sample`, the current position, recent movement samples and the most recent `target_decision.targets` relative positions exposed by `/api/hud/state`. It supports toggles for a local coordinate grid, illustrative heading cone, movement trail and target markers. Mineflayer yaw/pitch values are radians and are formatted as degrees only for human-readable labels. The heading cone's 90-degree aperture is illustrative, **not** measured agent-camera FOV. Readouts are disabled if pose telemetry is stale. Other world features, rendered POV, depth, segmentation, true 3D object boxes and camera-space connector lines remain unavailable. Validate heading orientation against native Minecraft orientation before relying on spatial alignment for research conclusions.
 
 This development round modified only the browser HUD HTML and documentation. It did not change agent movement, reward logic, Minecraft networking, persistent world files, or checkpoints. GitHub commits alone do not update a running Windows Docker installation: pull and rebuild the appropriate container. A live Minecraft client smoke test is still pending.
+
+### HUD refinement and readiness gates (2026-10-28)
+
+The research dashboard now rejects stale pose display, labels offline telemetry clearly, suppresses stale live-target/health/action values at the JSON projection, and draws a pitch-based *diagnostic* side profile rather than an always-identical side frustum. The top-down compass heading and apparent cone remain illustrative: no eye-height, calibrated FOV, camera/view-projection matrices, occlusion or depth are measured here. Neither visual is proof of image-based policy inputs. Browser HUD values come from `/api/hud/state`, not direct agent control. These changes affect the dashboard and projection only.
+
+**Acceptance gates before promoting any graphical layer to a LIVE camera badge:**
+1. Demonstrate two independent camera renders in the same client frame: moving the spectator camera while the inset shows agent head rotation and occlusion.
+2. Timestamp each frame with agent pose and native rendering time; show stale/unloaded/dead/mismatched-dimension states.
+3. Verify the rendered frame's camera projection against three known blocks in-world and on-screen; test both positive and negative yaw and pitch.
+4. Test frame budget at 720p full view plus max 480x270 inset, starting at 10 FPS; no feedback into Mineflayer or DQN.
+5. Only after camera-space projection passes, enable object boxes and parallax connector lines. Only after depth framebuffer read passes, label depth view as measured; segmentation needs independently verified class IDs.
+6. Add disconnected/reconnected agent test and offline-hud test to guard against the prior bot-offline confusion.
+7. Record a Windows Fabric 1.21.1 smoke test before claiming native rendering is complete.
+
+The native Fabric offscreen render remains unimplemented and has **not** been smoke-tested. Never substitute a 2D telemetry plot or a copied spectator iframe for the actual agent POV.
