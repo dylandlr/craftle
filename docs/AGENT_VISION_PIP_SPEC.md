@@ -43,3 +43,8 @@ git pull origin main
 docker compose -f deploy/filming/compose.yml --profile learning up -d --build --force-recreate agent
 ```
 Open http://127.0.0.1:3011/vision. The Minecraft server and its volumes do not need reset.
+
+### Iteration: telemetry-driven research overlays (2026-10-28)
+The `/vision` dashboard now renders an actual agent-relative 2D XY-screen/XZ-world spatial projection using `pose_sample`, the current position, recent movement samples and the most recent `target_decision.targets` relative positions exposed by `/api/hud/state`. It supports toggles for a local coordinate grid, illustrative heading cone, movement trail and target markers. Mineflayer yaw/pitch values are radians and are formatted as degrees only for human-readable labels. The heading cone's 90-degree aperture is illustrative, **not** measured agent-camera FOV. Readouts are disabled if pose telemetry is stale. Other world features, rendered POV, depth, segmentation, true 3D object boxes and camera-space connector lines remain unavailable. Validate heading orientation against native Minecraft orientation before relying on spatial alignment for research conclusions.
+
+This development round modified only the browser HUD HTML and documentation. It did not change agent movement, reward logic, Minecraft networking, persistent world files, or checkpoints. GitHub commits alone do not update a running Windows Docker installation: pull and rebuild the appropriate container. A live Minecraft client smoke test is still pending.
