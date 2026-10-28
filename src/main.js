@@ -149,7 +149,9 @@ for(const [index,profile] of activeProfiles.entries()){
    if(process.env.CRAFTLE_CAPTURE_TELEMETRY!=='1'||!bot.entity)return;
    const now=Date.now();if(now-lastSample<250)return;lastSample=now;
    const p=bot.entity.position;
-   log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch});
+   log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch,
+     dimension:bot.game?.dimension??null,positionSource:'mineflayer_entity_feet',
+     anglesUnit:'radians',eyeHeight:null,eyeHeightVerified:false});
  });
  // Observer-only event telemetry. This never sends commands or enters policy inputs.
  const observerEvent=(kind,payload={})=>log(profile.name,'spectator_effect',{
