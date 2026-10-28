@@ -151,7 +151,10 @@ for(const [index,profile] of activeProfiles.entries()){
    const p=bot.entity.position;
    log(profile.name,'pose_sample',{agent_id:profile.id,worldAgeAnchor:lastWorldAge,position:{x:p.x,y:p.y,z:p.z},yaw:bot.entity.yaw,pitch:bot.entity.pitch,
      dimension:bot.game?.dimension??null,positionSource:'mineflayer_entity_feet',
-     anglesUnit:'radians',eyeHeight:null,eyeHeightVerified:false});
+     anglesUnit:'radians',
+     eyeHeight:Number.isFinite(bot.entity.eyeHeight)&&bot.entity.eyeHeight>0&&bot.entity.eyeHeight<3?bot.entity.eyeHeight:null,
+     eyeHeightVerified:Number.isFinite(bot.entity.eyeHeight)&&bot.entity.eyeHeight>0&&bot.entity.eyeHeight<3,
+     eyeHeightSource:'prismarine_entity_eyeHeight'});
  });
  // Observer-only event telemetry. This never sends commands or enters policy inputs.
  const observerEvent=(kind,payload={})=>log(profile.name,'spectator_effect',{
