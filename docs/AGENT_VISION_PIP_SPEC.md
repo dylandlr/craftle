@@ -63,3 +63,11 @@ The research dashboard now rejects stale pose display, labels offline telemetry 
 7. Record a Windows Fabric 1.21.1 smoke test before claiming native rendering is complete.
 
 The native Fabric offscreen render remains unimplemented and has **not** been smoke-tested. Never substitute a 2D telemetry plot or a copied spectator iframe for the actual agent POV.
+
+### Pose contract hardening (continuation)
+
+The observer HUD now uses the pure `src/agent-vision-readiness.js` validator and `cameraContract()` rather than composing a pose-shaped camera contract in the HUD projection. It gates on finite position and orientation, recent pose timestamp (3 seconds), dimension, declared radian units and verified eye height. The pose is currently logged with `eyeHeightVerified:false`, so **the render readiness gate should fail** until an authoritative per-pose eye height is implemented. Its failure is intentional and does not stop agent learning or movement. This module never announces `frameAvailable:true`; only a separate verified framebuffer producer could provide that evidence.
+
+Readiness tests: `node --test test/agent-vision-readiness.test.js`; complete local checks: `npm test`. These tests still need to be run against the updated checkout; neither GitHub commit nor source inspection proves the Fabric framebuffer works.
+
+**Next engineering milestone:** determine the actual pose eye-height from a version-correct, authoritative Minecraft entity pose and world/dimension source; then verify client and agent clocks/dimension alignment. Only then implement isolated secondary camera framebuffer in Fabric and separately measure frame availability. Do not turn on object bounding boxes, parallax connectors, segmentation or a LIVE video badge before a real render.
