@@ -10,7 +10,7 @@ export function readHudState(root){
  const points=events.filter(e=>e.type==='pose_sample'&&e.position&&
   ['x','y','z'].every(k=>Number.isFinite(e.position[k]))).slice(-120)
   .map(e=>({x:e.position.x,y:e.position.y,z:e.position.z,t:e.timestamp}));
- const current=points.at(-1)??(action?.position??null);
+ const current=points.at(-1)??null;
  const poses=events.filter(e=>e.type==='pose_sample'&&Number.isFinite(e.yaw)&&Number.isFinite(e.pitch));
  const pose=poses.at(-1);
  const gaze=pose?{yaw:pose.yaw,pitch:pose.pitch,timestamp:pose.timestamp,
@@ -27,6 +27,8 @@ export function readHudState(root){
  const decisionActive=decisionAgeMs!==null&&decisionAgeMs<12000;
  const actionFresh=actionAgeMs!==null&&actionAgeMs<12000;
  const poseFresh=poseAgeMs!==null&&poseAgeMs<12000;
+ const coherentPose=poseFresh&&pose?.position&&['x','y','z'].every(k=>Number.isFinite(pose.position[k]));
+ const synchronizedTargets=coherentPose&&decisionActive&&Number.isFinite(Date.parse(decision.timestamp))&&Math.abs(Date.parse(decision.timestamp)-Date.parse(pose.timestamp))<=12000;
  const poseWindow=events.filter(e=>e.type==='pose_sample'&&e.position&&age(e)!==null&&age(e)<30000);
  const firstPose=poseWindow[0]?.position,lastPose=poseWindow.at(-1)?.position;
  const cameraDisplacement=firstPose&&lastPose?Math.hypot(firstPose.x-lastPose.x,firstPose.y-lastPose.y,firstPose.z-lastPose.z):null;
@@ -35,24 +37,32 @@ export function readHudState(root){
    pose:poseFresh?'fresh':poseAgeMs===null?'unknown':'stale',
    camera:'unverified',cameraAttachmentVerified:false,
    decisionAgeMs,poseAgeMs,actionAgeMs,targetAgeMs:decisionAgeMs,
-   targetsFresh:decisionActive,actionFresh,
+   targetsFresh:synchronizedTargets,actionFresh,
    movement30s:cameraDisplacement,source:'agent_log_only'};
+ const agentVision={schema:'craftle.agent-vision-contract.v1',readOnly:true,
+   renderStatus:'unavailable',frameAvailable:false,source:'not_implemented',
+   pose:coherentPose?{position:pose.position,yaw:pose.yaw,pitch:pose.pitch,
+     timestamp:pose.timestamp,source:'mineflayer_head_orientation',
+     dimension:null,eyeHeight:null}:null,
+   camera:{projectionVerified:false,fovDegrees:null,frameTimestamp:null,frameLatencyMs:null},
+   reason:coherentPose?'no_second_camera_render':'pose_missing_or_stale',
+   note:'Pose is not a rendered image and is not a DQN pixel observation'};
 
  return {schema:'craftle.native-hud.v1',readOnly:true,source:'filming_agent_jsonl',
   timestamp:newest?.timestamp??null,ageMs:newest?Date.now()-Date.parse(newest.timestamp):null,
   agent:'Turesla',decisionId:decision?.decisionId??null,
   action:decisionActive?decision?.action??null:actionFresh?action?.skill??null:null,
   health:actionFresh?action?.health??null:null,food:actionFresh?action?.food??null:null,
-  position:poseFresh?pose?.position??points.at(-1)??null:null,
-  points:poseFresh?points:[],targets:decisionActive?targets:[],gaze:poseFresh?gaze:null,lifecycle,availableActions:decision?.mask?.filter(Boolean).length??null,
+  position:coherentPose?pose.position:null,
+  points:coherentPose?points:[],targets:synchronizedTargets?targets:[],gaze:coherentPose?gaze:null,lifecycle,agentVision,availableActions:decision?.mask?.filter(Boolean).length??null,
   reward:Number.isFinite(transition?.reward)?transition.reward:null,
   updates:transition?.updates??null,
   latestNavigation:navigation?{status:navigation.status,decisionId:navigation.decisionId,at:navigation.timestamp}:null,
   deaths:events.filter(e=>e.type==='death_screen_observed').length,
   lastDeathAt:death?.timestamp??null,
   lastRespawnAt:respawn?.timestamp??null,
-  perception:{source:'policy_input_only',decisionId:decision?.decisionId??null,targetCount:decisionActive?targets.length:0,
-    targets:(decisionActive?targets:[]).map(t=>({kind:t.kind,distance:t.distance,reachable:t.reachable})),
+  perception:{source:'policy_input_only',decisionId:decision?.decisionId??null,targetCount:synchronizedTargets?targets.length:0,
+    targets:(synchronizedTargets?targets:[]).map(t=>({kind:t.kind,distance:t.distance,reachable:t.reachable})),
     note:'Observer nav/footing diagnostics are NOT DQN inputs'},
   density:density?{occupancyRatio:density.occupancyRatio,underfoot:density.underfootBlock,
     leaves:density.nearbyLeaves,at:density.timestamp}:null,
