@@ -124,14 +124,14 @@ public final class CraftleResearchHud {
                     int cx=gx+80,cy=gy+59;
                     // Horizontal: raw camera heading on a wraparound yaw scale.
                     // Vertical: look elevation. NOT learned saliency, eye movement, or ray-hit evidence.
-                    int rx=(int)Math.round(Math.sin(Math.toRadians(yaw))*53);
-                    int ry=(int)Math.round(Math.max(-90,Math.min(90,pitch))/90.0*27);
+                    int rx=(int)Math.round(Math.sin(yaw)*53);
+                    int ry=(int)Math.round(Math.max(-Math.PI/2,Math.min(Math.PI/2,pitch))/(Math.PI/2)*27);
                     ctx.fill(cx-55,cy-29,cx+56,cy+30,0x99303e50);
                     ctx.fill(cx-1,cy-29,cx+1,cy+30,0xff6c829a);
                     ctx.fill(cx-55,cy-1,cx+56,cy+1,0xff6c829a);
                     ctx.fill(cx+rx-4,cy+ry-1,cx+rx+5,cy+ry+2,0xff7be1ae);
                     ctx.fill(cx+rx-1,cy+ry-4,cx+rx+2,cy+ry+5,0xff7be1ae);
-                    ctx.drawTextWithShadow(client.textRenderer,Text.literal("Y "+Math.round(yaw)+"  P "+Math.round(pitch)),gx,gy+94,0xffffff);
+                    ctx.drawTextWithShadow(client.textRenderer,Text.literal("Y "+Math.round(Math.toDegrees(yaw))+"  P "+Math.round(Math.toDegrees(pitch))),gx,gy+94,0xffffff);
                 }catch(NumberFormatException ignored){}
             }
         }
