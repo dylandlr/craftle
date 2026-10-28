@@ -105,10 +105,10 @@ async function update(){
   $('action').textContent=s.action??'—';
   $('navigation').textContent=s.latestNavigation?.status??'—';
   $('policyStatus').textContent=s.lifecycle?.policy?.toUpperCase()??'UNKNOWN';
-  if(s.gaze){$('angles').textContent=fmt(s.gaze.yaw*180/Math.PI)+'° / '+fmt(s.gaze.pitch*180/Math.PI)+'°';
-    $('pose').textContent='Head yaw '+fmt(s.gaze.yaw)+'° · pitch '+fmt(s.gaze.pitch)+'° · pose only';
+  if(s.gaze && fresh(s)){$('angles').textContent=fmt(s.gaze.yaw*180/Math.PI)+'° / '+fmt(s.gaze.pitch*180/Math.PI)+'°';
+    $('pose').textContent='Head yaw '+fmt(s.gaze.yaw*180/Math.PI)+'° · pitch '+fmt(s.gaze.pitch*180/Math.PI)+'° · pose only';
 
-  }
+  }else{$('angles').textContent='—';$('pose').textContent='Agent head pose stale or unavailable';}
  }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);}
 }
 update();setInterval(update,1500);
