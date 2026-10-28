@@ -30,6 +30,8 @@ public final class CraftleResearchHud {
     private static KeyBinding toggle;
     private static KeyBinding perceptionToggle;
     private static KeyBinding gazeToggle;
+    private static KeyBinding visionToggle;
+    private static volatile boolean showVision=true;
     private static volatile boolean showGaze=false;
     private static volatile boolean showPolicyPerception=false;
 
@@ -38,9 +40,12 @@ public final class CraftleResearchHud {
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F9,"category.craftle.camera"));
         perceptionToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.perception",
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F10,"category.craftle.camera"));
+        visionToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.vision",
+                InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F6,"category.craftle.camera"));
         gazeToggle=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.craftle.hud.gaze",
                 InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_F7,"category.craftle.camera"));
         ClientTickEvents.END_CLIENT_TICK.register(client->{
+            while(visionToggle.wasPressed())showVision=!showVision;
             while(gazeToggle.wasPressed())showGaze=!showGaze;
             while(perceptionToggle.wasPressed())showPolicyPerception=!showPolicyPerception;
             while(toggle.wasPressed()){
@@ -110,6 +115,20 @@ public final class CraftleResearchHud {
             }
         }
         ctx.drawTextWithShadow(client.textRenderer,Text.literal("CAMERA: "+cameraStatus+" | F7"),x,y+92,cameraColor);
+        if(showVision){
+            int vx=ctx.getScaledWindowWidth()-256,vy=ctx.getScaledWindowHeight()-84;
+            ctx.fill(vx-4,vy-4,vx+242,vy+76,0xe0081826);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("AGENT VISION / F6"),vx,vy,0x8bd7fa);
+            JsonObject v=s.has("agentVision")&&s.get("agentVision").isJsonObject()?s.getAsJsonObject("agentVision"):null;
+            String reason=value(v,"reason","no camera data");
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("POV VIDEO: NOT RENDERED"),vx,vy+14,0xffc47b);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("POSE: "+(value(v,"poseReadyForRenderer","false").equals("true")?"VALIDATED":"NOT READY")),vx,vy+28,0xffffff);
+            JsonObject camPose=v!=null&&v.has("pose")&&v.get("pose").isJsonObject()?v.getAsJsonObject("pose"):null;
+            JsonObject eye=camPose!=null&&camPose.has("eyePosition")&&camPose.get("eyePosition").isJsonObject()?camPose.getAsJsonObject("eyePosition"):null;
+            String coords=eye==null?"UNKNOWN":value(eye,"x","?")+", "+value(eye,"y","?")+", "+value(eye,"z","?");
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("EYE: "+coords),vx,vy+42,0xa7ecc7);
+            ctx.drawTextWithShadow(client.textRenderer,Text.literal("BLOCKER: "+reason),vx,vy+56,0xffc47b);
+        }
         if(showGaze){
             JsonObject g=s.has("gaze")&&s.get("gaze").isJsonObject()?s.getAsJsonObject("gaze"):null;
             int gx=ctx.getScaledWindowWidth()-176,gy=10,gw=164,gh=112;
