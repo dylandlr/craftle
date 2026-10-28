@@ -13,11 +13,13 @@ test('camera contract never claims frame exists even with valid pose',()=>{
  assert.equal(state.poseReadyForRenderer,true);
  assert.equal(state.renderStatus,'unavailable');
  assert.equal(state.pose.dimension,'minecraft:overworld');
+ assert.deepEqual(state.pose.eyePosition,{x:5,y:65.62,z:-3});
 });
 test('unverified eye height prevents camera readiness',()=>{
  const result=cameraContract({...pose,eyeHeight:null,eyeHeightVerified:false},now);
  assert.equal(result.reason,'eye_height_unverified');
  assert.equal(result.poseReadyForRenderer,false);
+ assert.equal(result.pose.eyePosition,null);
 });
 test('stale and future samples fail closed',()=>{
  assert.equal(assessAgentVisionPose({...pose,timestamp:new Date(now-3100).toISOString()},now).reason,'pose_missing_or_stale');
