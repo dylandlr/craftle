@@ -3,24 +3,24 @@
 <title>Craftle — Agent Vision Research View</title>
 <style>
 :root{font-family:Inter,system-ui,Segoe UI,sans-serif;color:#d7eaff;background:#04101b;color-scheme:dark;--cyan:#59d8ff;--edge:#145678;--green:#64eaa7;--amber:#ffcd6b}
-*{box-sizing:border-box}body{margin:0;background:#04101b}header{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--edge);background:#071525}strong{letter-spacing:.06em}small,.muted{color:#8daec7}main{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(340px,1fr);gap:8px;padding:8px;min-height:calc(100vh - 44px)}.panel{border:1px solid var(--edge);background:linear-gradient(145deg,#061724,#071322);border-radius:6px;overflow:hidden;min-width:0;position:relative}.heading{padding:8px 11px;border-bottom:1px solid #1c4a63;font-size:12px;letter-spacing:.07em;color:#acdff6;display:flex;justify-content:space-between;align-items:center}.main{display:flex;flex-direction:column;min-height:470px}.world{position:relative;flex:1;min-height:390px;background:radial-gradient(ellipse at 50% 30%,#183f42,#051520)}iframe{width:100%;height:100%;border:0}.world .notice{position:absolute;bottom:9px;left:10px;background:#071525d9;padding:7px 9px;border:1px solid var(--edge);pointer-events:none;font-size:12px}.right{display:grid;grid-template-rows:minmax(280px,1.3fr) minmax(180px,1fr);gap:8px}.pov{min-height:280px;border:2px solid #dcb74d}.placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;background:repeating-linear-gradient(0deg,#091c29,#091c29 23px,#0b2530 24px),#051d2b}.placeholder b{color:#ffd47b}.placeholder p{font-size:12px;max-width:310px;line-height:1.5;color:#b4cbd7}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fov{position:relative;height:calc(100% - 32px);min-height:130px;background:linear-gradient(#0c2533ad 1px,transparent 1px),linear-gradient(90deg,#0c2533ad 1px,transparent 1px),#06141f;background-size:18px 18px}.fov svg{position:absolute;inset:0;width:100%;height:100%}.bottom{grid-column:1/-1;display:grid;grid-template-columns:1fr 1.25fr 1.25fr 1.25fr 1fr;gap:8px;min-height:220px}.bottom .panel{min-height:218px}.body{padding:10px;font-size:12px}.row{display:flex;justify-content:space-between;gap:6px;margin:9px 0}.row span:last-child{color:var(--green);text-align:right}.pill{padding:2px 7px;border-radius:10px;background:#123749;color:var(--cyan)}.warning{color:var(--amber)}label{display:block;margin:12px 0}input{accent-color:var(--cyan)}.gradient{height:100%;min-height:170px;background:linear-gradient(90deg,#253039,#56626a,#afc2ca,#e5eef1)}.segments{height:100%;min-height:170px;background:repeating-linear-gradient(35deg,#257d53 0 24px,#4fbb5d 24px 45px,#83623b 45px 65px,#3262a5 65px 79px)}.boxpreview{height:100%;min-height:170px;position:relative;background:#0a2532}.boxpreview:before,.boxpreview:after{content:"";position:absolute;border:1px solid #5eeaa2;width:40%;height:55%;top:18%;left:10%}.boxpreview:after{left:53%;height:35%;top:37%;border-color:#ffc95c}.disabled{opacity:.4}button{background:#0a3445;border:1px solid #286d88;color:#b9efff;border-radius:4px;padding:5px 8px;cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid #fff}.source{font-size:10px;color:#829db1;padding:6px 10px;border-top:1px solid #133b52}.status{font-size:11px}@media(max-width:1050px){main{grid-template-columns:1fr}.right{grid-template-rows:300px 190px}.bottom{grid-template-columns:repeat(2,1fr)}.bottom .panel:last-child{grid-column:1/-1}}@media(max-width:540px){.bottom{grid-template-columns:1fr}.twocol{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;background:#04101b}header{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--edge);background:#071525}strong{letter-spacing:.06em}small,.muted{color:#8daec7}main{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(340px,1fr);gap:8px;padding:8px;min-height:calc(100vh - 44px)}.panel{border:1px solid var(--edge);background:linear-gradient(145deg,#061724,#071322);border-radius:6px;overflow:hidden;min-width:0;position:relative}.heading{padding:8px 11px;border-bottom:1px solid #1c4a63;font-size:12px;letter-spacing:.07em;color:#acdff6;display:flex;justify-content:space-between;align-items:center}.main{display:flex;flex-direction:column;min-height:470px}.world{position:relative;flex:1;min-height:390px;background:radial-gradient(ellipse at 50% 30%,#183f42,#051520)}iframe{width:100%;height:100%;border:0}.world .notice{position:absolute;bottom:9px;left:10px;background:#071525d9;padding:7px 9px;border:1px solid var(--edge);pointer-events:none;font-size:12px}.right{display:grid;grid-template-rows:minmax(280px,1.3fr) minmax(180px,1fr);gap:8px}.pov{min-height:280px;border:2px solid #dcb74d}.placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;background:repeating-linear-gradient(0deg,#091c29,#091c29 23px,#0b2530 24px),#051d2b}.placeholder b{color:#ffd47b}.placeholder p{font-size:12px;max-width:310px;line-height:1.5;color:#b4cbd7}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}.fov{position:relative;height:calc(100% - 32px);min-height:130px;background:linear-gradient(#0c2533ad 1px,transparent 1px),linear-gradient(90deg,#0c2533ad 1px,transparent 1px),#06141f;background-size:18px 18px}.fov svg{position:absolute;inset:0;width:100%;height:100%}.bottom{grid-column:1/-1;display:grid;grid-template-columns:1fr 1.25fr 1.25fr 1.25fr 1fr;gap:8px;min-height:220px}.bottom .panel{min-height:218px}.body{padding:10px;font-size:12px}.row{display:flex;justify-content:space-between;gap:6px;margin:9px 0}.row span:last-child{color:var(--green);text-align:right}.pill{padding:2px 7px;border-radius:10px;background:#123749;color:var(--cyan)}.warning{color:var(--amber)}label{display:block;margin:12px 0}input{accent-color:var(--cyan)}.gradient{height:100%;min-height:170px;background:linear-gradient(90deg,#253039,#56626a,#afc2ca,#e5eef1)}.segments{height:100%;min-height:170px;background:repeating-linear-gradient(35deg,#257d53 0 24px,#4fbb5d 24px 45px,#83623b 45px 65px,#3262a5 65px 79px)}.boxpreview{height:100%;min-height:170px;position:relative;background:#0a2532}.boxpreview:before,.boxpreview:after{content:"";position:absolute;border:1px solid #5eeaa2;width:40%;height:55%;top:18%;left:10%}.boxpreview:after{left:53%;height:35%;top:37%;border-color:#ffc95c}.disabled{opacity:.4}button{background:#0a3445;border:1px solid #286d88;color:#b9efff;border-radius:4px;padding:5px 8px;cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid #fff}.source{font-size:10px;color:#829db1;padding:6px 10px;border-top:1px solid #133b52}.status{font-size:11px}.spatial-status{position:absolute;left:5px;bottom:4px;background:#05121cde;padding:2px 4px;color:#8fb0c6;font-size:9px;max-width:98%}.spatial-status.warn{color:#ffcd6b}.fov svg{overflow:hidden}.spatial-text{fill:#d9efff;font-size:9px}.target-label{fill:#ffcf7b;font-size:8px}@media(max-width:1050px){main{grid-template-columns:1fr}.right{grid-template-rows:300px 190px}.bottom{grid-template-columns:repeat(2,1fr)}.bottom .panel:last-child{grid-column:1/-1}}@media(max-width:540px){.bottom{grid-template-columns:1fr}.twocol{grid-template-columns:1fr}}
 </style></head><body><header><strong>◉ &nbsp; CRAFTLE <span class="muted">/ RESEARCH VIEW</span></strong><span class="status" id="connection">TELEMETRY CONNECTING</span></header>
 <main>
 <section class="panel main"><div class="heading">SPECTATOR VIEW <span class="pill">FREE CAMERA · OBSERVER ONLY</span></div><div class="world"><iframe title="Live Minecraft spectator viewer" id="viewer" src="about:blank"></iframe><div class="notice">Spectator render · independent of agent decisions</div></div></section>
 <div class="right">
 <section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><div class="placeholder"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p></div></section>
-<div class="twocol"><section class="panel"><div class="heading">FOV FRUSTUM / TOP DOWN</div><div class="fov"><svg viewBox="0 0 240 155" aria-label="Gaze cone from sampled head yaw"><g id="topCone" transform="rotate(0 120 125)"><path d="M120 125 L50 14 Q120 -12 190 14 Z" fill="#16bfee" fill-opacity=".2" stroke="#55d9ff" stroke-width="1.5"/><circle cx="120" cy="125" r="5" fill="#62eaaa"/></g></svg></div></section>
+<div class="twocol"><section class="panel"><div class="heading">FOV FRUSTUM / TOP DOWN</div><div class="fov"><svg id="spatial" viewBox="0 0 240 155" aria-label="Top-down relative agent navigation telemetry"></svg><div class="spatial-status" id="spatialStatus">Waiting for fresh position and gaze telemetry</div></div></section>
 <section class="panel"><div class="heading">FOV FRUSTUM / SIDE VIEW</div><div class="fov"><svg viewBox="0 0 240 155" aria-label="Illustrative side-angle frustum"><path d="M35 113 L225 20 L225 144 Z" fill="#16bfee" fill-opacity=".2" stroke="#55d9ff" stroke-width="1.5"/><circle cx="35" cy="113" r="5" fill="#62eaaa"/></svg></div></section></div>
 </div>
 <div class="bottom">
 <section class="panel"><div class="heading">PERCEPTION OVERLAY</div><div class="body">
-<label><input type="checkbox" checked disabled> Show FOV frustum</label>
-<label><input type="checkbox" disabled> Show block grid</label>
-<label><input type="checkbox" disabled> Show detected blocks</label>
-<label><input type="checkbox" disabled> Show entities</label>
-<label><input type="checkbox" disabled> Show gaze ray</label>
-<label><input type="checkbox" disabled> Show path / goal</label>
-<div class="warning">Unavailable controls stay disabled until the corresponding renderer exists.</div></div></section>
+<label><input type="checkbox" id="overlayGrid" checked> Show local coordinate grid</label>
+<label><input type="checkbox" id="overlayFov" checked> Show head-direction cone</label>
+<label><input type="checkbox" id="overlayTrail" checked> Show sampled movement trail</label>
+<label><input type="checkbox" id="overlayTargets" checked> Show reported target directions</label>
+<label><input type="checkbox" disabled> Show 3D block bounding boxes</label>
+<label><input type="checkbox" disabled> Show perspective parallax connectors</label>
+<div class="warning">Active overlays use agent log coordinates only. Camera-space detection and connectors require a real render matrix.</div></div></section>
 <section class="panel"><div class="heading">DEPTH VIEW / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO DEPTH FRAME</b><p>Requires actual agent-view depth buffer.</p></div></section>
 <section class="panel"><div class="heading">SEGMENTATION / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO SEGMENTATION FRAME</b><p>Semantic color masks will be generated from verified scene geometry.</p></div></section>
 <section class="panel"><div class="heading">BOUNDING BOXES / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO CAMERA-SPACE BOXES</b><p>3D world positions must be projected with the actual POV camera matrix.</p></div></section>
@@ -32,11 +32,72 @@ const host=location.hostname||'127.0.0.1';
 document.getElementById('viewer').src='http://'+host+':3010/';
 const $=id=>document.getElementById(id);
 function fmt(x){return Number.isFinite(x)?x.toFixed(1):'—'}
+const NS='http://www.w3.org/2000/svg',scale=4;
+let lastState=null;
+function node(name,attrs,text){
+ const el=document.createElementNS(NS,name);
+ for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));
+ if(text!==undefined)el.textContent=text;
+ return el;
+}
+function checked(id){return $(id).checked}
+function fresh(s){
+ const a=s?.lifecycle?.poseAgeMs;
+ return s?.lifecycle?.pose==='fresh' && Number.isFinite(a) && a<=12000;
+}
+function spatial(s){
+ const svg=$('spatial');svg.replaceChildren();
+ const status=$('spatialStatus');
+ if(!fresh(s)||!s.position||!s.gaze||!Number.isFinite(s.gaze.yaw)){
+   status.textContent='Position / head pose unavailable or stale · no live projection';
+   status.classList.add('warn');return;
+ }
+ status.classList.remove('warn');
+ // Mineflayer/Prismarine conventions: yaw in RADIANS, +X corresponds to -sin(yaw);
+ // +Z corresponds to cos(yaw). Screen up represents world -Z.
+ const cx=120,cy=78,ux=-Math.sin(s.gaze.yaw),uz=Math.cos(s.gaze.yaw);
+ const pt=(dx,dz)=>[cx+dx*scale,cy+dz*scale];
+ if(checked('overlayGrid')){
+   for(let n=-30;n<=30;n+=5){
+     const x=cx+n*scale,y=cy+n*scale;
+     if(x>=0&&x<=240)svg.append(node('line',{x1:x,y1:0,x2:x,y2:155,stroke:'#19435b','stroke-width':'.6'}));
+     if(y>=0&&y<=155)svg.append(node('line',{x1:0,y1:y,x2:240,y2:y,stroke:'#19435b','stroke-width':'.6'}));
+   }
+   svg.append(node('text',{x:4,y:12,class:'spatial-text'},'N (−Z) ↑ · 5 blocks/grid'));
+ }
+ if(checked('overlayFov')){
+   const reach=12,half=Math.PI/4;
+   const left=[ux*Math.cos(half)-uz*Math.sin(half),ux*Math.sin(half)+uz*Math.cos(half)];
+   const right=[ux*Math.cos(-half)-uz*Math.sin(-half),ux*Math.sin(-half)+uz*Math.cos(-half)];
+   const a=pt(left[0]*reach,left[1]*reach),b=pt(right[0]*reach,right[1]*reach),forward=pt(ux*reach,uz*reach);
+   svg.append(node('path',{d:'M'+cx+' '+cy+' L'+a.join(' ')+' Q'+forward.join(' ')+' '+b.join(' ')+' Z',fill:'#1daecf','fill-opacity':'.22',stroke:'#56dcff','stroke-width':'1.2'}));
+   svg.append(node('line',{x1:cx,y1:cy,x2:forward[0],y2:forward[1],stroke:'#76e7fa','stroke-width':'1.5'}));
+ }
+ if(checked('overlayTrail')&&Array.isArray(s.points)){
+   const points=s.points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.z)).slice(-120).map(p=>pt(p.x-s.position.x,p.z-s.position.z));
+   if(points.length>=2)svg.append(node('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#63e6ad','stroke-width':'1.8',opacity:'.9'}));
+ }
+ if(checked('overlayTargets')&&Array.isArray(s.targets)){
+   s.targets.filter(t=>Number.isFinite(t.relative?.x)&&Number.isFinite(t.relative?.z)).forEach((t,i)=>{
+     const [x,y]=pt(t.relative.x,t.relative.z);
+     if(x<4||x>236||y<4||y>150)return;
+     svg.append(node('line',{x1:cx,y1:cy,x2:x,y2:y,stroke:'#f3ba61','stroke-width':'1','stroke-dasharray':'3,3',opacity:'.6'}));
+     svg.append(node('rect',{x:x-4,y:y-4,width:8,height:8,fill:'none',stroke:'#ffcf7b','stroke-width':'1.5'}));
+     svg.append(node('text',{x:x+6,y:y-5,class:'target-label'},String(t.kind??'target').slice(0,16)));
+   });
+ }
+ svg.append(node('circle',{cx,cy,r:4.5,fill:'#77f3ad',stroke:'#061622','stroke-width':1}));
+ status.textContent='Relative world-plane telemetry · agent-centered · not voxel vision';
+}
+for(const id of ['overlayGrid','overlayFov','overlayTrail','overlayTargets']){
+ $(id).addEventListener('change',()=>{if(lastState)spatial(lastState)});
+}
+
 async function update(){
  try{
   const response=await fetch('/api/hud/state',{cache:'no-store'});
   if(!response.ok)throw Error('HTTP '+response.status);
-  const s=await response.json();
+  const s=await response.json();lastState=s;spatial(s);
   const age=Number.isFinite(s.ageMs)?s.ageMs:Infinity;
   $('connection').textContent=age<12000?'AGENT TELEMETRY ONLINE':'AGENT TELEMETRY STALE';
   $('position').textContent=s.position?['x','y','z'].map(k=>fmt(s.position[k])).join(', '):'—';
@@ -44,11 +105,11 @@ async function update(){
   $('action').textContent=s.action??'—';
   $('navigation').textContent=s.latestNavigation?.status??'—';
   $('policyStatus').textContent=s.lifecycle?.policy?.toUpperCase()??'UNKNOWN';
-  if(s.gaze){$('angles').textContent=fmt(s.gaze.yaw)+'° / '+fmt(s.gaze.pitch)+'°';
+  if(s.gaze){$('angles').textContent=fmt(s.gaze.yaw*180/Math.PI)+'° / '+fmt(s.gaze.pitch*180/Math.PI)+'°';
     $('pose').textContent='Head yaw '+fmt(s.gaze.yaw)+'° · pitch '+fmt(s.gaze.pitch)+'° · pose only';
-    $('topCone').setAttribute('transform','rotate('+(-s.gaze.yaw)+' 120 125)');
+
   }
- }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';}
+ }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);}
 }
 update();setInterval(update,1500);
 </script></body></html>
