@@ -10,7 +10,7 @@
 <div class="right">
 <section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><div class="placeholder"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p></div></section>
 <div class="twocol"><section class="panel"><div class="heading">FOV FRUSTUM / TOP DOWN</div><div class="fov"><svg id="spatial" viewBox="0 0 240 155" aria-label="Top-down relative agent navigation telemetry"></svg><div class="spatial-status" id="spatialStatus">Waiting for fresh position and gaze telemetry</div></div></section>
-<section class="panel"><div class="heading">FOV FRUSTUM / SIDE VIEW</div><div class="fov"><svg viewBox="0 0 240 155" aria-label="Illustrative side-angle frustum"><path d="M35 113 L225 20 L225 144 Z" fill="#16bfee" fill-opacity=".2" stroke="#55d9ff" stroke-width="1.5"/><circle cx="35" cy="113" r="5" fill="#62eaaa"/></svg></div></section></div>
+<section class="panel"><div class="heading">FOV FRUSTUM / SIDE VIEW</div><div class="fov"><svg id="sideSpatial" viewBox="0 0 240 155" aria-label="Agent head pitch side profile"></svg><div class="spatial-status" id="sideStatus">Awaiting fresh head pitch</div></div></section></div>
 </div>
 <div class="bottom">
 <section class="panel"><div class="heading">PERCEPTION OVERLAY</div><div class="body">
@@ -47,12 +47,22 @@ function fresh(s){
 }
 function spatial(s){
  const svg=$('spatial');svg.replaceChildren();
+ const side=$('sideSpatial');side.replaceChildren();
+ const sideStatus=$('sideStatus');
  const status=$('spatialStatus');
  if(!fresh(s)||!s.position||!s.gaze||!Number.isFinite(s.gaze.yaw)){
    status.textContent='Position / head pose unavailable or stale · no live projection';
-   status.classList.add('warn');return;
+   status.classList.add('warn');sideStatus.textContent='Head pitch unavailable or stale';sideStatus.classList.add('warn');return;
  }
- status.classList.remove('warn');
+ status.classList.remove('warn');sideStatus.classList.remove('warn');
+ const pitch=Number.isFinite(s.gaze.pitch)?s.gaze.pitch:0;
+ const ox=35,oy=87,reach=145;
+ side.append(node('line',{x1:0,y1:oy,x2:240,y2:oy,stroke:'#335d6b','stroke-width':1}));
+ const fy=oy+Math.sin(pitch)*reach,fx=ox+Math.cos(pitch)*reach;
+ side.append(node('line',{x1:ox,y1:oy,x2:fx,y2:fy,stroke:'#5fe4ff','stroke-width':2}));
+ side.append(node('circle',{cx:ox,cy:oy,r:5,fill:'#77f3ad'}));
+ side.append(node('text',{x:8,y:16,class:'spatial-text'},'PITCH '+fmt(pitch*180/Math.PI)+'°'));
+ sideStatus.textContent='Head pitch only · no depth or block occlusion';
  // Mineflayer/Prismarine conventions: yaw in RADIANS, +X corresponds to -sin(yaw);
  // +Z corresponds to cos(yaw). Screen up represents world -Z.
  const cx=120,cy=78,ux=-Math.sin(s.gaze.yaw),uz=Math.cos(s.gaze.yaw);
@@ -99,8 +109,8 @@ async function update(){
   if(!response.ok)throw Error('HTTP '+response.status);
   const s=await response.json();lastState=s;spatial(s);
   const age=Number.isFinite(s.ageMs)?s.ageMs:Infinity;
-  $('connection').textContent=age<12000?'AGENT TELEMETRY ONLINE':'AGENT TELEMETRY STALE';
-  $('position').textContent=s.position?['x','y','z'].map(k=>fmt(s.position[k])).join(', '):'—';
+  $('connection').textContent=fresh(s)?'AGENT POSE FRESH':age<12000?'LOG ACTIVE · POSE UNAVAILABLE':'AGENT TELEMETRY STALE';
+  $('position').textContent=fresh(s)&&s.position?['x','y','z'].map(k=>fmt(s.position[k])).join(', '):'—';
   $('health').textContent=s.health??'—';$('food').textContent=s.food??'—';
   $('action').textContent=s.action??'—';
   $('navigation').textContent=s.latestNavigation?.status??'—';
@@ -109,7 +119,7 @@ async function update(){
     $('pose').textContent='Head yaw '+fmt(s.gaze.yaw*180/Math.PI)+'° · pitch '+fmt(s.gaze.pitch*180/Math.PI)+'° · pose only';
 
   }else{$('angles').textContent='—';$('pose').textContent='Agent head pose stale or unavailable';}
- }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);}
+ }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);for(const id of ['position','angles','health','food','action','navigation'])$(id).textContent='—';$('policyStatus').textContent='OFFLINE';$('pose').textContent='Unable to read telemetry';}
 }
 update();setInterval(update,1500);
 </script></body></html>
