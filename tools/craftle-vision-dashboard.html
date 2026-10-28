@@ -8,7 +8,7 @@
 <main>
 <section class="panel main"><div class="heading">SPECTATOR VIEW <span class="pill">FREE CAMERA · OBSERVER ONLY</span></div><div class="world"><iframe title="Live Minecraft spectator viewer" id="viewer" src="about:blank"></iframe><div class="notice">Spectator render · independent of agent decisions</div></div></section>
 <div class="right">
-<section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><div class="placeholder"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p></div></section>
+<section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><div class="placeholder"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p><p id="cameraReason" class="warning">Camera renderer not installed</p></div></section>
 <div class="twocol"><section class="panel"><div class="heading">FOV FRUSTUM / TOP DOWN</div><div class="fov"><svg id="spatial" viewBox="0 0 240 155" aria-label="Top-down relative agent navigation telemetry"></svg><div class="spatial-status" id="spatialStatus">Waiting for fresh position and gaze telemetry</div></div></section>
 <section class="panel"><div class="heading">FOV FRUSTUM / SIDE VIEW</div><div class="fov"><svg id="sideSpatial" viewBox="0 0 240 155" aria-label="Agent head pitch side profile"></svg><div class="spatial-status" id="sideStatus">Awaiting fresh head pitch</div></div></section></div>
 </div>
@@ -24,7 +24,7 @@
 <section class="panel"><div class="heading">DEPTH VIEW / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO DEPTH FRAME</b><p>Requires actual agent-view depth buffer.</p></div></section>
 <section class="panel"><div class="heading">SEGMENTATION / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO SEGMENTATION FRAME</b><p>Semantic color masks will be generated from verified scene geometry.</p></div></section>
 <section class="panel"><div class="heading">BOUNDING BOXES / AGENT POV <span class="warning">UNAVAILABLE</span></div><div class="placeholder"><b>NO CAMERA-SPACE BOXES</b><p>3D world positions must be projected with the actual POV camera matrix.</p></div></section>
-<section class="panel"><div class="heading">AGENT STATE <span id="policyStatus" class="warning">UNKNOWN</span></div><div class="body"><div class="row"><span>Agent</span><span>Turesla</span></div><div class="row"><span>Position</span><span id="position">—</span></div><div class="row"><span>Health</span><span id="health">—</span></div><div class="row"><span>Food</span><span id="food">—</span></div><div class="row"><span>Yaw / Pitch</span><span id="angles">—</span></div><div class="row"><span>Decision</span><span id="action">—</span></div><div class="row"><span>Navigation</span><span id="navigation">—</span></div><div class="row"><span>Camera attached</span><span>UNVERIFIED</span></div></div><div class="source">Agent log telemetry; not a learned visual model</div></section>
+<section class="panel"><div class="heading">AGENT STATE <span id="policyStatus" class="warning">UNKNOWN</span></div><div class="body"><div class="row"><span>Agent</span><span>Turesla</span></div><div class="row"><span>Position</span><span id="position">—</span></div><div class="row"><span>Health</span><span id="health">—</span></div><div class="row"><span>Food</span><span id="food">—</span></div><div class="row"><span>Yaw / Pitch</span><span id="angles">—</span></div><div class="row"><span>Decision</span><span id="action">—</span></div><div class="row"><span>Navigation</span><span id="navigation">—</span></div><div class="row"><span>Camera readiness</span><span id="cameraReady">—</span></div><div class="row"><span>Eye position</span><span id="eyePosition">—</span></div></div><div class="source">Agent log telemetry; not a learned visual model</div></section>
 </div>
 </main>
 <script>
@@ -115,11 +115,15 @@ async function update(){
   $('action').textContent=s.action??'—';
   $('navigation').textContent=s.latestNavigation?.status??'—';
   $('policyStatus').textContent=s.lifecycle?.policy?.toUpperCase()??'UNKNOWN';
+  $('cameraReady').textContent=s.agentVision?.poseReadyForRenderer===true?'POSE VALID · NO FRAME':'NOT READY';
+  $('cameraReason').textContent='Camera blocker: '+(s.agentVision?.reason??'no vision contract');
+  const ep=s.agentVision?.pose?.eyePosition;
+  $('eyePosition').textContent=ep&&['x','y','z'].every(k=>Number.isFinite(ep[k]))?['x','y','z'].map(k=>fmt(ep[k])).join(', '):'—';
   if(s.gaze && fresh(s)){$('angles').textContent=fmt(s.gaze.yaw*180/Math.PI)+'° / '+fmt(s.gaze.pitch*180/Math.PI)+'°';
     $('pose').textContent='Head yaw '+fmt(s.gaze.yaw*180/Math.PI)+'° · pitch '+fmt(s.gaze.pitch*180/Math.PI)+'° · pose only';
 
   }else{$('angles').textContent='—';$('pose').textContent='Agent head pose stale or unavailable';}
- }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);for(const id of ['position','angles','health','food','action','navigation'])$(id).textContent='—';$('policyStatus').textContent='OFFLINE';$('pose').textContent='Unable to read telemetry';}
+ }catch(error){$('connection').textContent='AGENT TELEMETRY OFFLINE';lastState=null;spatial(null);for(const id of ['position','angles','health','food','action','navigation','eyePosition','cameraReady'])$(id).textContent='—';$('policyStatus').textContent='OFFLINE';$('pose').textContent='Unable to read telemetry';$('cameraReason').textContent='Camera blocker: telemetry offline';}
 }
 update();setInterval(update,1500);
 </script></body></html>
