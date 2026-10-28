@@ -58,14 +58,14 @@ function spatial(s){
  const pitch=Number.isFinite(s.gaze.pitch)?s.gaze.pitch:0;
  const ox=35,oy=87,reach=145;
  side.append(node('line',{x1:0,y1:oy,x2:240,y2:oy,stroke:'#335d6b','stroke-width':1}));
- const fy=oy+Math.sin(pitch)*reach,fx=ox+Math.cos(pitch)*reach;
+ const fy=oy-Math.sin(pitch)*reach,fx=ox+Math.cos(pitch)*reach;
  side.append(node('line',{x1:ox,y1:oy,x2:fx,y2:fy,stroke:'#5fe4ff','stroke-width':2}));
  side.append(node('circle',{cx:ox,cy:oy,r:5,fill:'#77f3ad'}));
  side.append(node('text',{x:8,y:16,class:'spatial-text'},'PITCH '+fmt(pitch*180/Math.PI)+'°'));
  sideStatus.textContent='Head pitch only · no depth or block occlusion';
- // Mineflayer/Prismarine conventions: yaw in RADIANS, +X corresponds to -sin(yaw);
- // +Z corresponds to cos(yaw). Screen up represents world -Z.
- const cx=120,cy=78,ux=-Math.sin(s.gaze.yaw),uz=Math.cos(s.gaze.yaw);
+ // Mineflayer bot.look(yaw,pitch): yaw 0 faces +X, increasing yaw rotates toward -Z.
+ // The map's upward screen direction is world -Z. This is still telemetry, not a render.
+ const cx=120,cy=78,ux=Math.cos(s.gaze.yaw),uz=-Math.sin(s.gaze.yaw);
  const pt=(dx,dz)=>[cx+dx*scale,cy+dz*scale];
  if(checked('overlayGrid')){
    for(let n=-30;n<=30;n+=5){
