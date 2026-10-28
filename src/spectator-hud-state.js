@@ -1,6 +1,7 @@
 // Read-only projection for the native Fabric spectator HUD.
 // All fields are derived from agent-observed event logs, never game commands.
 import {readObservatoryEvents} from './spectator-observatory-data.js';
+import {cameraContract} from './agent-vision-readiness.js';
 export function readHudState(root){
  const events=readObservatoryEvents(root,{tailBytes:4*1024*1024,limit:1800});
  const last=type=>{for(let i=events.length-1;i>=0;i--)if(events[i].type===type)return events[i];return null;};
@@ -43,14 +44,7 @@ export function readHudState(root){
    decisionAgeMs,poseAgeMs,actionAgeMs,targetAgeMs:decisionAgeMs,
    targetsFresh:synchronizedTargets,actionFresh,
    movement30s:cameraDisplacement,source:'agent_log_only'};
- const agentVision={schema:'craftle.agent-vision-contract.v1',readOnly:true,
-   renderStatus:'unavailable',frameAvailable:false,source:'not_implemented',
-   pose:coherentPose?{position:pose.position,yaw:pose.yaw,pitch:pose.pitch,
-     timestamp:pose.timestamp,source:'mineflayer_head_orientation',
-     dimension:null,eyeHeight:null}:null,
-   camera:{projectionVerified:false,fovDegrees:null,frameTimestamp:null,frameLatencyMs:null},
-   reason:coherentPose?'no_second_camera_render':'pose_missing_or_stale',
-   note:'Pose is not a rendered image and is not a DQN pixel observation'};
+ const agentVision=cameraContract(coherentPose?pose:null);
 
  return {schema:'craftle.native-hud.v1',readOnly:true,source:'filming_agent_jsonl',
   timestamp:newest?.timestamp??null,ageMs:newest?Date.now()-Date.parse(newest.timestamp):null,
