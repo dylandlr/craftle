@@ -15,7 +15,11 @@ export function readHudState(root){
  const pose=poses.at(-1);
  const gaze=pose?{yaw:pose.yaw,pitch:pose.pitch,timestamp:pose.timestamp,
    history:poses.slice(-24).map(e=>({yaw:e.yaw,pitch:e.pitch,t:e.timestamp})),
-   source:'mineflayer_head_orientation',learnedAttention:false,raycastHit:null}:null;
+   source:'mineflayer_head_orientation',anglesUnit:'radians',
+   dimension:pose.dimension??null,positionSource:pose.positionSource??'unverified_legacy',
+   eyeHeight:Number.isFinite(pose.eyeHeight)&&pose.eyeHeightVerified===true?pose.eyeHeight:null,
+   eyeHeightVerified:pose.eyeHeightVerified===true,
+   learnedAttention:false,raycastHit:null}:null;
  const targets=(decision?.targets??[]).slice(0,4).map(t=>({
   kind:t.kind??null,distance:Number.isFinite(t.distance)?t.distance:null,
   reachable:t.reachable===true,relative:current&&t.position?{
