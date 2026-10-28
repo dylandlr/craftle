@@ -26,7 +26,11 @@ export function cameraContract(pose,now=Date.now()){
       timestamp:pose.timestamp??null,dimension:pose.dimension??null,
       anglesUnit:pose.anglesUnit??'unverified',positionSource:pose.positionSource??'unverified',
       eyeHeight:pose.eyeHeightVerified===true&&Number.isFinite(pose.eyeHeight)?pose.eyeHeight:null,
-      eyeHeightVerified:pose.eyeHeightVerified===true
+      eyeHeightVerified:pose.eyeHeightVerified===true,
+      eyeHeightSource:pose.eyeHeightSource??null,
+      eyePosition:pose.eyeHeightVerified===true&&Number.isFinite(pose.eyeHeight)?{
+        x:pose.position.x,y:pose.position.y+pose.eyeHeight,z:pose.position.z
+      }:null
    }:null,
    poseReadyForRenderer:check.ready,
    camera:{projectionVerified:false,fovDegrees:null,frameTimestamp:null,frameLatencyMs:null},
