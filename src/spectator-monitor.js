@@ -261,6 +261,15 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       const events=telemetryRoot?readEventAnnotations(telemetryRoot):[];
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({schema:'craftle.spectator-annotations.v1',events,source:'agent_observed_not_authoritative_server_log'}));
+    }else if(route==='/vision'){
+      // Observer-only design shell: serves no agent commands and never implies a live second camera.
+      try{
+        const html=fs.readFileSync(new URL('../tools/craftle-vision-dashboard.html',import.meta.url),'utf8');
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
+        res.end(html);
+      }catch{
+        res.writeHead(503);res.end('Vision dashboard unavailable');
+      }
     }else if(route==='/observatory'){
       // This is the bundled read-only local diagnostics workstation.
       try{const html=fs.readFileSync(new URL('../tools/craftle-observatory.html',import.meta.url),'utf8');
