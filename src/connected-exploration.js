@@ -2,7 +2,7 @@
 // It cannot infer unseen terrain, mine, build, teleport, or select the DQN's skill.
 const K=(x,y,z)=>x+','+y+','+z;
 const directions=[[1,0],[-1,0],[0,1],[0,-1]];
-export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220,avoid=new Set()}){
+export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220,avoid=new Set(),scoreNode=null}){
  const o={x:Math.floor(origin.x),y:Math.floor(origin.y),z:Math.floor(origin.z)};
  const inspect=(x,y,z)=>{
   const ground=blockAt(x,y-1,z),feet=blockAt(x,y,z),head=blockAt(x,y+1,z);
@@ -20,7 +20,8 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
   if(n.steps>=2&&!n.leaves&&!avoid.has(K(n.x,n.y,n.z))){
    // Favor stable ground and discovery distance, penalize leaf paths and vertical climbs.
    const netDistance=Math.hypot(n.x-o.x,n.z-o.z);
-   const score=netDistance*1.2-n.cost*.23;
+   const score=scoreNode?scoreNode(n,{origin:o,netDistance}):netDistance*1.2-n.cost*.23;
+   if(!Number.isFinite(score))continue;
    if(!best||score>best.score)best={position:{x:n.x,y:n.y,z:n.z},score,ground:n.footing,leaves:n.leaves,steps:n.steps};
   }
   for(const [dx,dz] of directions){
