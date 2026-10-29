@@ -20,7 +20,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   bot.autoEat.enableAuto();log({type:'auto_eat_control_enabled',minHunger:15,priority:'foodPoints',learned:false});
  }
  bot.loadPlugin(pathfinder);const movements=new Movements(bot);
- Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:1});bot.pathfinder.setMovements(movements);
+ const canopyDescent=process.env.CRAFTLE_TREE_NAVIGATION==='1'&&process.env.CRAFTLE_CANOPY_DESCENT==='1';
+ Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:canopyDescent?3:1});bot.pathfinder.setMovements(movements);
  let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer,activeDecision=null;
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
@@ -30,7 +31,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const failedExplore=new Set();
  const failedConnected=new Set();
  const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
- log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',learned:false});
+ log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',canopyDescent,maximumDrop:canopyDescent?3:1,learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
  const death=()=>{if(ended||dead)return;dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
@@ -69,7 +70,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     if(goal?.key!=='explore'||stalls>=3||clock()-goal.at>=15000){
      if(groundedExplore){
       const choice=connectedExplore
-       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected})
+       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected,allowShortDescent:canopyDescent})
        : chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
       if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
@@ -87,6 +88,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
        origin:p,
        blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
        avoid:failedConnected,
+       allowShortDescent:canopyDescent,
        scoreNode:(n)=>Math.hypot(n.x-threat.position.x,n.z-threat.position.z)-startDistance-n.cost*.15
       });
       log({type:'connected_retreat_audit',decisionId:choice.decisionId,reason:route.reason,examined:route.examined,
