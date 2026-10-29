@@ -26,7 +26,7 @@ export function inspectAgentExitLog(filename,{bytes=65536,startOffset=0}={}){
   const buf=Buffer.alloc(len);
   fs.readSync(fd,buf,0,len,offset);
   const content=buf.toString('utf8');
-  const lines=content.slice(offset>0?content.indexOf('\n')+1:0).split('\n');
+  const lines=content.slice(offset>startOffset?content.indexOf('\n')+1:0).split('\n');
   let last=null;
   for(const line of lines){
    if(!line.startsWith('{"timestamp":'))continue;
