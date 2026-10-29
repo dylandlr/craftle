@@ -71,6 +71,15 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
    if(stalls===3&&goal?.key==='explore'&&connectedExplore){markConnectedFailure(goal);log({type:'connected_navigation_recovery',reason:'three_low_displacement_samples',failedGoal:{...goal},learned:false});clearGoal();}
    if(stalls===3||stalls===8)log({type:'target_navigation_stall',decisionId:activeDecision?.decisionId??null,stalls,displacement,goal:goal?{...goal}:null,position:{x:p.x,y:p.y,z:p.z}});
+   if(connectedExplore&&(stalls===3||stalls===8||(stalls>8&&stalls%100===0))){
+    const at=(dy)=>{const b=bot.blockAt(p.offset(0,dy,0),false);return b?{name:b.name,boundingBox:b.boundingBox,position:{x:b.position.x,y:b.position.y,z:b.position.z}}:null;};
+    log({type:'navigation_immobility_audit',stalls,decisionId:activeDecision?.decisionId??null,
+     position:{x:p.x,y:p.y,z:p.z},onGround:bot.entity.onGround??null,
+     isInWater:Boolean(bot.entity.isInWater),isInLava:Boolean(bot.entity.isInLava),
+     velocity:bot.entity.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null,
+     footMinusPointThree:at(-0.3),footMinusOne:at(-1),feet:at(0),head:at(1),
+     pathGoal:goal?{...goal}:null,learned:false,informationAccess:'privileged_mineflayer_state'});
+   }
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const proposed=decisionController.choose(observation);
    const choice=typeof proposed?.then==='function'?await proposed:proposed;
