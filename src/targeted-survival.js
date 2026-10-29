@@ -137,7 +137,13 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
       await bot.lookAt(p.offset(q.dx*2,0,q.dz*2),true);
       if(!valid())return;
       bot.setControlState('forward',true);
-      await bot.waitForTicks(5);
+      for(let n=0;n<5;n++){
+       await bot.waitForTicks(3);
+       if(!valid())break;
+       const current=bot.entity.position;
+       // Stop at an observed landing or after a bounded movement attempt.
+       if(current.y<=q.y+0.1||Math.hypot(current.x-start.x,current.z-start.z)>1.4)break;
+      }
      }finally{bot.setControlState('forward',false);}
      if(!valid())return;
      const end=bot.entity.position;
