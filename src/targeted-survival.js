@@ -10,6 +10,7 @@ import {chooseConnectedExploreGoal} from './connected-exploration.js';
 import {createCanopyOutcomeTracker} from './canopy-outcome.js';
 import {planTrapRecovery} from './trap-recovery.js';
 import {diagnoseFooting} from './footing-diagnostic.js';
+import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -30,6 +31,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const sequences=createFoodSequenceTracker({log,clock});
  const canopyTracker=createCanopyOutcomeTracker({clock});
  let previousFoodUnits=null;
+ let lastLookScan=0;
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
@@ -45,7 +47,12 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   log({type:'trap_recovery_audit',reason,decisionId:activeDecision?.decisionId??null,
    outcome:plan.reason,examined:plan.examined??0,selected:plan.selected?.position??null,
    health:bot.health,stalls,learned:false,informationAccess:'privileged_mineflayer_state'});
-  if(plan.selected){setGoal('trap_recovery',plan.selected.position,1);return true;}
+  if(plan.selected){
+   const q=plan.selected.position;
+   const unsafe=isHazardAdjacent({x:q.x,y:q.y,z:q.z,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
+   if(unsafe){log({type:'trap_recovery_hazard_rejected',decisionId:activeDecision?.decisionId??null,position:q,reason:'hazard_or_unknown_near_destination',learned:false});return false;}
+   setGoal('trap_recovery',q,1);return true;
+  }
   return false;
  };
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
@@ -84,6 +91,19 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      velocity:bot.entity.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null,
      footMinusPointThree:at(-0.3),footMinusOne:at(-1),feet:at(0),head:at(1),
      pathGoal:goal?{...goal}:null,learned:false,informationAccess:'privileged_mineflayer_state'});
+   }
+   if(connectedExplore&&stalls>=3&&clock()-lastLookScan>=12000){
+    lastLookScan=clock();
+    const blockAt=(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false);
+    const surroundings=inspectLedge({position:p,blockAt});
+    log({type:'trap_visual_survey',stalls,decisionId:activeDecision?.decisionId??null,
+     position:{x:p.x,y:p.y,z:p.z},...surroundings,learned:false,
+     informationAccess:'privileged_mineflayer_state'});
+    // Looking changes camera heading only. It does not move, jump, dig or choose a policy action.
+    const yaw=bot.entity.yaw+Math.PI/2;
+    try{await bot.look(yaw,Math.PI/12,true);}
+    catch(e){log({type:'trap_visual_survey_error',message:e.message});}
+    if(!valid())return;
    }
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const proposed=decisionController.choose(observation);
