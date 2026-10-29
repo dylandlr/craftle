@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 const prefix='craftle-options-v3-structured7-assisted4-commit4-audited-v1-';
@@ -22,7 +23,7 @@ export function writeLineage({checkpoint,metadata,runId,runAttempt}){
  const policy=JSON.parse(fs.readFileSync(checkpoint,'utf8'));
  if(!policy.trainingState)throw Error('Checkpoint lacks full training state');
  const record={schema:'craftle.checkpoint-lineage.v1',runId:String(runId),runAttempt:Number(runAttempt),updates:policy.updates,sha256:sha(checkpoint)};
- fs.mkdirSync(metadata.substring(0,metadata.lastIndexOf('/')),{recursive:true});
+ fs.mkdirSync(path.dirname(path.resolve(metadata)),{recursive:true});
  fs.writeFileSync(metadata,JSON.stringify(record,null,2)+'\n');
  return record;
 }
