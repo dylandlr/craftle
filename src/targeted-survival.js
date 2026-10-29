@@ -46,6 +46,13 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  let lastStepdown=0;
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
+ const recentExploreDestinations=[];
+ const rememberExploreDestination=q=>{recentExploreDestinations.push({x:q.x,z:q.z});if(recentExploreDestinations.length>12)recentExploreDestinations.shift();};
+ const explorationNoveltyScore=(node,{origin,netDistance})=>{
+  const nearest=recentExploreDestinations.length?Math.min(...recentExploreDestinations.map(q=>Math.hypot(node.x-q.x,node.z-q.z))):Infinity;
+  const revisitPenalty=Number.isFinite(nearest)?Math.max(0,6-nearest)*2.4:0;
+  return netDistance*1.2-node.cost*.23-revisitPenalty;
+ };
  const failedConnected=new Set();
  const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
  log({type:'native_traversal_config',mode:traversalMode,maxDropDown:movements.maxDropDown,allowParkour:movements.allowParkour,canDig:movements.canDig,learned:false});
@@ -180,11 +187,18 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     if(goal?.key!=='explore'||stalls>=3||clock()-goal.at>=15000){
      if(groundedExplore){
       const choice=connectedExplore
-       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected,allowShortDescent:canopyDescent})
+       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected,allowShortDescent:canopyDescent,scoreNode:explorationNoveltyScore})
        : chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
       if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
-      if(choice.selected)setGoal('explore',choice.selected.position,1,false);
+      if(choice.selected){
+       const prevGoal=goal;
+       setGoal('explore',choice.selected.position,1,false);
+       if(goal!==prevGoal&&goal?.key==='explore'){
+        rememberExploreDestination(choice.selected.position);
+        log({type:'exploration_novelty_goal',selected:choice.selected.position,recentDestinations:recentExploreDestinations.length,learned:false});
+       }
+      }
       else{
        clearGoal();
        let found=false;
