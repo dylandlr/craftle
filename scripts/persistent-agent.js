@@ -58,6 +58,7 @@ if(continuous){
     continue;
    }
    const stream=fs.openSync(logFile,'a');
+   const runStartOffset=fs.fstatSync(stream).size;
    let result;
    try{
     result=await execute('xvfb-run',['-a','node','src/main.js'],{
@@ -72,7 +73,7 @@ if(continuous){
    }finally{fs.closeSync(stream);}
    if(stopping)break;
    const serverReady=await probeMinecraft({host:serverHost,port:serverPort});
-   const recent=inspectAgentExitLog(logFile);
+   const recent=inspectAgentExitLog(logFile,{startOffset:runStartOffset});
    const category=classifyAgentExit({lastEvent:recent,serverReady});
    if(category==='unexpected_agent_exit')errors++;
    else errors=0;
