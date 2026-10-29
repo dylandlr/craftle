@@ -8,6 +8,7 @@ import {createFoodSequenceTracker} from './food-sequence-tracker.js';
 import {chooseGroundedExploreGoal} from './grounded-exploration.js';
 import {chooseConnectedExploreGoal} from './connected-exploration.js';
 import {createCanopyOutcomeTracker} from './canopy-outcome.js';
+import {planTrapRecovery} from './trap-recovery.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -35,6 +36,17 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
  log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',canopyDescent,maximumDrop:canopyDescent?3:1,learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
+ const recoverTrap=(p,reason)=>{
+  if(!connectedExplore||stalls<3)return false;
+  const plan=planTrapRecovery({origin:p,health:bot.health,
+   blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedConnected,
+   maxDrop:canopyDescent?3:1});
+  log({type:'trap_recovery_audit',reason,decisionId:activeDecision?.decisionId??null,
+   outcome:plan.reason,examined:plan.examined??0,selected:plan.selected?.position??null,
+   health:bot.health,stalls,learned:false,informationAccess:'privileged_mineflayer_state'});
+  if(plan.selected){setGoal('trap_recovery',plan.selected.position,1);return true;}
+  return false;
+ };
  const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
  const death=()=>{if(ended||dead)return;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
  const spawn=()=>{if(ended)return;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
@@ -82,7 +94,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
       if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
       if(choice.selected)setGoal('explore',choice.selected.position,1,false);
-      else{clearGoal();log({type:'grounded_exploration_no_safe_goal',decisionId:choice.decisionId??activeDecision?.decisionId});}
+      else{clearGoal();recoverTrap(p,'explore_no_connected_route');log({type:'grounded_exploration_no_safe_goal',decisionId:choice.decisionId??activeDecision?.decisionId});}
      }else{const a=tick*2.399963229728653;setGoal('explore',{x:p.x+Math.cos(a)*16,y:p.y,z:p.z+Math.sin(a)*16},1,true);}
     }
    }else if(choice.skill==='retreat'){
@@ -101,7 +113,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
       log({type:'connected_retreat_audit',decisionId:choice.decisionId,reason:route.reason,examined:route.examined,
        selected:route.selected?.position??null,underfoot:bot.blockAt(p.offset(0,-0.3,0),false)?.name??null,learned:false});
       if(route.selected)setGoal('retreat',route.selected.position,1);
-      else clearGoal();
+      else {clearGoal();recoverTrap(p,'retreat_no_connected_route');}
      }else{
       const dx=p.x-threat.position.x,dz=p.z-threat.position.z,len=Math.max(0.01,Math.hypot(dx,dz));
       setGoal('retreat',{x:p.x+dx/len*12,y:p.y,z:p.z+dz/len*12},2);
