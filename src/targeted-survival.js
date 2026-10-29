@@ -8,6 +8,7 @@ import {createFoodSequenceTracker} from './food-sequence-tracker.js';
 import {chooseGroundedExploreGoal} from './grounded-exploration.js';
 import {chooseConnectedExploreGoal} from './connected-exploration.js';
 import {createCanopyOutcomeTracker} from './canopy-outcome.js';
+import {createDiscoveryMemory,discoveryMemoryPath} from './discovery-memory.js';
 import {planTrapRecovery} from './trap-recovery.js';
 import {diagnoseFooting} from './footing-diagnostic.js';
 import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
@@ -37,6 +38,14 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
  const canopyTracker=createCanopyOutcomeTracker({clock});
+ const discoveryEnabled=process.env.CRAFTLE_DISCOVERY_MEMORY==='1';
+ const discovery=discoveryEnabled?createDiscoveryMemory({
+  agentId:process.env.CRAFTLE_DISCOVERY_AGENT_ID??bot.username??'agent',
+  worldId:process.env.CRAFTLE_DISCOVERY_WORLD_ID??'unscoped',
+  file:discoveryMemoryPath({root:process.env.CRAFTLE_PERSISTENT_ROOT??'recordings',agentId:process.env.CRAFTLE_DISCOVERY_AGENT_ID??bot.username??'agent'}),
+  clock,log
+ }):null;
+ const saveDiscovery=()=>{if(!discovery)return;try{discovery.save();}catch(error){log({type:'discovery_memory_save_error',message:error.message});}};
  let previousFoodUnits=null;
  let lastLookScan=0;
  const nativeRouteGate=createNativeRouteFailureGate();
@@ -51,7 +60,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const explorationNoveltyScore=(node,{origin,netDistance})=>{
   const nearest=recentExploreDestinations.length?Math.min(...recentExploreDestinations.map(q=>Math.hypot(node.x-q.x,node.z-q.z))):Infinity;
   const revisitPenalty=Number.isFinite(nearest)?Math.max(0,6-nearest)*2.4:0;
-  return netDistance*1.2-node.cost*.23-revisitPenalty;
+  const mapNovelty=discovery?discovery.novelty({...node,dimension:bot.game?.dimension??'overworld'}):0;
+  return netDistance*1.2-node.cost*.23-revisitPenalty+mapNovelty;
  };
  const failedConnected=new Set();
  const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
@@ -100,6 +110,12 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   busy=true;const epoch=life,valid=()=>!ended&&!dead&&epoch===life;
   try{
    let p=bot.entity.position;
+   if(discovery){
+    discovery.sample({position:p,dimension:bot.game?.dimension??'overworld',
+     blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
+     entities:Object.values(bot.entities??{})});
+    saveDiscovery();
+   }
    if(connectedExplore){
     const underfoot=bot.blockAt(p.offset(0,-0.3,0),false)?.name??null;
     for(const event of canopyTracker.sample({position:p,underfoot,life,health:bot.health,food:bot.food}))log(event);
@@ -274,7 +290,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;for(const event of canopyTracker.reset('agent_stopped'))log(event);ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['path_update',pathDiagnostics],['path_reset',pathReset],['end',stop]])bot.removeListener(event,listener);cancel();};
+ const stop=()=>{if(ended)return;
+  if(discovery)try{discovery.save(true);}catch(error){log({type:'discovery_memory_save_error',message:error.message});}for(const event of canopyTracker.reset('agent_stopped'))log(event);ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['path_update',pathDiagnostics],['path_reset',pathReset],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.on('path_update',pathDiagnostics);bot.on('path_reset',pathReset);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
