@@ -32,7 +32,7 @@ test('spectator monitor serves watch-only UI and does not expose agent controls'
 
 test('embedded spectator script boots and Return to Auto resets view without bot actions',()=>{
  const html=spectatorHtml();
- const script=html.match(/<script>([\\s\\S]*?)<\\/script>/)?.[1];
+ const script=html.split('<script>')[1]?.split('</script>')[0];
  assert.ok(script,'embedded browser script should exist');
  new vm.Script(script);
  const nodes=new Map(),handlers=new Map();
