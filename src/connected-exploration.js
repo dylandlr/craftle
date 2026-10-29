@@ -2,7 +2,7 @@
 // It cannot infer unseen terrain, mine, build, teleport, or select the DQN's skill.
 const K=(x,y,z)=>x+','+y+','+z;
 const directions=[[1,0],[-1,0],[0,1],[0,-1]];
-export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220,avoid=new Set(),scoreNode=null}){
+export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220,avoid=new Set(),scoreNode=null,allowShortDescent=false}){
  const o={x:Math.floor(origin.x),y:Math.floor(origin.y),z:Math.floor(origin.z)};
  const inspect=(x,y,z)=>{
   const ground=blockAt(x,y-1,z),feet=blockAt(x,y,z),head=blockAt(x,y+1,z);
@@ -27,12 +27,22 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
   for(const [dx,dz] of directions){
    const x=n.x+dx,z=n.z+dz;
    if(Math.max(Math.abs(x-o.x),Math.abs(z-o.z))>radius)continue;
-   // Minecraft step-up <=1, descent <=1; never use unknown ground or unsupported air.
-   for(const dy of [0,1,-1]){
+   // In explicit canopy-recovery mode, inspect short drops of at most 3 blocks.
+   // Check the entire landing column, never a blind fall or unsupported block.
+   const verticalOptions=allowShortDescent&&start.leaves?[0,1,-1,-2,-3]:[0,1,-1];
+   for(const dy of verticalOptions){
     const y=n.y+dy,key=K(x,y,z);
     if(seen.has(key)||avoid.has(key))continue;
     const candidate=inspect(x,y,z);
     if(!candidate)continue;
+    if(dy< -1){
+     let shaftClear=true;
+     for(let h=n.y;h>y+1;h--){
+      const block=blockAt(x,h,z);
+      if(!block||block.boundingBox!=='empty'){shaftClear=false;break;}
+     }
+     if(!shaftClear)continue;
+    }
     // Leaves are traversable only when starting stranded on them; do not climb onto new canopy footing.
     if(candidate.leaves&&!(start.leaves&&n.leaves))continue;
     // Blocked at eye level between cells when moving uphill.
@@ -41,7 +51,7 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
      if(!clearance||clearance.boundingBox!=='empty')continue;
     }
     seen.add(key);
-    nodes.push({...candidate,steps:n.steps+1,cost:n.cost+1+(candidate.leaves?3:0)+(dy!==0?.4:0)});
+    nodes.push({...candidate,steps:n.steps+1,cost:n.cost+1+(candidate.leaves?3:0)+(dy!==0?.4:0)+(dy< -1?(-dy-1)*.8:0)});
     break;
    }
   }
