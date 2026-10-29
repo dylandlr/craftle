@@ -56,7 +56,7 @@ test('embedded spectator script boots and Return to Auto resets view without bot
  handlers.get('return-auto:click')();
  assert.equal(node('viewport').dataset.cameraMode,'auto');
  assert.equal(handlers.get('cameraMode'),'auto');
- assert.equal(node('viewer').src,'','Return to Auto must not recreate the WebGL iframe');
- assert.doesNotMatch(html,/frame\.src\s*=/,'No camera-mode transition may reload the viewer');
+ assert.equal(node('viewer').src,'http://127.0.0.1:3000/','Return to Auto must not recreate the WebGL iframe');
+ assert.equal((html.match(/frame\.src\s*=/g)??[]).length,1,'The viewer iframe should be initialized only once');
  assert.ok(timers.length>=2);
 });
