@@ -148,7 +148,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
        if(nativeDiscovery&&connectedExplore){
         const probe=discoverNativeRoute({position:p,pathfinder:bot.pathfinder,movements,GoalNearXZ,seed:tick});
         log({type:'native_route_discovery_audit',decisionId:activeDecision?.decisionId??null,
-         reason:probe.reason,probes:probe.probes,selected:probe.selected,learned:false});
+         reason:probe.reason,probes:probe.probes,selected:probe.selected,
+         executor:{isMoving:bot.pathfinder.isMoving?.()??null,hasGoal:Boolean(bot.pathfinder.goal),
+          activeGoal:goal?{...goal}:null,onGround:bot.entity?.onGround??null,
+          velocity:bot.entity?.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null},
+         learned:false});
         if(probe.selected){setGoal('explore',probe.selected,2,true);found=true;}
        }
        if(!found)recoverTrap(p,'explore_no_connected_route');
