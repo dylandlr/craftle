@@ -71,3 +71,35 @@ test('retreat scorer prefers connected footing farther from threat, not unreacha
  assert.ok(result.selected);
  assert.ok(result.selected.position.x>=0,'retreat must favor movement away from west-side threat');
 });
+
+test('canopy descent considers a verified two-block drop but not in standard mode',()=>{
+ const blocks=(x,y,z)=>{
+  if(x===0&&z===0&&y===74)return solid('birch_leaves');
+  if(x===1&&y===72)return solid('grass_block');
+  if(y>=73&&y<=77)return air;
+  return null;
+ };
+ const origin={x:0,y:75,z:0};
+ const ordinary=chooseConnectedExploreGoal({origin,blockAt:blocks,radius:3});
+ assert.equal(ordinary.selected,null);
+ // A safe landing needs two steps of horizontal travel to be ranked.
+ const descent=chooseConnectedExploreGoal({origin,blockAt:(x,y,z)=>{
+  if(x===0&&z===0&&y===74)return solid('birch_leaves');
+  if((x===1||x===2)&&z===0&&y===72)return solid('grass_block');
+  if(y>=73&&y<=77)return air;
+  return null;
+ },radius:3,allowShortDescent:true});
+ assert.ok(descent.selected);
+ assert.equal(descent.selected.ground,'grass_block');
+ assert.equal(descent.selected.position.y,73);
+});
+test('canopy planner rejects unknown landing shafts and falls over three blocks',()=>{
+ const blocks=(x,y,z)=>{
+  if(x===0&&z===0&&y===74)return solid('birch_leaves');
+  if((x===1||x===2)&&z===0&&y===69)return solid('grass_block');
+  if(y>=70&&y<=77)return air;
+  return null;
+ };
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:75,z:0},blockAt:blocks,allowShortDescent:true});
+ assert.equal(result.selected,null);
+});
