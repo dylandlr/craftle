@@ -5,6 +5,7 @@ import {preparePersistentSession,promotePersistentSession} from '../src/persiste
 import {startSpectatorMonitor} from '../src/spectator-monitor.js';
 import {provisionCitizenRoster} from '../src/citizen-registry.js';
 import {makeSkin} from './generate-citizen-skins.js';
+import {probeMinecraft,inspectAgentExitLog,classifyAgentExit} from '../src/continuous-agent-recovery.js';
 const root=path.resolve(process.env.CRAFTLE_PERSISTENT_ROOT??'deploy/persistent/state/agent');
 const monitor=startSpectatorMonitor({telemetryRoot:root});
 monitor.on('error',error=>console.error(JSON.stringify({type:'spectator_monitor_error',message:error.message})));
@@ -46,9 +47,17 @@ if(continuous){
  fs.mkdirSync(continuousDir,{recursive:true});
  console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,rewardVersion,validatedBaselineUntouched:true,referenceVideo:false}));
  let errors=0;
+ const logFile=path.join(continuousDir,'agent.log');
+ const serverHost=process.env.CRAFTLE_SERVER_HOST??'minecraft';
+ const serverPort=Number(process.env.CRAFTLE_SERVER_PORT??25565);
  try{
   while(!stopping){
-   const stream=fs.openSync(path.join(continuousDir,'agent.log'),'a');
+   if(!await probeMinecraft({host:serverHost,port:serverPort})){
+    console.error(JSON.stringify({type:'continuous_agent_waiting_for_minecraft',host:serverHost,port:serverPort}));
+    await new Promise(resolve=>setTimeout(resolve,10000));
+    continue;
+   }
+   const stream=fs.openSync(logFile,'a');
    let result;
    try{
     result=await execute('xvfb-run',['-a','node','src/main.js'],{
@@ -62,14 +71,18 @@ if(continuous){
     });
    }finally{fs.closeSync(stream);}
    if(stopping)break;
-   errors++;
-   console.error(JSON.stringify({type:'continuous_agent_exit',code:result.code,signal:result.signal,consecutiveExits:errors}));
+   const serverReady=await probeMinecraft({host:serverHost,port:serverPort});
+   const recent=inspectAgentExitLog(logFile);
+   const category=classifyAgentExit({lastEvent:recent,serverReady});
+   if(category==='unexpected_agent_exit')errors++;
+   else errors=0;
+   console.error(JSON.stringify({type:'continuous_agent_exit',code:result.code,signal:result.signal,category,consecutiveExits:errors}));
    if(errors>=5){
     console.error(JSON.stringify({type:'continuous_agent_paused',reason:'five unexpected exits; inspect agent.log'}));
     while(!stopping)await new Promise(resolve=>setTimeout(resolve,5000));
     break;
    }
-   await new Promise(resolve=>setTimeout(resolve,5000));
+   await new Promise(resolve=>setTimeout(resolve,category==='unexpected_agent_exit'?5000:10000));
   }
  }finally{terminate();monitor.close();}
 }else{
