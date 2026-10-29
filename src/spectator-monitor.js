@@ -82,7 +82,7 @@ function setManual(enabled){
  take.disabled=manual;
  back.disabled=!manual;
  help.textContent=manual?'Manual mode: click inside the viewer to focus its controls. Escape returns to Auto.':'Auto mode: the existing Prismarine camera follows the agent. Camera controls are watch-only.';
- frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:manual?'manual':'auto'},'http://127.0.0.1:3000');
+ frame.contentWindow?.postMessage({type:'craftle-camera-mode',mode:manual?'manual':'auto'},viewerOrigin);
  if(manual)frame.focus();else take.focus();
 }
 take.addEventListener('click',()=>setManual(true));
