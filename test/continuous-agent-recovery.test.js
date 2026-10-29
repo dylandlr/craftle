@@ -24,3 +24,16 @@ test('bounded tail parser handles large prefixes and last network error',()=>{
   assert.equal(inspectAgentExitLog(path.join(root,'missing.log')),null);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('exit classifier ignores previous process errors using byte boundary',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-run-boundary-'));
+ try{
+  const log=path.join(root,'agent.log');
+  fs.writeFileSync(log,JSON.stringify(event('error','connect ECONNREFUSED minecraft:25565'))+'\n');
+  const boundary=fs.statSync(log).size;
+  assert.equal(inspectAgentExitLog(log,{startOffset:boundary}),null);
+  fs.appendFileSync(log,JSON.stringify(event('connected',null))+'\n');
+  assert.equal(inspectAgentExitLog(log,{startOffset:boundary})?.type,'connected');
+  assert.equal(classifyAgentExit({lastEvent:inspectAgentExitLog(log,{startOffset:boundary}),serverReady:true,now}),'unexpected_agent_exit');
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
