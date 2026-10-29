@@ -30,7 +30,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  }
  bot.loadPlugin(pathfinder);const movements=new Movements(bot);
  const canopyDescent=process.env.CRAFTLE_TREE_NAVIGATION==='1'&&process.env.CRAFTLE_CANOPY_DESCENT==='1';
- configurePathfinderSafety(movements,{registry:bot.registry,maxDropDown:canopyDescent?3:1});bot.pathfinder.setMovements(movements);
+ const traversalMode=process.env.CRAFTLE_NATIVE_TRAVERSAL_MODE==='ordinary'?'ordinary':'conservative';
+ configurePathfinderSafety(movements,{registry:bot.registry,maxDropDown:canopyDescent?3:1,mode:traversalMode});bot.pathfinder.setMovements(movements);
  let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer,activeDecision=null;
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
@@ -46,6 +47,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const failedExplore=new Set();
  const failedConnected=new Set();
  const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
+ log({type:'native_traversal_config',mode:traversalMode,maxDropDown:movements.maxDropDown,allowParkour:movements.allowParkour,canDig:movements.canDig,learned:false});
  log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',canopyDescent,maximumDrop:canopyDescent?3:1,learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
  const recoverTrap=(p,reason)=>{
