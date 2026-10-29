@@ -8,7 +8,7 @@
 <main>
 <section class="panel main"><div class="heading">SPECTATOR VIEW <span class="pill">FREE CAMERA · OBSERVER ONLY</span></div><div class="world"><iframe title="Live Minecraft spectator viewer" id="viewer" src="about:blank"></iframe><div class="notice">Spectator render · independent of agent decisions</div></div></section>
 <div class="right">
-<section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><div class="placeholder"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p><p id="cameraReason" class="warning">Camera renderer not installed</p></div></section>
+<section class="panel pov"><div class="heading">TURESLA — FIRST-PERSON POV <span class="warning">NOT CONNECTED</span></div><img id="povFrame" alt="Verified live first-person JPEG frame" style="display:none;width:100%;height:calc(100% - 34px);object-fit:contain;background:#000"><div class="placeholder" id="povUnavailable"><b>AGENT POV RENDERER NOT YET ATTACHED</b><p>This slot requires a second native Minecraft render at the agent's eye pose. Telemetry is not pixel vision. No fabricated images or false LIVE indicator.</p><p id="pose">Waiting for head pose…</p><p id="cameraReason" class="warning">Camera renderer not installed</p></div></section>
 <div class="twocol"><section class="panel"><div class="heading">FOV FRUSTUM / TOP DOWN</div><div class="fov"><svg id="spatial" viewBox="0 0 240 155" aria-label="Top-down relative agent navigation telemetry"></svg><div class="spatial-status" id="spatialStatus">Waiting for fresh position and gaze telemetry</div></div></section>
 <section class="panel"><div class="heading">FOV FRUSTUM / SIDE VIEW</div><div class="fov"><svg id="sideSpatial" viewBox="0 0 240 155" aria-label="Agent head pitch side profile"></svg><div class="spatial-status" id="sideStatus">Awaiting fresh head pitch</div></div></section></div>
 </div>
@@ -31,6 +31,27 @@
 const host=location.hostname||'127.0.0.1';
 document.getElementById('viewer').src='http://'+host+':3010/';
 const $=id=>document.getElementById(id);
+let lastPovFrame=-1;
+async function refreshPov(){
+ try{
+  const response=await fetch('/api/observer-pov/status',{cache:'no-store'});
+  if(!response.ok)throw Error('frame status unavailable');
+  const state=await response.json();
+  if(!state.available||!Number.isInteger(state.frameId))throw Error(state.listenerEnabled?'Awaiting rendered TCP JPEG frames':'POV producer not configured');
+  if(state.frameId!==lastPovFrame){
+   const image=$('povFrame');image.onload=()=>{image.style.display='block';$('povUnavailable').style.display='none';};
+   image.onerror=()=>{$('povUnavailable').style.display='flex';image.style.display='none';};
+   image.src='/api/observer-pov/frame.jpg?frame='+state.frameId;
+   lastPovFrame=state.frameId;
+  }
+  document.querySelector('.pov .heading .warning').textContent='JPEG · '+state.ageMs+'ms';
+ }catch(error){
+  $('povFrame').style.display='none';$('povUnavailable').style.display='flex';
+  document.querySelector('.pov .heading .warning').textContent='UNAVAILABLE';
+  $('cameraReason').textContent=error.message;
+ }
+}
+setInterval(refreshPov,500);refreshPov();
 function fmt(x){return Number.isFinite(x)?x.toFixed(1):'—'}
 const NS='http://www.w3.org/2000/svg',scale=4;
 let lastState=null;
