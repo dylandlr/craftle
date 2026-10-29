@@ -39,7 +39,8 @@ for(const row of rows){
    gainedMilestones:row.verifiedMilestones.filter(id=>!baseline.verifiedMilestones.includes(id)),
    lostMilestones:baseline.verifiedMilestones.filter(id=>!row.verifiedMilestones.includes(id))});
 }
-const byCondition=Object.groupBy(paired,r=>r.agentId);
+const byCondition={};
+for(const row of paired)(byCondition[row.agentId]??=[]).push(row);
 const comparisons=Object.entries(byCondition).map(([agentId,records])=>({
  agentId,condition:records[0].condition,n:records.length,
  milestoneGains:records.reduce((n,r)=>n+r.gainedMilestones.length,0),
