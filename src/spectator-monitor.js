@@ -8,6 +8,7 @@ import {readEventAnnotations} from './spectator-annotations.js';
 import {readObservatoryEvents} from './spectator-observatory-data.js';
 import {readHudState} from './spectator-hud-state.js';
 import {readCitizenRoster} from './citizen-registry.js';
+import {createObserverPovFrameCache} from './observer-pov-frame.js';
 
 export function cameraReachable({host='127.0.0.1',port=3000,timeoutMs=700}={}){
   return new Promise(resolve=>{
@@ -143,6 +144,19 @@ check();inspect();annotations();setInterval(check,3000);setInterval(inspect,2000
 
 export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.0.0.1',cameraPort=3000,telemetryRoot=null}={}){
   const page=spectatorHtml();
+  const pov=createObserverPovFrameCache();
+  // Opt-in only. The recording renderer must explicitly connect to this port.
+  const povPort=Number(process.env.CRAFTLE_OBSERVER_POV_PORT??0);
+  let povListener=null;
+  if(Number.isInteger(povPort)&&povPort>0&&povPort<65536){
+    povListener=net.createServer(socket=>{
+      const parser=pov.parser();
+      socket.on('data',data=>{try{parser.push(data);}catch{socket.destroy();}});
+      socket.on('error',()=>{});
+    });
+    povListener.on('error',error=>console.error(JSON.stringify({type:'observer_pov_listener_error',message:error.message})));
+    povListener.listen(povPort,'127.0.0.1');
+  }
   let lastPose=null,lastObservedAt=null;
   const subscribers=new Set();
   let lastEmitted=null;
@@ -216,6 +230,13 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
         res.end(JSON.stringify({schema:'craftle.citizen-public.v1',...entry,appearance,
           skinUrl:'/api/citizens/'+id+'/skin.png',cosmeticOnly:true}));
       }
+    }else if(route==='/api/observer-pov/status'){
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({...pov.status(),listenerEnabled:!!povListener}));
+    }else if(route==='/api/observer-pov/frame.jpg'){
+      const frame=pov.get();
+      if(!frame){res.writeHead(503,{'Content-Type':'text/plain; charset=utf-8'});res.end('No fresh rendered POV frame');}
+      else {res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'no-store','X-Craftle-Frame-Id':String(frame.id)});res.end(frame.bytes);}
     }else if(route==='/api/hud/state'){
       const state=telemetryRoot?readHudState(telemetryRoot):{schema:'craftle.native-hud.v1',readOnly:true,source:'unavailable',timestamp:null};
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
@@ -283,7 +304,7 @@ export function startSpectatorMonitor({port=3001,host='0.0.0.0',cameraHost='127.
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(page);
     }else{res.writeHead(404);res.end('Not found');}
   });
-  server.on('close',()=>{clearInterval(streamTimer);for(const res of subscribers)res.end();subscribers.clear();});
+  server.on('close',()=>{povListener?.close();clearInterval(streamTimer);for(const res of subscribers)res.end();subscribers.clear();});
   server.listen(port,host);
   return server;
 }
