@@ -1,10 +1,10 @@
 // Configure the existing Mineflayer A* navigator, not a replacement search engine.
 const BLOCK_HAZARDS=['lava','flowing_lava','fire','soul_fire','magma_block','campfire','soul_campfire','cactus'];
-export function configurePathfinderSafety(movements,{registry,maxDropDown=1}={}){
+export function configurePathfinderSafety(movements,{registry,maxDropDown=1,mode='conservative'}={}){
  movements.canDig=false;
  movements.allow1by1towers=false;
- movements.allowParkour=false;
- movements.maxDropDown=maxDropDown;
+ movements.allowParkour=mode==='ordinary';
+ movements.maxDropDown=mode==='ordinary'?4:maxDropDown;
  movements.dontCreateFlow=true;
  movements.dontMineUnderFallingBlock=true;
  movements.allowEntityDetection=true;
