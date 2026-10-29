@@ -13,16 +13,20 @@ export function probeMinecraft({host='minecraft',port=25565,timeoutMs=3000}={}){
 }
 
 // Read only the tail of the large log; do not decode multi-GB experiment history.
-export function inspectAgentExitLog(filename,{bytes=65536}={}){
+export function inspectAgentExitLog(filename,{bytes=65536,startOffset=0}={}){
  let fd;
  try{
   fd=fs.openSync(filename,'r');
   const size=fs.fstatSync(fd).size;
-  const len=Math.min(size,bytes);
+  // Inspect only bytes written after this specific child was launched.
+  // Old run errors must not be mistaken for the new run's failure.
+  if(size<=startOffset)return null;
+  const offset=Math.max(startOffset,size-bytes);
+  const len=size-offset;
   const buf=Buffer.alloc(len);
-  fs.readSync(fd,buf,0,len,size-len);
+  fs.readSync(fd,buf,0,len,offset);
   const content=buf.toString('utf8');
-  const lines=content.slice(size>len?content.indexOf('\n')+1:0).split('\n');
+  const lines=content.slice(offset>0?content.indexOf('\n')+1:0).split('\n');
   let last=null;
   for(const line of lines){
    if(!line.startsWith('{"timestamp":'))continue;
