@@ -32,9 +32,17 @@ function rcon(command){
   socket.on('close',()=>{if(!done)finish(new Error('RCON connection closed'));});
  });
 }
-let offset=0,partial='',busy=false,latest={action:'waiting',health:null,food:null,position:null,decisionId:null,reward:null,updates:null,deaths:0,updatedAt:null};
+let offset=0,partial='',busy=false,latest={action:'waiting',health:null,food:null,position:null,decisionId:null,reward:null,updates:null,deaths:0,updatedAt:null,discoveredCells:0,discoveredLandmarks:0,lastDiscovery:null};
 try{offset=fs.statSync(file).size;}catch{}
 function consume(e){
+ if(e.type==='discovery_new_cell'){
+  latest.discoveredCells++;
+  latest.lastDiscovery={kind:'new area',name:e.cellKey??'unknown',at:e.timestamp};
+ }
+ if(e.type==='discovery_landmark'){
+  latest.discoveredLandmarks++;
+  latest.lastDiscovery={kind:'landmark',name:e.landmark?.name??'unknown',at:e.timestamp};
+ }
  if(e.type==='target_decision'){latest.action=e.action??e.skill??'unknown';latest.decisionId=e.decisionId;latest.updatedAt=e.timestamp;}
  if(e.type==='target_action'){
   latest.action=e.action??e.skill??latest.action;latest.health=e.health;latest.food=e.food;
@@ -67,7 +75,9 @@ function hud(){
  const stale=age===null?' [NO TELEMETRY]':age>8?' [STALE '+age+'s]':'';
  const line='TURESLA | '+String(latest.action).slice(0,19)+' #'+(latest.decisionId??'?')+
   ' | HP '+fmt(latest.health)+'/20 | Food '+fmt(latest.food)+'/20'+
-  ' | XYZ '+pos+' | R '+fmt(latest.reward)+' | Updates '+(latest.updates??'?')+stale;
+  ' | XYZ '+pos+' | R '+fmt(latest.reward)+' | Updates '+(latest.updates??'?')+
+  ' | New '+latest.discoveredCells+' areas / '+latest.discoveredLandmarks+' landmarks'+
+  (latest.lastDiscovery&&Date.now()-Date.parse(latest.lastDiscovery.at)<30000?' | FOUND '+String(latest.lastDiscovery.name).slice(0,24):'')+stale;
  return 'title '+camera+' actionbar '+JSON.stringify({text:line,color:'gold'});
 }
 async function tick(){
