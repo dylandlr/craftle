@@ -43,7 +43,7 @@ test('embedded spectator script boots and Return to Auto resets view without bot
  };
  const document={getElementById:node,addEventListener(type,fn){handlers.set('document:'+type,fn);}};
  node('viewer').contentWindow={postMessage(data,origin){assert.equal(origin,'http://127.0.0.1:3000');handlers.set('cameraMode',data.mode);}};
- const window={addEventListener(type,fn){handlers.set('window:'+type,fn);}};
+ const window={location:{port:'3001'},addEventListener(type,fn){handlers.set('window:'+type,fn);}};
  const timers=[];
  const sandbox={document,window,Date,console,setInterval:fn=>timers.push(fn),fetch:async url=>({
    ok:true,json:async()=>url==='/api/status'?{cameraReachable:true}:{agent:null}
