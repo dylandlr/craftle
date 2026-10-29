@@ -20,17 +20,23 @@ export function inspectAgentExitLog(filename,{bytes=65536,startOffset=0}={}){
   const size=fs.fstatSync(fd).size;
   // Inspect only bytes written after this specific child was launched.
   // Old run errors must not be mistaken for the new run's failure.
-  if(size<=startOffset)return null;
-  const offset=Math.max(startOffset,size-bytes);
+  if(!Number.isSafeInteger(startOffset)||startOffset<0||size<=startOffset)return null;
+  const cap=Number.isSafeInteger(bytes)&&bytes>0?Math.min(bytes,1048576):65536;
+  const offset=Math.max(startOffset,size-cap);
   const len=size-offset;
   const buf=Buffer.alloc(len);
   fs.readSync(fd,buf,0,len,offset);
   const content=buf.toString('utf8');
-  const lines=content.slice(offset>startOffset?content.indexOf('\n')+1:0).split('\n');
+  const complete=offset>startOffset?content.slice(content.indexOf('\n')+1):content;
+  const lines=complete.split('\n');
   let last=null;
   for(const line of lines){
-   if(!line.startsWith('{"timestamp":'))continue;
-   try{const item=JSON.parse(line);if(item.type==='error'||item.type==='disconnected'||item.type==='connected')last=item;}catch{}
+   if(!line.trimStart().startsWith('{'))continue;
+   try{
+    const item=JSON.parse(line);
+    if(typeof item.timestamp==='string'&&
+       (item.type==='error'||item.type==='disconnected'||item.type==='connected'))last=item;
+   }catch{}
   }
   return last;
  }catch{return null;}
