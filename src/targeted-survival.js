@@ -15,6 +15,7 @@ import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
 import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety.js';
 import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
+import {findCanopyStepdown} from './canopy-stepdown.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -39,6 +40,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const nativeRouteGate=createNativeRouteFailureGate();
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
+ const canopyStepdown=process.env.CRAFTLE_CANOPY_STEPDOWN==='1';
+ let lastStepdown=0;
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
  const failedConnected=new Set();
@@ -120,6 +123,30 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     try{await bot.look(yaw,Math.PI/12,true);}
     catch(e){log({type:'trap_visual_survey_error',message:e.message});}
     if(!valid())return;
+   }
+   if(canopyStepdown&&connectedExplore&&stalls>=3&&clock()-lastStepdown>15000){
+    lastStepdown=clock();
+    const candidate=findCanopyStepdown({position:p,health:bot.health,
+     blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
+    log({type:'canopy_stepdown_plan',reason:candidate.reason,selected:candidate.selected,
+     decisionId:activeDecision?.decisionId??null,learned:false});
+    if(candidate.selected&&bot.waitForTicks){
+     clearGoal();
+     const start={x:p.x,y:p.y,z:p.z},q=candidate.selected;
+     try{
+      await bot.lookAt(p.offset(q.dx*2,0,q.dz*2),true);
+      if(!valid())return;
+      bot.setControlState('forward',true);
+      await bot.waitForTicks(5);
+     }finally{bot.setControlState('forward',false);}
+     if(!valid())return;
+     const end=bot.entity.position;
+     log({type:'canopy_stepdown_execution',start,end:{x:end.x,y:end.y,z:end.z},
+      selected:q,displacement:Math.hypot(end.x-start.x,end.z-start.z),
+      healthBefore:null,healthAfter:bot.health,learned:false});
+     lastPosition={x:end.x,z:end.z};
+     return;
+    }
    }
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const proposed=decisionController.choose(observation);
