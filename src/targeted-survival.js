@@ -12,6 +12,7 @@ import {planTrapRecovery} from './trap-recovery.js';
 import {diagnoseFooting} from './footing-diagnostic.js';
 import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
 import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
+import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -26,7 +27,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  }
  bot.loadPlugin(pathfinder);const movements=new Movements(bot);
  const canopyDescent=process.env.CRAFTLE_TREE_NAVIGATION==='1'&&process.env.CRAFTLE_CANOPY_DESCENT==='1';
- Object.assign(movements,{canDig:false,allow1by1towers:false,allowParkour:false,maxDropDown:canopyDescent?3:1});bot.pathfinder.setMovements(movements);
+ configurePathfinderSafety(movements,{registry:bot.registry,maxDropDown:canopyDescent?3:1});bot.pathfinder.setMovements(movements);
  let ended=false,dead=false,busy=false,life=0,tick=0,lastPosition=null,stalls=0,goal=null,timer,activeDecision=null;
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
@@ -61,6 +62,13 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const spawn=()=>{if(ended)return;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};markConnectedFailure(failed);if(groundedExplore&&failed.key==='explore'){failedExplore.add([Math.floor(failed.x),Math.floor(failed.z)].join(','));if(failedExplore.size>256)failedExplore.clear();}clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
+ const pathReset=reason=>log({type:'native_pathfinder_reset',reason,
+  decisionId:activeDecision?.decisionId??null,goal:goal?{...goal}:null,learned:false});
+ const pathDiagnostics=result=>{
+  if(['success','partial','timeout'].includes(result?.status))
+   log({type:'native_pathfinder_update',...summarizePathUpdate(result),
+    decisionId:activeDecision?.decisionId??null,goal:goal?{...goal}:null,learned:false});
+ };
  const setGoal=(key,p,range=1,horizontal=false)=>{
   const requested={key,x:p.x,y:p.y,z:p.z};
   const replacement=shouldReplaceNavigationGoal({current:goal,requested,now:clock(),stalls});
@@ -185,8 +193,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    log({type:'target_action',life,...choice,health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z}});
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
- const stop=()=>{if(ended)return;for(const event of canopyTracker.reset('agent_stopped'))log(event);ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['end',stop]])bot.removeListener(event,listener);cancel();};
- bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.once('end',stop);
+ const stop=()=>{if(ended)return;for(const event of canopyTracker.reset('agent_stopped'))log(event);ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['path_update',pathDiagnostics],['path_reset',pathReset],['end',stop]])bot.removeListener(event,listener);cancel();};
+ bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.on('path_update',pathDiagnostics);bot.on('path_reset',pathReset);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
  return {step,stop};
 }
