@@ -13,10 +13,11 @@ import {diagnoseFooting} from './footing-diagnostic.js';
 import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
 import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
 import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety.js';
+import {discoverNativeRoute} from './native-navigation-discovery.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
- const {pathfinder,Movements,goals:{GoalNear,GoalXZ}}=navigation;
+ const {pathfinder,Movements,goals:{GoalNear,GoalXZ,GoalNearXZ}}=navigation;
  if(autoEatControl){
   bot.loadPlugin(autoEatPlugin);
   bot.autoEat.setOpts({minHunger:15,priority:'foodPoints'});
@@ -35,6 +36,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  let previousFoodUnits=null;
  let lastLookScan=0;
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
+ const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
  const failedConnected=new Set();
@@ -140,7 +142,18 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
       if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
       if(choice.selected)setGoal('explore',choice.selected.position,1,false);
-      else{clearGoal();recoverTrap(p,'explore_no_connected_route');log({type:'grounded_exploration_no_safe_goal',decisionId:choice.decisionId??activeDecision?.decisionId});}
+      else{
+       clearGoal();
+       let found=false;
+       if(nativeDiscovery&&connectedExplore){
+        const probe=discoverNativeRoute({position:p,pathfinder:bot.pathfinder,movements,GoalNearXZ,seed:tick});
+        log({type:'native_route_discovery_audit',decisionId:activeDecision?.decisionId??null,
+         reason:probe.reason,probes:probe.probes,selected:probe.selected,learned:false});
+        if(probe.selected){setGoal('explore',probe.selected,2,true);found=true;}
+       }
+       if(!found)recoverTrap(p,'explore_no_connected_route');
+       log({type:'grounded_exploration_no_safe_goal',decisionId:activeDecision?.decisionId});
+      }
      }else{const a=tick*2.399963229728653;setGoal('explore',{x:p.x+Math.cos(a)*16,y:p.y,z:p.z+Math.sin(a)*16},1,true);}
     }
    }else if(choice.skill==='retreat'){
