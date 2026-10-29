@@ -71,3 +71,11 @@ The observer HUD now uses the pure `src/agent-vision-readiness.js` validator and
 Readiness tests: `node --test test/agent-vision-readiness.test.js`; complete local checks: `npm test`. These tests still need to be run against the updated checkout; neither GitHub commit nor source inspection proves the Fabric framebuffer works.
 
 **Next engineering milestone:** determine the actual pose eye-height from a version-correct, authoritative Minecraft entity pose and world/dimension source; then verify client and agent clocks/dimension alignment. Only then implement isolated secondary camera framebuffer in Fabric and separately measure frame availability. Do not turn on object bounding boxes, parallax connectors, segmentation or a LIVE video badge before a real render.
+
+### Reliability dependency implemented (2026-10-28)
+
+The continuous-learning supervisor now probes TCP connectivity to the configured Minecraft service before launching its child. After a child exit, a bounded tail reader classifies recent Minecraft network errors separately from unexpected agent crashes. The five-failure pause remains for real unexplained crashes, but transient Minecraft unavailability is retried instead of burning the failure budget. Evidence older than 30 seconds is ignored. Unit tests in `test/continuous-agent-recovery.test.js` cover the classification and bounded tail.
+
+**Critical remaining reliability tests:** execute `npm test`, verify live Minecraft shutdown/restart does not corrupt experiment state, verify DNS changes and repeated connect refusal, and inspect read-only logs for exceptions. The 2GB `agent.log` has **not** been rotated or deleted because the log is part of research evidence and Docker/Windows had produced EIO. Create and verify an external backup before any log archival or rotation. This change only affects the agent process and must be applied with an agent-only rebuild after backup; it does not need a Minecraft server recreation.
+
+**POV rendering is still unimplemented:** next commit should target a correctly isolated framebuffer in the Fabric client, not a placeholder image or misleading LIVE badge.
