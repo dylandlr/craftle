@@ -37,3 +37,12 @@ test('exit classifier ignores previous process errors using byte boundary',()=>{
   assert.equal(classifyAgentExit({lastEvent:inspectAgentExitLog(log,{startOffset:boundary}),serverReady:true,now}),'unexpected_agent_exit');
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+
+test('parser handles timestamp-first and type-first JSON event records',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-order-'));
+ try{
+  const log=path.join(root,'agent.log');
+  fs.writeFileSync(log,JSON.stringify({timestamp:new Date(now).toISOString(),type:'disconnected'})+'\nnot json\n'+JSON.stringify(event('error','connect ECONNREFUSED'))+'\n');
+  assert.equal(inspectAgentExitLog(log)?.type,'error');
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
