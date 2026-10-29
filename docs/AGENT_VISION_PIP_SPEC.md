@@ -92,3 +92,15 @@ Before deploying to the live filming setup:
 - Verify real-process fatal errors still increment the crash counter and eventually pause.
 
 **Next Agent Vision implementation milestone remains native secondary framebuffer rendering.** Reliable telemetry and recovery are prerequisites, not a substitute for a real first-person image.
+
+### TCP reachability integration tests (2026-10-29)
+
+Added `test/continuous-agent-network.test.js`. It opens an ephemeral localhost TCP server to prove positive Minecraft reachability, closes a local listener to verify connection refusal is handled, and checks that an invalid DNS name returns an unavailable result rather than crashing the supervisor. These are isolated tests that do not connect to the user's actual Minecraft server, mutate checkpoints, or touch experimental log volumes.
+
+Recommended local verification sequence:
+```powershell
+Set-Location "C:\Users\delar\Downloads\craftle-main\craftle-updated"; git pull origin main; if ($LASTEXITCODE -eq 0) { node --test test/continuous-agent-recovery.test.js test/continuous-agent-network.test.js; if ($LASTEXITCODE -eq 0) { npm test } }
+```
+Only redeploy an agent container after confirming tests pass and preserving the current log/checkpoint. The GitHub version does not automatically update the currently running container.
+
+**Rendering blocker remains:** Native Fabric secondary camera and framebuffer require an implementation and live-client rendering test; browser dashboard's visual placeholders are not frame evidence.
