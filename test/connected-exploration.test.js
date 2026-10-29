@@ -61,3 +61,13 @@ test('does not invent a safe exit from an isolated leaf canopy',()=>{
  const result=chooseConnectedExploreGoal({origin:{x:0,y:71,z:0},radius:4,blockAt});
  assert.equal(result.selected,null);
 });
+
+test('retreat scorer prefers connected footing farther from threat, not unreachable coordinates',()=>{
+ const blockAt=(x,y,z)=>y===64?solid('grass_block'):(y===65||y===66?air:null);
+ const result=chooseConnectedExploreGoal({
+  origin:{x:0,y:65,z:0},radius:5,blockAt,
+  scoreNode:n=>Math.hypot(n.x+4,n.z)-Math.hypot(4,0)-n.cost*.15
+ });
+ assert.ok(result.selected);
+ assert.ok(result.selected.position.x>=0,'retreat must favor movement away from west-side threat');
+});
