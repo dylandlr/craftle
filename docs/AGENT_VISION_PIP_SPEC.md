@@ -79,3 +79,16 @@ The continuous-learning supervisor now probes TCP connectivity to the configured
 **Critical remaining reliability tests:** execute `npm test`, verify live Minecraft shutdown/restart does not corrupt experiment state, verify DNS changes and repeated connect refusal, and inspect read-only logs for exceptions. The 2GB `agent.log` has **not** been rotated or deleted because the log is part of research evidence and Docker/Windows had produced EIO. Create and verify an external backup before any log archival or rotation. This change only affects the agent process and must be applied with an agent-only rebuild after backup; it does not need a Minecraft server recreation.
 
 **POV rendering is still unimplemented:** next commit should target a correctly isolated framebuffer in the Fabric client, not a placeholder image or misleading LIVE badge.
+
+### Recovery hardening — current-run log boundaries
+
+Exit diagnosis now records the current log byte offset immediately before spawning Turesla. The supervisor's exit classifier only reads JSONL events written at or after that offset, preventing stale Minecraft connection errors from masking a new agent crash. Bounded tail reads remain 64 KiB, even when the persistent experiment log is multiple gigabytes. A regression test covers an old `ECONNREFUSED` event followed by a new `connected` event. This does **not** repair filesystem EIO errors, corrupt checkpoints or replace real integration testing.
+
+Before deploying to the live filming setup:
+- Back up `deploy/filming/state/agent/continuous-policy.json` and the research log using a non-destructive copy. Existing checkpoint and world files must remain untouched.
+- Run `node --test test/continuous-agent-recovery.test.js` and then `npm test`.
+- Pull the latest source and build/recreate **only** the agent service after backup. Avoid `down -v`, prune, truncation or accidental Minecraft recreation.
+- Simulate a Minecraft outage in an isolated throwaway run; confirm the supervisor waits, does not consume the unexpected-crash budget and reconnects when the server returns.
+- Verify real-process fatal errors still increment the crash counter and eventually pause.
+
+**Next Agent Vision implementation milestone remains native secondary framebuffer rendering.** Reliable telemetry and recovery are prerequisites, not a substitute for a real first-person image.
