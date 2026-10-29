@@ -16,6 +16,7 @@ import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety
 import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
 import {findCanopyStepdown} from './canopy-stepdown.js';
+import {auditDiggingNeighbors} from './dig-navigation-audit.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -112,6 +113,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      velocity:bot.entity.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null,
      footMinusPointThree:at(-0.3),footMinusOne:at(-1),feet:at(0),head:at(1),
      pathGoal:goal?{...goal}:null,learned:false,informationAccess:'privileged_mineflayer_state'});
+   }
+   if(connectedExplore&&(stalls===3||stalls===8)&&process.env.CRAFTLE_DIG_NAVIGATION_AUDIT==='1'){
+    log({type:'native_dig_neighbor_audit',stalls,decisionId:activeDecision?.decisionId??null,
+     ...auditDiggingNeighbors({bot,Movements,configure:configurePathfinderSafety,position:p,mode:traversalMode}),
+     learned:false,executed:false,informationAccess:'privileged_mineflayer_state'});
    }
    if(connectedExplore&&stalls>=3&&clock()-lastLookScan>=12000){
     lastLookScan=clock();
