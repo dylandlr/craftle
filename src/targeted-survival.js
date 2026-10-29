@@ -14,6 +14,7 @@ import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
 import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
 import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety.js';
 import {discoverNativeRoute} from './native-navigation-discovery.js';
+import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -35,6 +36,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const canopyTracker=createCanopyOutcomeTracker({clock});
  let previousFoodUnits=null;
  let lastLookScan=0;
+ const nativeRouteGate=createNativeRouteFailureGate();
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
@@ -59,7 +61,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   }
   return false;
  };
- const cancel=()=>{clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
+ const cancel=()=>{nativeRouteGate.reset();clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
  const death=()=>{if(ended||dead)return;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
  const spawn=()=>{if(ended)return;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
@@ -146,14 +148,21 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
        clearGoal();
        let found=false;
        if(nativeDiscovery&&connectedExplore){
-        const probe=discoverNativeRoute({position:p,pathfinder:bot.pathfinder,movements,GoalNearXZ,seed:tick});
-        log({type:'native_route_discovery_audit',decisionId:activeDecision?.decisionId??null,
-         reason:probe.reason,probes:probe.probes,selected:probe.selected,
-         executor:{isMoving:bot.pathfinder.isMoving?.()??null,hasGoal:Boolean(bot.pathfinder.goal),
-          activeGoal:goal?{...goal}:null,onGround:bot.entity?.onGround??null,
-          velocity:bot.entity?.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null},
-         learned:false});
-        if(probe.selected){setGoal('explore',probe.selected,2,true);found=true;}
+        const gate=nativeRouteGate.check({position:p,now:clock()});
+        if(gate.allow){
+         const probe=discoverNativeRoute({position:p,pathfinder:bot.pathfinder,movements,GoalNearXZ,seed:tick});
+         if(probe.selected)nativeRouteGate.succeeded();
+         else nativeRouteGate.failed({position:p,now:clock()});
+         log({type:'native_route_discovery_audit',decisionId:activeDecision?.decisionId??null,
+          reason:probe.reason,probes:probe.probes,selected:probe.selected,
+          executor:{isMoving:bot.pathfinder.isMoving?.()??null,hasGoal:Boolean(bot.pathfinder.goal),
+           activeGoal:goal?{...goal}:null,onGround:bot.entity?.onGround??null,
+           velocity:bot.entity?.velocity?{x:bot.entity.velocity.x,y:bot.entity.velocity.y,z:bot.entity.velocity.z}:null},
+          learned:false});
+         if(probe.selected){setGoal('explore',probe.selected,2,true);found=true;}
+         else log({type:'navigation_requires_nonwalking_recovery',decisionId:activeDecision?.decisionId??null,
+          reason:'no_verified_native_route',at:{x:p.x,y:p.y,z:p.z},learned:false});
+        }else if(stalls===3||stalls===8)log({type:'native_route_probe_suppressed',...gate,learned:false});
        }
        if(!found)recoverTrap(p,'explore_no_connected_route');
        log({type:'grounded_exploration_no_safe_goal',decisionId:activeDecision?.decisionId});
