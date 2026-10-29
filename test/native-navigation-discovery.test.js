@@ -13,11 +13,17 @@ test('native discovery accepts only a complete A-star route',()=>{
 test('no complete route never invents a destination',()=>{
  const pathfinder={getPathTo:()=>({status:'noPath',path:[]})};
  const result=discoverNativeRoute({position,pathfinder,movements:{},GoalNearXZ});
- assert.equal(result.selected,null);assert.equal(result.probes.length,8);
+ assert.equal(result.selected,null);assert.equal(result.probes.length,12);
 });
 test('missing native API and path exceptions fail closed',()=>{
  assert.equal(discoverNativeRoute({position}).reason,'native_probe_unavailable');
  const pathfinder={getPathTo:()=>{throw Error('unloaded chunk');}};
  const result=discoverNativeRoute({position,pathfinder,movements:{},GoalNearXZ});
  assert.equal(result.selected,null);assert.equal(result.probes[0].status,'error');
+});
+
+test('native probe logs noPath at one-step range distinctly from far destinations',()=>{
+ const result=discoverNativeRoute({position,pathfinder:{getPathTo:()=>({status:'noPath',path:[],visitedNodes:1})},movements:{},GoalNearXZ});
+ assert.equal(result.probes[0].kind,'near');assert.equal(result.probes[0].visitedNodes,1);
+ assert.equal(result.probes[4].kind,'far');
 });
