@@ -80,7 +80,24 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    }else if(choice.skill==='retreat'){
     const threats=Object.values(bot.entities).filter(e=>e?.position&&HOSTILE_MOBS.has(e.name));
     threats.sort((a,b)=>a.position.distanceTo(p)-b.position.distanceTo(p));const threat=threats[0];
-    if(threat){const dx=p.x-threat.position.x,dz=p.z-threat.position.z,len=Math.max(0.01,Math.hypot(dx,dz));setGoal('retreat',{x:p.x+dx/len*12,y:p.y,z:p.z+dz/len*12},2);}else clearGoal();
+    if(threat){
+     if(connectedExplore){
+      const startDistance=Math.hypot(p.x-threat.position.x,p.z-threat.position.z);
+      const route=chooseConnectedExploreGoal({
+       origin:p,
+       blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
+       avoid:failedConnected,
+       scoreNode:(n)=>Math.hypot(n.x-threat.position.x,n.z-threat.position.z)-startDistance-n.cost*.15
+      });
+      log({type:'connected_retreat_audit',decisionId:choice.decisionId,reason:route.reason,examined:route.examined,
+       selected:route.selected?.position??null,underfoot:bot.blockAt(p.offset(0,-0.3,0),false)?.name??null,learned:false});
+      if(route.selected)setGoal('retreat',route.selected.position,1);
+      else clearGoal();
+     }else{
+      const dx=p.x-threat.position.x,dz=p.z-threat.position.z,len=Math.max(0.01,Math.hypot(dx,dz));
+      setGoal('retreat',{x:p.x+dx/len*12,y:p.y,z:p.z+dz/len*12},2);
+     }
+    }else clearGoal();
    }else{
     clearGoal();
     if(choice.skill==='eat'){
