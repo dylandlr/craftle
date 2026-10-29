@@ -32,7 +32,9 @@ export function inspectAgentExitLog(filename,{bytes=65536}={}){
  }catch{return null;}
  finally{if(fd!==undefined)fs.closeSync(fd);}
 }
-export function classifyAgentExit({lastEvent,serverReady}){
+export function classifyAgentExit({lastEvent,serverReady,now=Date.now()}){
+ const eventTime=Date.parse(lastEvent?.timestamp??'');
+ if(!Number.isFinite(eventTime)||Math.abs(now-eventTime)>30000)lastEvent=null;
  if(!serverReady)return 'minecraft_unreachable';
  if(lastEvent?.type==='error'&&/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|ECONNRESET/.test(lastEvent.message??''))return 'minecraft_connectivity';
  if(lastEvent?.type==='disconnected')return 'minecraft_disconnected';
