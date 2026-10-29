@@ -9,6 +9,7 @@ import {chooseGroundedExploreGoal} from './grounded-exploration.js';
 import {chooseConnectedExploreGoal} from './connected-exploration.js';
 import {createCanopyOutcomeTracker} from './canopy-outcome.js';
 import {planTrapRecovery} from './trap-recovery.js';
+import {diagnoseFooting} from './footing-diagnostic.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -73,6 +74,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    if(stalls===3||stalls===8)log({type:'target_navigation_stall',decisionId:activeDecision?.decisionId??null,stalls,displacement,goal:goal?{...goal}:null,position:{x:p.x,y:p.y,z:p.z}});
    if(connectedExplore&&(stalls===3||stalls===8||(stalls>8&&stalls%100===0))){
     const at=(dy)=>{const b=bot.blockAt(p.offset(0,dy,0),false);return b?{name:b.name,boundingBox:b.boundingBox,position:{x:b.position.x,y:b.position.y,z:b.position.z}}:null;};
+    const footing=diagnoseFooting({position:p,onGround:bot.entity.onGround??null,
+     blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
+    log({type:'navigation_footing_diagnostic',stalls,decisionId:activeDecision?.decisionId??null,
+     ...footing,learned:false,informationAccess:'privileged_mineflayer_state'});
     log({type:'navigation_immobility_audit',stalls,decisionId:activeDecision?.decisionId??null,
      position:{x:p.x,y:p.y,z:p.z},onGround:bot.entity.onGround??null,
      isInWater:Boolean(bot.entity.isInWater),isInLava:Boolean(bot.entity.isInLava),
