@@ -11,6 +11,7 @@ import {createCanopyOutcomeTracker} from './canopy-outcome.js';
 import {planTrapRecovery} from './trap-recovery.js';
 import {diagnoseFooting} from './footing-diagnostic.js';
 import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
+import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
  if(!decisionController)throw Error('Targeted policy required');
@@ -61,7 +62,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};markConnectedFailure(failed);if(groundedExplore&&failed.key==='explore'){failedExplore.add([Math.floor(failed.x),Math.floor(failed.z)].join(','));if(failedExplore.size>256)failedExplore.clear();}clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
  const setGoal=(key,p,range=1,horizontal=false)=>{
-  if(goal?.key===key&&Math.hypot(p.x-goal.x,p.y-goal.y,p.z-goal.z)<=1&&clock()-goal.at<15000&&stalls<3)return;
+  const requested={key,x:p.x,y:p.y,z:p.z};
+  const replacement=shouldReplaceNavigationGoal({current:goal,requested,now:clock(),stalls});
+  if(!replacement.replace)return;
+  if(goal)log({type:'navigation_goal_replanned',previous:{...goal},requested,reason:replacement.reason,learned:false});
   goal={key,x:p.x,y:p.y,z:p.z,at:clock()};
   log({type:'target_navigation_goal',decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:{...goal},range,horizontal});
   bot.pathfinder.setGoal(horizontal?new GoalXZ(Math.floor(p.x),Math.floor(p.z)):new GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range));
