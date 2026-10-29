@@ -19,3 +19,11 @@ test('native path results are bounded to diagnostic fields',()=>{
  });
  assert.equal(summarizePathUpdate(null).status,'unknown');
 });
+
+test('ordinary mode restores native parkour and four-block drops without excavation',()=>{
+ const movements={blocksToAvoid:new Set()};
+ const out=configurePathfinderSafety(movements,{registry:{blocksByName:{lava:{id:10}}},mode:'ordinary',maxDropDown:1});
+ assert.equal(out.allowParkour,true);assert.equal(out.maxDropDown,4);
+ assert.equal(out.canDig,false);assert.equal(out.allow1by1towers,false);
+ assert.equal(out.blocksToAvoid.has(10),true);
+});
