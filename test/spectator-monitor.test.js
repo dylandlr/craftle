@@ -41,6 +41,7 @@ test('embedded spectator script boots and Return to Auto resets view without bot
     focus(){},addEventListener(type,fn){handlers.set(id+':'+type,fn);}});
   return nodes.get(id);
  };
+ node('viewport').dataset.cameraMode='auto'; // Mirrors the HTML data-camera-mode attribute.
  const document={getElementById:node,addEventListener(type,fn){handlers.set('document:'+type,fn);}};
  node('viewer').contentWindow={postMessage(data,origin){assert.equal(origin,'http://127.0.0.1:3000');handlers.set('cameraMode',data.mode);}};
  const window={location:{port:'3001'},addEventListener(type,fn){handlers.set('window:'+type,fn);}};
