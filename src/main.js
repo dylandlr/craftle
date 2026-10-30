@@ -122,6 +122,24 @@ for(const [index,profile] of activeProfiles.entries()){
    position:{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z},
    evidence:'mineflayer_local_block_cache',cameraApplied:false});
  });
+ // Periodic chunk-availability probe at the AGENT, not at spectator client.
+ // A loaded bot chunk does not guarantee spectator renderer visibility.
+ let chunkProbeAt=0;
+ bot.on('physicsTick',()=>{
+  if(process.env.CRAFTLE_CHUNK_DIAGNOSTICS!=='1'||!bot.entity||Date.now()-chunkProbeAt<5000)return;
+  chunkProbeAt=Date.now();
+  const p=bot.entity.position;
+  let known=0,unknown=0,solid=0;
+  for(const [dx,dz] of [[0,0],[16,0],[-16,0],[0,16],[0,-16],[32,0],[-32,0]]){
+   const b=bot.blockAt(p.offset(dx,-1,dz),false);
+   if(!b){unknown++;continue;}known++;if(b.boundingBox==='block')solid++;
+  }
+  log(profile.name,'agent_chunk_cache_audit',{agent_id:profile.id,
+   position:{x:p.x,y:p.y,z:p.z},dimension:bot.game?.dimension??null,
+   knownSamples:known,unknownSamples:unknown,solidSamples:solid,
+   observation:'mineflayer_block_cache_only',
+   spectatorRenderVerified:false,learned:false});
+ });
  // Opt-in fine-grained tick trace. This is a physical state snapshot, not a DQN decision.
  // Set only for short isolated experiments: ~20 events/second, significant log volume.
  let physicsTickSerial=0;
