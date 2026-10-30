@@ -91,6 +91,7 @@ services:
       CRAFTLE_RCON_PORT: '25575'
       CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
       CRAFTLE_FOLLOW_CHECK_MS: '6000'
+      CRAFTLE_FOLLOW_REATTACH_MS: '${CRAFTLE_FOLLOW_REATTACH_MS:-0}'
     volumes:
       - ../../scripts:/app/scripts:ro
       - ./state/agent:/state/agent:ro
