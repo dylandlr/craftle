@@ -9,6 +9,7 @@ import {chooseGroundedExploreGoal} from './grounded-exploration.js';
 import {chooseConnectedExploreGoal} from './connected-exploration.js';
 import {createCanopyOutcomeTracker} from './canopy-outcome.js';
 import {createDiscoveryMemory,discoveryMemoryPath} from './discovery-memory.js';
+import {createCuriosityMemory} from './curiosity-memory.js';
 import {planTrapRecovery} from './trap-recovery.js';
 import {diagnoseFooting} from './footing-diagnostic.js';
 import {inspectLedge,isHazardAdjacent} from './ledge-observation.js';
@@ -38,6 +39,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const provenance=attachFoodProvenance(bot,{log,getDecision:()=>activeDecision,clock});
  const sequences=createFoodSequenceTracker({log,clock});
  const canopyTracker=createCanopyOutcomeTracker({clock});
+ const curiosityEnabled=process.env.CRAFTLE_CURIOSITY_MEMORY==='1';
+ const curiosity=curiosityEnabled?createCuriosityMemory({agentId:process.env.CRAFTLE_DISCOVERY_AGENT_ID??bot.username??'agent',
+  worldId:process.env.CRAFTLE_DISCOVERY_WORLD_ID??'unscoped',clock,log,
+  file:(process.env.CRAFTLE_PERSISTENT_ROOT??'recordings')+'/curiosity/'+(process.env.CRAFTLE_DISCOVERY_AGENT_ID??bot.username??'agent').replace(/[^a-zA-Z0-9_-]/g,'_')+'.json'}):null;
  const discoveryEnabled=process.env.CRAFTLE_DISCOVERY_MEMORY==='1';
  const discovery=discoveryEnabled?createDiscoveryMemory({
   agentId:process.env.CRAFTLE_DISCOVERY_AGENT_ID??bot.username??'agent',
@@ -110,6 +115,16 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   busy=true;const epoch=life,valid=()=>!ended&&!dead&&epoch===life;
   try{
    let p=bot.entity.position;
+   if(curiosity){
+    const blocks=[];
+    for(let dx=-3;dx<=3;dx+=2)for(let dz=-3;dz<=3;dz+=2)for(let dy=-2;dy<=2;dy+=2){
+     const b=bot.blockAt(p.offset(dx,dy,dz),false);
+     if(b)blocks.push({name:b.name,position:b.position});
+    }
+    const entities=Object.values(bot.entities??{}).filter(e=>e?.position&&e.position.distanceTo(p)<=16);
+    curiosity.observe({position:p,dimension:bot.game?.dimension??'overworld',blocks,entities});
+    try{curiosity.save();}catch(error){log({type:'curiosity_save_error',message:error.message});}
+   }
    if(discovery){
     discovery.sample({position:p,dimension:bot.game?.dimension??'overworld',
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
@@ -291,6 +306,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   }catch(error){if(valid())log({type:'target_runtime_error',message:error.message});}finally{busy=false;}
  };
  const stop=()=>{if(ended)return;
+  if(curiosity)try{curiosity.save(true);}catch(error){log({type:'curiosity_save_error',message:error.message});}
   if(discovery)try{discovery.save(true);}catch(error){log({type:'discovery_memory_save_error',message:error.message});}for(const event of canopyTracker.reset('agent_stopped'))log(event);ended=true;bot.__craftleActiveDecision=null;life++;if(timer)clearInterval(timer);decisionController.stop();provenance.stop();sequences.stop();if(autoEatControl){bot.autoEat.disableAuto();bot.autoEat.cancelEat();}for(const [event,listener] of [['death',death],['spawn',spawn],['goal_reached',reached],['path_update',pathUpdate],['path_update',pathDiagnostics],['path_reset',pathReset],['end',stop]])bot.removeListener(event,listener);cancel();};
  bot.on('death',death);bot.on('spawn',spawn);bot.on('goal_reached',reached);bot.on('path_update',pathUpdate);bot.on('path_update',pathDiagnostics);bot.on('path_reset',pathReset);bot.once('end',stop);
  if(autoStart)timer=setInterval(()=>void step(),intervalMs);
