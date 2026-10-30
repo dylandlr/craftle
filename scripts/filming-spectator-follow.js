@@ -1,3 +1,4 @@
+import {shouldAttachCamera} from '../src/filming-camera-attachment.js';
 // Filming-only spectator follow watchdog. It never connects to the learner,
 // modifies its policy, or controls gameplay; RCON only changes the camera account.
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ const password=fs.readFileSync(process.env.CRAFTLE_RCON_PASSWORD_FILE??'/run/sec
 if(!password)throw Error('Missing filming RCON password');
 const logFile=process.env.CRAFTLE_COMMENTARY_LOG??'/state/agent/continuous/agent.log';
 const interval=Math.max(2500,Number(process.env.CRAFTLE_FOLLOW_CHECK_MS??6000));
+const reattachMs=Number(process.env.CRAFTLE_FOLLOW_REATTACH_MS??0);
 function packet(id,type,payload){
  const body=Buffer.from(payload+'\0\0');
  const out=Buffer.alloc(body.length+12);out.writeInt32LE(out.length-4,0);
@@ -82,13 +84,14 @@ async function tick(){
     const mode=await command('gamemode spectator '+camera);
     console.log(JSON.stringify({type:'filming_camera_spectator_mode',camera,response:mode.slice(0,220)}));
   }
-  // Periodically reassert to recover lost attachment even if a lifecycle event
-  // was missed. No bot commands are issued. This is an ALWAYS-ON camera mode.
-  if(!pending&&Date.now()-lastAttach<30000)return;
+  // Do not repeatedly issue /spectate while attached: it can disturb client terrain rendering.
+  // Lifecycle events and reconnects still trigger attachment. Optional heartbeat is opt-in.
+  const decision=shouldAttachCamera({pending,lastAttach,now:Date.now(),heartbeatMs:reattachMs});
+  if(!decision.attach)return;
   const response=await command('spectate '+target+' '+camera);
   // Vanilla command text varies with the server language; an empty response
   // is not proof of success. Report it, and keep retrying on the heartbeat.
-  console.log(JSON.stringify({type:'filming_follow_attempt',target,camera,response:response.slice(0,220)}));
+  console.log(JSON.stringify({type:'filming_follow_attempt',target,camera,reason:decision.reason,response:response.slice(0,220)}));
   if(/no entity|not found|unknown|failed|cannot|can't|could not|not in spectator|not online/i.test(response)){
    pending=true;
   }else{
