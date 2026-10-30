@@ -94,6 +94,7 @@ services:
       CRAFTLE_FOLLOW_REATTACH_MS: '${CRAFTLE_FOLLOW_REATTACH_MS:-0}'
     volumes:
       - ../../scripts:/app/scripts:ro
+      - ../../src:/app/src:ro
       - ./state/agent:/state/agent:ro
     secrets:
       - rcon_password
