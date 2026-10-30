@@ -22,6 +22,7 @@ import {createLearningOptionController} from './learning-options.js';
 import {createTargetedController} from './targeted-controller.js';
 import {startTargetedSurvival} from './targeted-survival.js';
 import {observeLocalPerception} from './local-perception.js';
+import {auditFoodPerception} from './food-perception-audit.js';
 const config=JSON.parse(fs.readFileSync('config.json','utf8'));
 fs.mkdirSync('recordings',{recursive:true});
 const events=fs.createWriteStream('recordings/events.jsonl',{flags:'a'});
@@ -121,6 +122,16 @@ for(const [index,profile] of activeProfiles.entries()){
    worldAgeAnchor:lastWorldAge,
    position:{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z},
    evidence:'mineflayer_local_block_cache',cameraApplied:false});
+ });
+ // Throttled observer-side diagnostic. Never used by learning policy or navigation.
+ let foodAuditAt=0;
+ bot.on('physicsTick',()=>{
+  if(process.env.CRAFTLE_FOOD_PERCEPTION_AUDIT!=='1'||!bot.entity||Date.now()-foodAuditAt<10000)return;
+  foodAuditAt=Date.now();
+  try{
+   const audit=auditFoodPerception(bot);
+   if(audit)log(profile.name,audit.type,{agent_id:profile.id,...audit});
+  }catch(e){log(profile.name,'food_perception_audit_error',{message:e.message});}
  });
  // Opt-in fine-grained tick trace. This is a physical state snapshot, not a DQN decision.
  // Set only for short isolated experiments: ~20 events/second, significant log volume.
