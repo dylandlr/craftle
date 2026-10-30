@@ -16,6 +16,7 @@ import {createProgressTracker} from './llm-progress.js';
 import {createOnlineVisualQLearner,visualState,intrinsicVisualReward} from './online-visual-rl.js';
 import {attachRecorder,recordingOptions,prepareRecorder} from './recording.js';
 import {createLifeFeedback} from './life-feedback.js';
+import {createRespawnAudit} from './respawn-audit.js';
 import {createRewardV2} from './reward-v2.js';
 import {startSurvivalReference} from './survival-reference.js';
 import {createLearningOptionController} from './learning-options.js';
@@ -69,12 +70,14 @@ for(const [index,profile] of activeProfiles.entries()){
        note:'Message mentioning observer received by Mineflayer'});});
  }
  const lifeFeedback=createLifeFeedback();
+ const respawnAudit=createRespawnAudit({log:event=>log(profile.name,event.type,{agent_id:profile.id,...event})});
  bot.on('messagestr',(message,position)=>{
    const entry=lifeFeedback.chat(message,position??'chat');
    log(profile.name,'minecraft_text_observed',{agent_id:profile.id,...entry});
  });
  bot.on('death',()=>{
    const position=bot.entity?.position;
+   respawnAudit.death({position,dimension:bot.game?.dimension});
    const entry=lifeFeedback.death({message:'You Died!',position:position?{x:position.x,y:position.y,z:position.z}:null,health:bot.health});
    log(profile.name,'death_screen_observed',{agent_id:profile.id,...entry,source:'mineflayer_death_event'});
  });
@@ -195,6 +198,7 @@ for(const [index,profile] of activeProfiles.entries()){
  let rlRuntimeInitialized=false;
  bot.on('spawn',()=>{
    log(profile.name,'spawn',{agent_id:profile.id,position:bot.entity?.position});
+   respawnAudit.spawn({position:bot.entity?.position,dimension:bot.game?.dimension});
    if(process.env.CRAFTLE_CAMERA_SWEEP==='1'){
      let tick=0;
      const sweep=setInterval(()=>{
