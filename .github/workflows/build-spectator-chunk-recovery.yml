@@ -1,0 +1,42 @@
+name: Build spectator chunk recovery mod
+
+on:
+  push:
+    branches:
+      - feat/fabric-spectator-chunk-recovery-v1
+    paths:
+      - 'client-mod/chunk-recovery/**'
+      - '.github/workflows/build-spectator-chunk-recovery.yml'
+  pull_request:
+    paths:
+      - 'client-mod/chunk-recovery/**'
+      - '.github/workflows/build-spectator-chunk-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client-mod/chunk-recovery
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build Fabric mod
+        run: gradle --no-daemon build
+      - name: Upload installable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: craftle-spectator-chunk-recovery
+          path: client-mod/chunk-recovery/build/libs/*.jar
+          if-no-files-found: error
+          retention-days: 30
