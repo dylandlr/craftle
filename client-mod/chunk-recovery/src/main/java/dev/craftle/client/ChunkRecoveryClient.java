@@ -14,13 +14,13 @@ import org.slf4j.LoggerFactory;
 public final class ChunkRecoveryClient implements ClientModInitializer {
     private static final Logger LOG = LoggerFactory.getLogger("CraftleChunkRecovery");
     private static final RecoveryGate GATE = new RecoveryGate(12_000, 45_000);
-    private static final boolean AUTO = Boolean.getBoolean("craftle.chunkRecovery.auto");
+    private static final boolean AUTO = Boolean.parseBoolean(System.getProperty("craftle.chunkRecovery.auto", "true"));
     private static long lastSample = 0;
     private static int previousX = Integer.MIN_VALUE, previousZ = Integer.MIN_VALUE;
     private static String previousWorld = "";
 
     @Override public void onInitializeClient() {
-        LOG.info("Craftle chunk recovery installed: auto={} (disabled by default)", AUTO);
+        LOG.info("Craftle chunk recovery installed: auto={} (enabled by default; set -Dcraftle.chunkRecovery.auto=false to disable)", AUTO);
         ClientTickEvents.END_CLIENT_TICK.register(ChunkRecoveryClient::tick);
     }
 
