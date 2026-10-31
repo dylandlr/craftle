@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "craftle_chunk_recovery",
+  "version": "${version}",
+  "name": "Craftle Spectator Chunk Recovery",
+  "description": "Client-only diagnostics and guarded terrain reload for spectator filming.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.craftle.client.ChunkRecoveryClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
