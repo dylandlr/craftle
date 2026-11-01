@@ -1,4 +1,4 @@
-import {interpretNeuralTrace,neuralTraceText,neuralTraceChat} from './observer-neural-traces.js';
+import {interpretNeuralTrace,neuralTraceText,neuralTraceChat,neuralTracePages} from './observer-neural-traces.js';
 import {explainEvent,explanationChat} from './observer-explainability.js';
 import {formatEvent,recommendedLevel,observerCommand} from './observer-presentation.js';
 // Filming-only RCON chat commentator. Reads the agent log; never modifies policy,
@@ -15,7 +15,7 @@ const port=Number(process.env.CRAFTLE_RCON_PORT??25575);
 const password=fs.readFileSync(process.env.CRAFTLE_RCON_PASSWORD_FILE??'/run/secrets/rcon_password','utf8').trim();
 if(!password)throw Error('Missing RCON password');
 const minimumMs=Math.max(750,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??1200));
-let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
+let lastSent=0,queued=[],tracePages=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
 let lastDecisionAnnouncement=null,lastDecisionAnnouncedAt=0,lastVitalsWarningAt=0;
 const eventCooldown=new Map();
 const maxAgeMs=4000;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
@@ -81,6 +81,20 @@ async function poll(){
      const explanation=modeNow==='verbose'?explainEvent(e,lastDecision):null;
      // Full explanatory record goes to the human observer console, even when chat dedupes.
      if(explanation)console.log(JSON.stringify({type:'observer_explanation',timestamp:e.timestamp,decisionId:explanation.decisionId,...explanation}));
+     if(e.type==='decision_trace_v1'&&modeNow==='verbose'){
+       const pages=neuralTracePages(e);
+       // A complete decision's pages stay together; display a bounded live backlog.
+       // If the spectator falls behind, record explicit loss rather than pretend
+       // that all values were displayed. The source JSONL remains complete.
+       if(pages.length){
+         if(tracePages.length+pages.length>120){
+           console.warn(JSON.stringify({type:'observer_neural_chat_overflow',droppedPages:tracePages.length,decisionId:e.decisionId,source:'agent.log'}));
+           tracePages=[];
+         }
+         for(const message of pages)tracePages.push({message,time:Date.parse(e.timestamp),type:'neural_trace_page'});
+       }
+       continue;
+     }
      let message=allowed(e)?(e.type==='decision_trace_v1'&&modeNow==='verbose'?neuralTraceChat(e):explanation?explanationChat(explanation):describe(e)):null;
      if(e.type==='target_decision'&&modeNow!=='verbose'){
        const kind=String(e.action??'unknown');
@@ -128,10 +142,13 @@ async function poll(){
    // Detailed numerical status is available in the server JSONL, not spectator chat.
   }
   queued=queued.filter(e=>Date.now()-e.time<=maxAgeMs);
+  if(verbosity()!=='verbose')tracePages=[];
+  // Full verbose trace pages are intentionally not subject to routine event
+  // deduplication, age expiry, or one-message-per-decision coalescing.
   // Prefer a recent event over a routine summary when both are available.
   queued.sort((a,b)=>(Number(criticalTypes.has(b.type))-Number(criticalTypes.has(a.type)))||a.time-b.time);
-  if(queued.length&&(criticalTypes.has(queued[0].type)||Date.now()-lastSent>=minimumMs)){
-   const entry=queued.shift();
+  if((queued.length||tracePages.length)&&(queued.length&&criticalTypes.has(queued[0].type)||Date.now()-lastSent>=minimumMs)){
+   const entry=queued.length&&criticalTypes.has(queued[0].type)?queued.shift():tracePages.length?tracePages.shift():queued.shift();
    await rcon(chatCommand(entry.message));lastSent=Date.now();
    console.log(JSON.stringify({type:'filming_chat_sent',eventType:entry.type,message:entry.message,ageMs:Date.now()-entry.time,recipient:username}));
   }
