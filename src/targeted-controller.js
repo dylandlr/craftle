@@ -17,7 +17,11 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
  const save=()=>{if(mode!=='training'||!checkpoint)return;fs.mkdirSync(path.dirname(checkpoint),{recursive:true});fs.writeFileSync(checkpoint+'.tmp',JSON.stringify(learner.snapshot()));fs.renameSync(checkpoint+'.tmp',checkpoint);};
  return {
   choose(o){
-   const {features,mask}=encodeTargets(o);
+   const {features,mask,requiresRecovery}=encodeTargets(o);
+   if(requiresRecovery){
+    log({type:'target_no_executable_action',reason:'planner_declared_exploration_unavailable',exploreFeasible:o.exploreFeasible??null,policyChanged:false});
+    throw new Error('No executable targeted action: executive recovery required');
+   }
    if(rewardVersion==='v2'&&!pending){const key=cell(o.position);if(key)visited.add(key);}
    if(pending){
     if(Number.isFinite(o.foodUnits)&&Number.isFinite(pending.foodUnits))log({type:'target_inventory_observed',decisionId:pending.decisionId,action:pending.action,previousFoodUnits:pending.foodUnits,currentFoodUnits:o.foodUnits,deltaFoodUnits:o.foodUnits-pending.foodUnits,evidence:'subsequent_observation_not_causal_proof'});
@@ -50,7 +54,7 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
    const choice=decodeTargetAction(index,o),decisionId=++serial;
    pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,credit:0,decisionId};
    log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,capabilityTier:'scripted_targeted_skills'});
-   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,source:'assisted_semantic_mineflayer_no_pixels'});
+   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actionAvailability:{exploreFeasible:o.exploreFeasible??null,requiresRecovery:false},actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,source:'assisted_semantic_mineflayer_no_pixels'});
    if(mode==='training'&&stats().updates%40===0)save();
    return {...choice,decisionId};
   },

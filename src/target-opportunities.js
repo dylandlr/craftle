@@ -40,12 +40,14 @@ export function encodeTargets(o){
  if(features.length!==TARGET_INPUTS||!features.every(Number.isFinite))throw Error('Invalid target observation');
  const mask=TARGET_ACTIONS.map(action=>{
   if(action==='eat')return o.foodAvailable&&o.food<20;
-  if(action==='explore')return true;
+  if(action==='explore')return o.exploreFeasible!==false;
   if(action==='retreat')return o.hostileDistance<24;
   const [skill,slot]=action.split('_'),t=o.targets[Number(slot)];
   return Boolean(t&&t.visible&&(skill==='approach'||t.reachable&&(skill==='harvest'?t.kind==='plant':t.kind==='animal')));
  });
- return {features,mask};
+ // Never silently construct an empty action set: caller needs an explicit recovery/interrupt path.
+ if(!mask.some(Boolean))return {features,mask,requiresRecovery:true};
+ return {features,mask,requiresRecovery:false};
 }
 export function decodeTargetAction(index,o){
  const {mask}=encodeTargets(o);if(!Number.isInteger(index)||!mask[index])throw Error('Unavailable target action');
