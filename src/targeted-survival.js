@@ -85,10 +85,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const settleRecovery=(p)=>{
   if(!pendingRecovery||!navRecovery||tick-pendingRecovery.tick<3)return;
   const d=Math.hypot(p.x-pendingRecovery.origin.x,p.z-pendingRecovery.origin.z);
-  const available=Boolean(goal&&bot.pathfinder.goal);
+  const remainingDistance=Math.hypot(p.x-pendingRecovery.destination.x,p.y-pendingRecovery.destination.y,p.z-pendingRecovery.destination.z);
+  const available=Boolean(goal&&bot.pathfinder.goal&&bot.pathfinder.isMoving?.());
   const outcome=navRecovery.finishRecovery({situationId:pendingRecovery.situationId,attemptId:pendingRecovery.attemptId,
-   before:{tick:pendingRecovery.tick,distanceToGoal:100},
-   after:{tick,distanceToGoal:100-d,routeAvailable:available}});
+   before:{tick:pendingRecovery.tick,distanceToGoal:pendingRecovery.initialDistance},
+   after:{tick,distanceToGoal:remainingDistance,routeAvailable:available}});
   log({type:'navigation_recovery_outcome',...outcome,measuredDisplacement:d,learned:false});
   const recommendation=navRecovery.recommendation(pendingRecovery.situationId);
   if(recommendation==='table_goal')log({type:'navigation_recovery_goal_tabling_recommended',situationId:pendingRecovery.situationId,decisionId:pendingRecovery.decisionId,reason:'attempt_budget_exhausted',learned:false});
@@ -114,7 +115,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     const attemptId=String(++recoverySerial);
     const accepted=navRecovery.beginRecovery({situationId,attemptId,method:'existing_trap_recovery'});
     if(accepted.accepted){
-     pendingRecovery={situationId,attemptId,tick,decisionId:activeDecision?.decisionId??null,origin:{x:p.x,z:p.z}};
+     pendingRecovery={situationId,attemptId,tick,decisionId:activeDecision?.decisionId??null,origin:{x:p.x,z:p.z},destination:{x:q.x,y:q.y,z:q.z},initialDistance:Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)};
      log({type:'navigation_recovery_attempt',situationId,attemptId,method:'existing_trap_recovery',decisionId:activeDecision?.decisionId??null,learned:false});
     }else if(accepted.recommendation==='table_goal'){
      log({type:'navigation_recovery_goal_tabling_recommended',situationId,reason:accepted.reason,learned:false});
