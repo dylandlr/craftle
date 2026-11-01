@@ -1,4 +1,4 @@
-import {interpretNeuralTrace,neuralTraceText} from './observer-neural-traces.js';
+import {interpretNeuralTrace,neuralTraceText,neuralTraceChat} from './observer-neural-traces.js';
 import {explainEvent,explanationChat} from './observer-explainability.js';
 import {formatEvent,recommendedLevel,observerCommand} from './observer-presentation.js';
 // Filming-only RCON chat commentator. Reads the agent log; never modifies policy,
@@ -81,8 +81,8 @@ async function poll(){
      const explanation=modeNow==='verbose'?explainEvent(e,lastDecision):null;
      // Full explanatory record goes to the human observer console, even when chat dedupes.
      if(explanation)console.log(JSON.stringify({type:'observer_explanation',timestamp:e.timestamp,decisionId:explanation.decisionId,...explanation}));
-     let message=allowed(e)?(explanation?explanationChat(explanation):describe(e)):null;
-     if(e.type==='target_decision'){
+     let message=allowed(e)?(e.type==='decision_trace_v1'&&modeNow==='verbose'?neuralTraceChat(e):explanation?explanationChat(explanation):describe(e)):null;
+     if(e.type==='target_decision'&&modeNow!=='verbose'){
        const kind=String(e.action??'unknown');
        if(kind===lastDecisionAnnouncement&&Date.now()-lastDecisionAnnouncedAt<60000)continue;
        lastDecisionAnnouncement=kind;lastDecisionAnnouncedAt=Date.now();
@@ -93,7 +93,7 @@ async function poll(){
      }
      if(!message)continue;
      const signature=e.type+':'+(e.reason??'')+':'+(e.action??'')+':'+(e.result??'');
-     const cooldownMs=['death_screen_observed','target_consumed','navigation_recovery_outcome'].includes(e.type)?0:25000;
+     const cooldownMs=e.type==='decision_trace_v1'&&modeNow==='verbose'?0:['death_screen_observed','target_consumed','navigation_recovery_outcome'].includes(e.type)?0:25000;
      if(Date.now()-(eventCooldown.get(signature)??0)<cooldownMs)continue;
      eventCooldown.set(signature,Date.now());
      if(eventCooldown.size>1000)eventCooldown.clear();
@@ -103,6 +103,7 @@ async function poll(){
      // Keep important outcomes even when rapid decisions occur.
      // Latest-state messages replace older summaries instead of forming backlog.
      if(e.type==='target_decision')queued=queued.filter(item=>item.type!=='target_decision');
+     if(e.type==='decision_trace_v1')queued=queued.filter(item=>item.type!=='decision_trace_v1');
      const age=Date.now()-Date.parse(e.timestamp);
      if(!Number.isFinite(age)||age>maxAgeMs||age< -30000)continue;
      const entry={message,time:Date.parse(e.timestamp),type:e.type};

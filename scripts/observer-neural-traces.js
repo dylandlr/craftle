@@ -21,3 +21,20 @@ export function neuralTraceText(x){
  return 'Decision #'+x.decisionId+': '+x.selected+'; '+x.selection+'. Eligible Q-values: '+ranking+
   '. Targets: '+(x.targets??'unknown')+'. Blocked input: '+x.blocked+'. '+x.note;
 }
+
+export function neuralTraceChat(event){
+ const result=interpretNeuralTrace(event);
+ if(!result||result.type==='invalid_trace')return null;
+ const q=n=>Number.isFinite(n)?n.toFixed(2):'?';
+ const selected=result.ranked.find(x=>x.action===result.selected);
+ const alternative=result.ranked.find(x=>x.action!==result.selected);
+ const selection=result.forced?'Only available action':event.neuralTrace.selectionReason==='epsilon_random'?'Epsilon exploration':'Highest eligible Q-value';
+ const line1=[{text:'CRAFTLE ',color:'dark_aqua',bold:true},{text:'NEURAL ',color:'aqua',bold:true},{text:'#'+result.decisionId+' ',color:'gray'},
+  {text:result.selected.replaceAll('_',' '),color:'white',bold:true},{text:'  '+selection,color:result.forced?'gold':event.neuralTrace.exploratory?'yellow':'green'}];
+ const line2=[{text:'\n  ↳ ',color:'dark_gray'},{text:'Q '+q(selected?.value),color:'aqua'}];
+ if(alternative)line2.push({text:'  vs  '+alternative.action.replaceAll('_',' ')+' '+q(alternative.value),color:'gray'});
+ line2.push({text:'\n  ↳ ',color:'dark_gray'},{text:result.targets===0?'No targets observed':result.targets+' targets observed',color:'gray'});
+ if(result.forced)line2.push({text:'; no other eligible actions',color:'gold'});
+ if(result.blocked)line2.push({text:'; blocked input',color:'yellow'});
+ return {text:'',extra:[...line1,...line2]};
+}
