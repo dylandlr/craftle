@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {OptionTransition} from '../src/option-transition.js';
+const make=()=>new OptionTransition({runId:'run-1',optionId:'opt-1',action:'explore',startTick:100,state:[.2,.4],mask:[true,false],gamma:.9});
+const close=(o,args={})=>o.finish({endTick:103,nextState:[.3,.6],nextMask:[true,false],nextQ:[5,100],...args});
+test('three ticks with sparse rewards have exact discounted target',()=>{const o=make();o.reward({tick:100,value:1,evidence:'verified'});o.reward({tick:101,value:2,evidence:'observed_association'});o.reward({tick:102,value:3,evidence:'verified'});const x=close(o);assert.ok(Math.abs(x.target-8.875)<1e-10);assert.equal(x.duration,3);assert.equal(x.evidence.length,3)});
+test('terminal ends bootstrap and preserves evidence',()=>{const o=make();o.reward({tick:100,value:-5,evidence:'verified'});const x=close(o,{termination:'environment_terminal',outcome:'verified_failure'});assert.equal(x.target,-5);assert.equal(x.bootstrapped,false)});
+test('interruption still bootstraps from next policy',()=>{const x=close(make(),{termination:'option_interrupted',outcome:'interrupted'});assert.ok(Math.abs(x.target-3.645)<1e-10)});
+test('empty successor mask is rejected before closing',()=>{const o=make();assert.throws(()=>close(o,{nextMask:[false,false]}),/recovery supervisor/);assert.equal(o.closed,false)});
+test('cannot use time before start or after option end',()=>{const o=make();assert.throws(()=>o.reward({tick:99,value:1}),/invalid/);o.reward({tick:103,value:1});assert.throws(()=>close(o),/outside option/);assert.equal(o.closed,false)});
+test('duplicate close and reward after finish rejected',()=>{const o=make();close(o);assert.throws(()=>close(o),/closed/);assert.throws(()=>o.reward({tick:101,value:1}),/closed/)});
+test('interruptions cannot be mislabeled as terminal',()=>assert.throws(()=>close(make(),{termination:'environment_terminal',outcome:'interrupted'}),/not an option interruption/));
