@@ -68,6 +68,7 @@ services:
       CRAFTLE_NATIVE_ROUTE_DISCOVERY: '${CRAFTLE_NATIVE_ROUTE_DISCOVERY:-0}'
       CRAFTLE_CANOPY_STEPDOWN: '${CRAFTLE_CANOPY_STEPDOWN:-0}'
       CRAFTLE_NATIVE_TRAVERSAL_MODE: '${CRAFTLE_NATIVE_TRAVERSAL_MODE:-conservative}'
+      CRAFTLE_NAVIGATION_RECOVERY_LEARNING: '${CRAFTLE_NAVIGATION_RECOVERY_LEARNING:-0}'
       CRAFTLE_CAMERA_USERNAME: '${CRAFTLE_CAMERA_USERNAME:-}'
       LIBGL_ALWAYS_SOFTWARE: '1'
     volumes:
@@ -133,10 +134,12 @@ services:
       CRAFTLE_RCON_HOST: minecraft
       CRAFTLE_RCON_PORT: '25575'
       CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
-      CRAFTLE_CHAT_INTERVAL_MS: '${CRAFTLE_CHAT_INTERVAL_MS:-1200}'
+      CRAFTLE_CHAT_INTERVAL_MS: '${CRAFTLE_CHAT_INTERVAL_MS:-2000}'
+      CRAFTLE_OBSERVER_CONFIG: /state/observer/config.json
     volumes:
       - ../../scripts:/app/scripts:ro
       - ./state/agent:/state/agent:ro
+      - ./state/observer:/state/observer
     secrets:
       - rcon_password
     init: true
