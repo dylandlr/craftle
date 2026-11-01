@@ -1,0 +1,14 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {discountedReturn,smdpTarget,potentialShaping,gammaFromHalfLifeSeconds} from '../src/smdp-target.js';
+const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`);
+test('duration one: masked Bellman target',()=>near(smdpTarget({rewards:[2],gamma:.9,nextQ:[100,4],nextMask:[false,true]}).target,5.6));
+test('duration three: reward sum and gamma cubed bootstrapping',()=>{const r=smdpTarget({rewards:[1,2,3],gamma:.9,nextQ:[5,100],nextMask:[true,false]});near(r.discountedReward,5.23);near(r.target,8.875)});
+test('environment death ends bootstrap',()=>{const r=smdpTarget({rewards:[-1,-5],gamma:.9,termination:'environment_terminal',nextQ:[999]});near(r.target,-5.5);assert.equal(r.bootstrapped,false)});
+test('option interruption continues bootstrap',()=>near(smdpTarget({rewards:[-1,-1],gamma:.9,termination:'option_interrupted',nextQ:[2],nextMask:[true]}).target,-1.9+.81*2));
+test('empty successor mask requires recovery supervisor',()=>assert.throws(()=>smdpTarget({rewards:[1],gamma:.9,nextQ:[9],nextMask:[false]}),/recovery supervisor/));
+test('ineligible high Q cannot win',()=>near(smdpTarget({rewards:[0],gamma:.9,nextQ:[999,-2],nextMask:[false,true]}).target,-1.8));
+test('invalid rewards, gamma and empty option rejected',()=>{assert.throws(()=>discountedReturn([],.9));assert.throws(()=>discountedReturn([NaN],.9));assert.throws(()=>smdpTarget({rewards:[1],gamma:1.3,termination:'environment_terminal'}))});
+test('potential shaping telescopes over unequal option durations',()=>{const g=.9,a=potentialShaping({gamma:g,duration:2,phiBefore:4,phiAfter:7}),b=potentialShaping({gamma:g,duration:3,phiBefore:7,phiAfter:2});near(a+g**2*b,g**5*2-4)});
+test('terminal potential is zero',()=>near(potentialShaping({gamma:.9,duration:2,phiBefore:3,phiAfter:100,environmentTerminal:true}),-3));
+test('60-second discount half-life at 20 ticks per second',()=>near(gammaFromHalfLifeSeconds(60)**1200,.5));
