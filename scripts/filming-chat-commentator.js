@@ -1,3 +1,4 @@
+import {explainEvent,explanationChat} from './observer-explainability.js';
 import {formatEvent,recommendedLevel,observerCommand} from './observer-presentation.js';
 // Filming-only RCON chat commentator. Reads the agent log; never modifies policy,
 // sends controls to Mineflayer, or broadcasts messages to Turesla.
@@ -71,7 +72,11 @@ async function poll(){
      if(e.type==='target_action')lastVitals={health:e.health,food:e.food};
      if(e.type==='target_decision')lastDecision=e;
      if(e.type==='target_transition')lastReward=e.reward;
-     let message=allowed(e)?describe(e):null;
+     const modeNow=verbosity();
+     const explanation=modeNow==='verbose'?explainEvent(e,lastDecision):null;
+     // Full explanatory record goes to the human observer console, even when chat dedupes.
+     if(explanation)console.log(JSON.stringify({type:'observer_explanation',timestamp:e.timestamp,decisionId:explanation.decisionId,...explanation}));
+     let message=allowed(e)?(explanation?explanationChat(explanation):describe(e)):null;
      if(e.type==='target_decision'){
        const kind=String(e.action??'unknown');
        if(kind===lastDecisionAnnouncement&&Date.now()-lastDecisionAnnouncedAt<60000)continue;
