@@ -1,3 +1,4 @@
+import {interpretNeuralTrace,neuralTraceText} from './observer-neural-traces.js';
 import {explainEvent,explanationChat} from './observer-explainability.js';
 import {formatEvent,recommendedLevel,observerCommand} from './observer-presentation.js';
 // Filming-only RCON chat commentator. Reads the agent log; never modifies policy,
@@ -73,6 +74,10 @@ async function poll(){
      if(e.type==='target_decision')lastDecision=e;
      if(e.type==='target_transition')lastReward=e.reward;
      const modeNow=verbosity();
+     if(e.type==='decision_trace_v1'&&modeNow==='verbose'){
+       const detail=interpretNeuralTrace(e);
+       if(detail)console.log(JSON.stringify({type:'observer_neural_decision',timestamp:e.timestamp,...detail,description:neuralTraceText(detail)}));
+     }
      const explanation=modeNow==='verbose'?explainEvent(e,lastDecision):null;
      // Full explanatory record goes to the human observer console, even when chat dedupes.
      if(explanation)console.log(JSON.stringify({type:'observer_explanation',timestamp:e.timestamp,decisionId:explanation.decisionId,...explanation}));
