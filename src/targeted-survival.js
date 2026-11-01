@@ -1,3 +1,4 @@
+import {NavigationRecoveryLearner} from './navigation-recovery-learning.js';
 import {loader as autoEatPlugin} from 'mineflayer-auto-eat';
 import pathfinderPackage from 'mineflayer-pathfinder';
 import {HOSTILE_MOBS} from './survival-reference.js';
@@ -68,6 +69,31 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  log({type:'native_traversal_config',mode:traversalMode,maxDropDown:movements.maxDropDown,allowParkour:movements.allowParkour,canDig:movements.canDig,learned:false});
  log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',canopyDescent,maximumDrop:canopyDescent?3:1,learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
+ const navRecovery=process.env.CRAFTLE_NAVIGATION_RECOVERY_LEARNING==='1'?new NavigationRecoveryLearner():null;
+ const observedSituation=(p)=>['overworld',Math.floor(p.x/4),Math.floor(p.y/4),Math.floor(p.z/4)].join(':');
+ let pendingRecovery=null,recoverySerial=0,lastNavFailurePosition=null;
+ const recordNavigationImpossible=(p,reason)=>{
+  if(!navRecovery)return;
+  const situationId=observedSituation(p),decisionId=String(activeDecision?.decisionId??'unassigned');
+  const outcome=navRecovery.observeFailure({situationId,decisionId,routeStatus:'no_known_connected_route',goalId:activeDecision?.skill??'explore'});
+  // No guaranteed action success: the native pathfinder can be unable to form a route.
+  if(!lastNavFailurePosition||lastNavFailurePosition!==situationId||stalls%25===0){
+   log({type:'navigation_impossibility_observed',...outcome,reasonDetail:reason,stalls,learned:false});
+   lastNavFailurePosition=situationId;
+  }
+ };
+ const settleRecovery=(p)=>{
+  if(!pendingRecovery||!navRecovery||tick-pendingRecovery.tick<3)return;
+  const d=Math.hypot(p.x-pendingRecovery.origin.x,p.z-pendingRecovery.origin.z);
+  const available=Boolean(goal&&bot.pathfinder.goal);
+  const outcome=navRecovery.finishRecovery({situationId:pendingRecovery.situationId,attemptId:pendingRecovery.attemptId,
+   before:{tick:pendingRecovery.tick,distanceToGoal:100},
+   after:{tick,distanceToGoal:100-d,routeAvailable:available}});
+  log({type:'navigation_recovery_outcome',...outcome,measuredDisplacement:d,learned:false});
+  const recommendation=navRecovery.recommendation(pendingRecovery.situationId);
+  if(recommendation==='table_goal')log({type:'navigation_recovery_goal_tabling_recommended',situationId:pendingRecovery.situationId,decisionId:pendingRecovery.decisionId,reason:'attempt_budget_exhausted',learned:false});
+  pendingRecovery=null;
+ };
  const recoverTrap=(p,reason)=>{
   if(!connectedExplore||stalls<3)return false;
   const plan=planTrapRecovery({origin:p,health:bot.health,
@@ -76,11 +102,25 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   log({type:'trap_recovery_audit',reason,decisionId:activeDecision?.decisionId??null,
    outcome:plan.reason,examined:plan.examined??0,selected:plan.selected?.position??null,
    health:bot.health,stalls,learned:false,informationAccess:'privileged_mineflayer_state'});
+  if(!plan.selected)recordNavigationImpossible(p,reason);
   if(plan.selected){
    const q=plan.selected.position;
    const unsafe=isHazardAdjacent({x:q.x,y:q.y,z:q.z,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
    if(unsafe){log({type:'trap_recovery_hazard_rejected',decisionId:activeDecision?.decisionId??null,position:q,reason:'hazard_or_unknown_near_destination',learned:false});return false;}
-   setGoal('trap_recovery',q,1);return true;
+   setGoal('trap_recovery',q,1);
+   if(navRecovery&&!pendingRecovery){
+    const situationId=observedSituation(p);
+    if(!navRecovery.situations.has(situationId))recordNavigationImpossible(p,reason);
+    const attemptId=String(++recoverySerial);
+    const accepted=navRecovery.beginRecovery({situationId,attemptId,method:'existing_trap_recovery'});
+    if(accepted.accepted){
+     pendingRecovery={situationId,attemptId,tick,decisionId:activeDecision?.decisionId??null,origin:{x:p.x,z:p.z}};
+     log({type:'navigation_recovery_attempt',situationId,attemptId,method:'existing_trap_recovery',decisionId:activeDecision?.decisionId??null,learned:false});
+    }else if(accepted.recommendation==='table_goal'){
+     log({type:'navigation_recovery_goal_tabling_recommended',situationId,reason:accepted.reason,learned:false});
+    }
+   }
+   return true;
   }
   return false;
  };
@@ -185,6 +225,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      return;
     }
    }
+   settleRecovery(p);
    const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
    const proposed=decisionController.choose(observation);
    const choice=typeof proposed?.then==='function'?await proposed:proposed;
