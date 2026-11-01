@@ -15,6 +15,7 @@ if(!password)throw Error('Missing RCON password');
 const minimumMs=Math.max(750,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??1200));
 let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
 let lastDecisionAnnouncement=null,lastDecisionAnnouncedAt=0,lastVitalsWarningAt=0;
+const eventCooldown=new Map();
 const maxAgeMs=4000;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
 function describe(e){return formatEvent(e);}
 function verbosity(){try{const c=JSON.parse(fs.readFileSync(process.env.CRAFTLE_OBSERVER_CONFIG??'/state/observer/config.json','utf8'));return ['off','minimal','normal','verbose'].includes(c.mode)?c.mode:'normal';}catch{return 'normal';}}
@@ -81,6 +82,12 @@ async function poll(){
        lastVitalsWarningAt=Date.now();
      }
      if(!message)continue;
+     const signature=e.type+':'+(e.reason??'')+':'+(e.action??'')+':'+(e.result??'');
+     const cooldownMs=['death_screen_observed','target_consumed','navigation_recovery_outcome'].includes(e.type)?0:25000;
+     if(Date.now()-(eventCooldown.get(signature)??0)<cooldownMs)continue;
+     eventCooldown.set(signature,Date.now());
+     if(eventCooldown.size>1000)eventCooldown.clear();
+     if(verbosity()==='verbose')console.log(JSON.stringify({type:'observer_verbose_event',event:e}));
      const key=[e.timestamp,e.type,e.decisionId??'',e.targetId??''].join('|');
      if(seen.has(key))continue;seen.add(key);if(seen.size>5000)seen.clear();
      // Keep important outcomes even when rapid decisions occur.
