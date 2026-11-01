@@ -1,3 +1,4 @@
+import {formatEvent,recommendedLevel,observerCommand} from './observer-presentation.js';
 // Filming-only RCON chat commentator. Reads the agent log; never modifies policy,
 // sends controls to Mineflayer, or broadcasts messages to Turesla.
 import fs from 'node:fs';
@@ -14,38 +15,11 @@ if(!password)throw Error('Missing RCON password');
 const minimumMs=Math.max(750,Number(process.env.CRAFTLE_CHAT_INTERVAL_MS??1200));
 let lastSent=0,queued=[],busy=false,seen=new Set(),lastSummary=0,lastDecision=null,lastPosition=null,lastVitals=null,lastReward=null;
 let lastDecisionAnnouncement=null,lastDecisionAnnouncedAt=0,lastVitalsWarningAt=0;
+const eventCooldown=new Map();
 const maxAgeMs=4000;const criticalTypes=new Set(['death_screen_observed','target_consumed','target_verified_recovery']);
-function describe(e){
- if(!e||!e.timestamp||typeof e.type!=='string')return null;
- if(e.type==='target_decision'){
-  const a=typeof e.action==='string'?e.action:'unknown';
-  if(a==='explore')return 'DQN chose EXPLORE (#'+(e.decisionId??'?')+'); targets='+((e.targets??[]).length)+'; options masked='+((e.mask??[]).filter(Boolean).length);
-  if(a==='retreat')return 'DQN chose RETREAT (#'+(e.decisionId??'?')+')';
-  if(a==='eat')return 'Decided to eat';
-  if(a.startsWith('approach_'))return 'Approaching target '+(e.targetId??a);
-  if(a.startsWith('attack_'))return 'Selected attack '+(e.targetId??a)+' (not verified)';
-  if(a.startsWith('harvest_'))return 'Selected harvest '+(e.targetId??a)+' (not verified)';
-  return 'Selected '+a;
- }
- if(e.type==='target_attack_attempt')return 'Punched / attacked '+(e.targetId??'target')+' (attempt)';
- if(e.type==='target_harvest_attempt')return 'Tried harvesting '+(e.plant??e.targetId??'block');
- if(e.type==='target_harvest_block_observation'&&e.changed)return 'Observed block change at harvest target';
- if(e.type==='target_consumed')return 'Ate '+(e.item??'food')+' (hunger '+e.beforeFood+' -> '+e.afterFood+')';
- if(e.type==='target_verified_recovery')return 'Hunger recovery verified';
- if(e.type==='food_provenance_pickup_event')return 'Item pickup observed';
- if(e.type==='death_screen_observed')return 'Turesla died';
- if(e.type==='food_sequence_started')return 'Started seeking food at '+(e.targetId??'a target');
- if(e.type==='food_sequence_recovery')return 'Completed food sequence: '+(e.status??'recovery observed');
- if(e.type==='health'&&Number.isFinite(e.health)&&Number.isFinite(e.food)){
-  if(e.health<=8||e.food<=6)return 'Low vitals: '+e.health+' HP, '+e.food+' hunger';
- }
- if(e.type==='target_navigation_result'&&e.status==='noPath')return 'Pathfinder reported NO PATH';
- if(e.type==='target_action_rejected')return 'Action rejected: '+(e.reason??'unknown');
- if(e.type==='target_runtime_error')return 'Agent skill error: '+String(e.message??'unknown').slice(0,85);
- if(e.type==='target_reward_components')return null;
- if(e.type==='target_transition'&&Number.isFinite(e.reward)&&Math.abs(e.reward)>.25)return 'DQN reward '+e.reward.toFixed(2)+' from '+(e.action??'action');
- return null;
-}
+function describe(e){return formatEvent(e);}
+function verbosity(){try{const c=JSON.parse(fs.readFileSync(process.env.CRAFTLE_OBSERVER_CONFIG??'/state/observer/config.json','utf8'));return ['off','minimal','normal','verbose'].includes(c.mode)?c.mode:'normal';}catch{return 'normal';}}
+function allowed(e){const level=verbosity();return level!=='off'&&(level==='verbose'||(level==='normal'&&recommendedLevel(e)!=='verbose')||(level==='minimal'&&recommendedLevel(e)==='minimal'));}
 function packet(id,type,payload){
  const bytes=Buffer.from(payload+'\0\0');
  const buf=Buffer.alloc(14+Buffer.byteLength(payload));
@@ -75,11 +49,7 @@ function rcon(command){
   socket.on('close',()=>{if(!completed)finish(new Error('RCON closed'));});
  });
 }
-function chatCommand(message){
- // Minecraft text-component JSON is escaped by JSON.stringify, preventing command injection.
- const component=JSON.stringify({text:'[Craftle] Turesla: '+message.slice(0,150),color:'aqua'});
- return 'tellraw '+username+' '+component;
-}
+function chatCommand(component){return observerCommand(username,component,'chat');}
 let offset=0,remainder='';
 try{offset=fs.statSync(file).size;}catch{}
 async function poll(){
@@ -101,19 +71,23 @@ async function poll(){
      if(e.type==='target_action')lastVitals={health:e.health,food:e.food};
      if(e.type==='target_decision')lastDecision=e;
      if(e.type==='target_transition')lastReward=e.reward;
-     let message=describe(e);
+     let message=allowed(e)?describe(e):null;
      if(e.type==='target_decision'){
        const kind=String(e.action??'unknown');
-       const changed=kind!==lastDecisionAnnouncement;
-       if(!changed&&Date.now()-lastDecisionAnnouncedAt<12000)continue;
+       if(kind===lastDecisionAnnouncement&&Date.now()-lastDecisionAnnouncedAt<60000)continue;
        lastDecisionAnnouncement=kind;lastDecisionAnnouncedAt=Date.now();
-       message=changed?message:'Still '+kind.toUpperCase()+'; latest decision #'+(e.decisionId??'?');
      }
      if(e.type==='health'&&message){
        if(Date.now()-lastVitalsWarningAt<12000)continue;
        lastVitalsWarningAt=Date.now();
      }
      if(!message)continue;
+     const signature=e.type+':'+(e.reason??'')+':'+(e.action??'')+':'+(e.result??'');
+     const cooldownMs=['death_screen_observed','target_consumed','navigation_recovery_outcome'].includes(e.type)?0:25000;
+     if(Date.now()-(eventCooldown.get(signature)??0)<cooldownMs)continue;
+     eventCooldown.set(signature,Date.now());
+     if(eventCooldown.size>1000)eventCooldown.clear();
+     if(verbosity()==='verbose')console.log(JSON.stringify({type:'observer_verbose_event',event:e}));
      const key=[e.timestamp,e.type,e.decisionId??'',e.targetId??''].join('|');
      if(seen.has(key))continue;seen.add(key);if(seen.size>5000)seen.clear();
      // Keep important outcomes even when rapid decisions occur.
@@ -133,15 +107,14 @@ async function poll(){
    }finally{fs.closeSync(fd);}
   }
   // Slow telemetry summary: ground in observed position and decision, never invent terrain type.
-  if(Date.now()-lastSummary>=15000&&lastDecision&&Date.now()-Date.parse(lastDecision.timestamp)<10000){
+  if(verbosity()==='verbose'&&Date.now()-lastSummary>=60000&&lastDecision&&Date.now()-Date.parse(lastDecision.timestamp)<10000){
    lastSummary=Date.now();
    const pos=lastPosition&&[lastPosition.x,lastPosition.y,lastPosition.z].every(Number.isFinite)?
      [lastPosition.x,lastPosition.y,lastPosition.z].map(v=>v.toFixed(1)).join(','):'unknown';
    const vit=lastVitals&&Number.isFinite(lastVitals.health)&&Number.isFinite(lastVitals.food)?
      ' HP='+lastVitals.health+' food='+lastVitals.food:'';
    queued=queued.filter(item=>item.type!=='status');
-   queued.push({message:'STATUS action='+(lastDecision.action??'?')+' pos='+pos+vit+
-     (Number.isFinite(lastReward)?' lastReward='+lastReward.toFixed(2):''),time:Date.now(),type:'status'});
+   // Detailed numerical status is available in the server JSONL, not spectator chat.
   }
   queued=queued.filter(e=>Date.now()-e.time<=maxAgeMs);
   // Prefer a recent event over a routine summary when both are available.

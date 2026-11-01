@@ -1,3 +1,4 @@
+import {formatHud,observerCommand} from './observer-presentation.js';
 // Read-only HUD projected as a private Minecraft actionbar to the filming spectator.
 // No scoreboard, teams, chat broadcasts or policy inputs; RCON only addresses spectator.
 import fs from 'node:fs';
@@ -59,20 +60,22 @@ function poll(){
  const lines=(partial+buf.toString('utf8')).split('\n');partial=lines.pop()??'';
  for(const line of lines){if(!line.startsWith('{"timestamp":'))continue;try{consume(JSON.parse(line));}catch{}}
 }
-const fmt=n=>Number.isFinite(n)?String(Math.round(n*10)/10):'?';
-function hud(){
- const p=latest.position;
- const pos=p&&[p.x,p.y,p.z].every(Number.isFinite)?[p.x,p.y,p.z].map(v=>Math.round(v)).join(','):'?';
- const age=latest.updatedAt?Math.floor((Date.now()-Date.parse(latest.updatedAt))/1000):null;
- const stale=age===null?' [NO TELEMETRY]':age>8?' [STALE '+age+'s]':'';
- const line='TURESLA | '+String(latest.action).slice(0,19)+' #'+(latest.decisionId??'?')+
-  ' | HP '+fmt(latest.health)+'/20 | Food '+fmt(latest.food)+'/20'+
-  ' | XYZ '+pos+' | R '+fmt(latest.reward)+' | Updates '+(latest.updates??'?')+stale;
- return 'title '+camera+' actionbar '+JSON.stringify({text:line,color:'gold'});
+// Compact observer actionbar; bossbar provides a persistent spectator-visible HUD.
+function hud(){return observerCommand(camera,formatHud(latest),'actionbar');}
+let bossbarReady=false;
+async function presentBossbar(){
+ const id='craftle:observer';
+ if(!bossbarReady){
+  await rcon('bossbar add '+id+' '+JSON.stringify({text:'Craftle observer',color:'aqua'}));
+  bossbarReady=true;
+ }
+ await rcon('bossbar set '+id+' players '+camera);
+ await rcon('bossbar set '+id+' visible true');
+ await rcon('bossbar set '+id+' name '+JSON.stringify(formatHud(latest)));
 }
 async function tick(){
  if(busy)return;busy=true;
- try{poll();await rcon(hud());}
+ try{poll();await rcon(hud());await presentBossbar();}
  catch(error){console.error(JSON.stringify({type:'filming_hud_error',message:error.message}));}
  finally{busy=false;}
 }
