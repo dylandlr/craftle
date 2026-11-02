@@ -115,14 +115,20 @@ deployment commands themselves have not been executed here.
 
 ### Copyable PowerShell update commands
 
-Run this block from the **existing live Craftle repository root**. It creates a
+Run this block from the **existing live Craftle repository or a subdirectory**. It creates a
 separate detached worktree for the updated tools and reads the live logs using
 absolute paths. It does not switch the live branch or restart any service. These
 focused tests use Node built-ins and do not need an npm install. Use Node 22.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$live = (Get-Location).Path
+$live = git rev-parse --show-toplevel
+if ($LASTEXITCODE -ne 0 -or -not $live) { throw 'Run this inside the live Craftle repository' }
+$agentLog = Join-Path $live 'deploy/filming/state/agent/continuous/agent.log'
+$clockLog = Join-Path $live 'deploy/filming/state/observer/server-clock.jsonl'
+foreach ($inputLog in @($agentLog, $clockLog)) {
+  if (-not (Test-Path -LiteralPath $inputLog -PathType Leaf)) { throw "Missing input log: $inputLog" }
+}
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $review = Join-Path (Split-Path $live -Parent) "craftle-replay-$stamp"
 git fetch origin feat/clock-bracketed-event-replay
@@ -135,8 +141,8 @@ try {
   node --test test/clock-event-correlation.test.js test/clock-bracketed-replay.test.js test/clock-collector.test.js test/event-envelope.test.js test/server-tick-clock.test.js test/minecraft-clock-rcon.test.js
   if ($LASTEXITCODE -ne 0) { throw 'Replay tests failed' }
   node scripts/build-clock-bracketed-replay.js `
-    (Join-Path $live 'deploy/filming/state/agent/continuous/agent.log') `
-    (Join-Path $live 'deploy/filming/state/observer/server-clock.jsonl') `
+    $agentLog `
+    $clockLog `
     $output 200 --max-sample-gap-ms 15000 --clock-skew-ms 0
   if ($LASTEXITCODE -ne 0) { throw 'Replay generation failed' }
 } finally {
@@ -151,7 +157,9 @@ $report.records | Where-Object { $_.tickBracket.status -ne 'bracketed' } |
 ```
 
 The default log paths match the supplied live run. If logs live elsewhere, change
-only those two `Join-Path` arguments. The `--clock-skew-ms 0` setting assumes a
+only the `$agentLog` and `$clockLog` assignments. Repository discovery avoids
+accidentally treating `observer-fabric` (or another subdirectory) as the live root.
+The `--clock-skew-ms 0` setting assumes a
 shared synchronized clock; replace it with a measured error bound if necessary.
 Retain `$review` for later reruns and the optional observer update below. The
 summary and diagnostics are the useful output to return for the next analysis.
