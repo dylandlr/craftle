@@ -19,3 +19,19 @@ test('identical tick samples cannot imply positive option duration',()=>{
  const c=new ServerTickClock(),a=c.observe(s(100)),b=c.observe(s(100));
  assert.throws(()=>c.interval(a,b),/invalid server tick interval/);
 });
+
+test('collector restart gets distinct identity even with the same world and epoch',()=>{
+ const first=new ServerTickClock(),second=new ServerTickClock();
+ const a=first.observe(s(100)),b=second.observe(s(110));
+ assert.notEqual(a.collectorSessionId,b.collectorSessionId);
+ assert.equal(a.epoch,b.epoch);
+ assert.throws(()=>first.interval(a,b),/epoch mismatch/);
+ assert.equal(first.observe(s(120)).sampleSequence,2);
+});
+
+test('wall-clock rollback advances epoch even when gameTime increases',()=>{
+ const clock=new ServerTickClock(),a=clock.observe(s(100));
+ const b=clock.observe({...s(110),observedAt:1});
+ assert.equal(b.epoch,a.epoch+1);
+ assert.throws(()=>clock.interval(a,b),/epoch mismatch/);
+});
