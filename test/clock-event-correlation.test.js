@@ -10,7 +10,7 @@ test('event strictly between completed and next requested clock sample has conse
  assert.deepEqual((( {minTick,maxTick,tickWidth,status})=>({minTick,maxTick,tickWidth,status}))(bracketEvent({timestamp:new Date(1600).toISOString()},samples)),
  {minTick:100,maxTick:120,tickWidth:20,status:'bracketed'});
 });
-test('event during a clock request is not spuriously assigned exact tick',()=>assert.equal(bracketEvent({timestamp:new Date(2020).toISOString()},samples).status,'unbounded'));
+test('event during a clock request uses wider enclosing bounds, never exact sample tick',()=>{const x=bracketEvent({timestamp:new Date(2020).toISOString()},samples);assert.equal(x.status,'bracketed');assert.equal(x.minTick,100);assert.equal(x.maxTick,140);});
 test('clock gap and epoch mismatch must not yield authoritative event tick',()=>{
  assert.equal(bracketEvent({timestamp:new Date(500).toISOString()},samples).status,'unbounded');
  assert.equal(bracketEvent({timestamp:new Date(1600).toISOString()},[samples[0],{...samples[1],epoch:1}]).status,'clock_discontinuity');
