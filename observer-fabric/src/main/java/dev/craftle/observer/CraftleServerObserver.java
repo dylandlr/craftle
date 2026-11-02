@@ -14,6 +14,9 @@ import java.nio.charset.StandardCharsets;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public final class CraftleServerObserver implements ModInitializer {
   private final Gson gson = new Gson();
@@ -21,9 +24,14 @@ public final class CraftleServerObserver implements ModInitializer {
   private long tickIndex = 0;
   private Path logPath;
   private BufferedWriter writer;
+  private final BlockingQueue<String> pending = new ArrayBlockingQueue<>(8192);
+  private Thread logThread;
+  private volatile boolean writing = false;
+  private long droppedEvents = 0;
   private final Map<UUID, Snapshot> previous = new HashMap<>();
 
-  private record Snapshot(double x,double y,double z,float health,int hunger,int inventoryHash,boolean dead) {}
+  private record Slot(String item,int count,String components) {}
+  private record Snapshot(double x,double y,double z,float health,int hunger,int inventoryHash,boolean dead,List<Slot> inventory) {}
 
   @Override public void onInitialize() {
     ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -33,6 +41,10 @@ public final class CraftleServerObserver implements ModInitializer {
         logPath = dir.resolve("server-events.jsonl");
         writer = Files.newBufferedWriter(logPath, StandardCharsets.UTF_8,
           StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        writing = true;
+        logThread = new Thread(this::drainEvents, "craftle-observer-writer");
+        logThread.setDaemon(true);
+        logThread.start();
         emit("server_observer_started", server, null, null);
       } catch (IOException error) {
         throw new IllegalStateException("Craftle observer could not create its output file", error);
@@ -41,9 +53,23 @@ public final class CraftleServerObserver implements ModInitializer {
     ServerTickEvents.END_SERVER_TICK.register(this::tick);
     ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
       emit("server_observer_stopping", server, null, null);
-      try { if(writer != null) writer.close(); } catch(IOException error) { throw new IllegalStateException(error); }
+      writing = false;
+      if(logThread != null) {
+        try { logThread.join(10000L); } catch(InterruptedException ex) { Thread.currentThread().interrupt(); }
+      }
+      if(logThread != null && logThread.isAlive()) {
+        throw new IllegalStateException("Craftle writer did not drain during shutdown");
+      }
       writer = null;
     });
+  }
+  private List<Slot> inventorySlots(ServerPlayerEntity player) {
+    List<Slot> slots = new ArrayList<>();
+    for(int index=0; index<player.getInventory().size(); index++) {
+      ItemStack stack=player.getInventory().getStack(index);
+      slots.add(new Slot(Registries.ITEM.getId(stack.getItem()).toString(),stack.getCount(),stack.getComponents().toString()));
+    }
+    return slots;
   }
   private int inventoryFingerprint(ServerPlayerEntity player) {
     int result=1;
@@ -61,13 +87,13 @@ public final class CraftleServerObserver implements ModInitializer {
     for(ServerPlayerEntity player:server.getPlayerManager().getPlayerList()){
       UUID id=player.getUuid();online.add(id);
       Snapshot now=new Snapshot(player.getX(),player.getY(),player.getZ(),player.getHealth(),
-        player.getHungerManager().getFoodLevel(),inventoryFingerprint(player),player.isDead());
+        player.getHungerManager().getFoodLevel(),inventoryFingerprint(player),player.isDead(),inventorySlots(player));
       Snapshot prior=previous.put(id,now);
       if(prior==null)emit("player_observed",server,player,now);
       if(prior!=null){
         if(now.health!=prior.health)emit("player_health_changed",server,player,now);
         if(now.hunger!=prior.hunger)emit("player_hunger_changed",server,player,now);
-        if(now.inventoryHash!=prior.inventoryHash)emit("player_inventory_changed",server,player,now);
+        if(!now.inventory.equals(prior.inventory)) emitInventoryChanges(server,player,prior,now);
         if(now.dead&&!prior.dead)emit("player_death_state_observed",server,player,now);
         if(tickIndex%20==0&&(now.x!=prior.x||now.y!=prior.y||now.z!=prior.z))
           emit("player_position_sample",server,player,now);
@@ -75,7 +101,41 @@ public final class CraftleServerObserver implements ModInitializer {
     }
     previous.keySet().retainAll(online);
   }
+  private void emitInventoryChanges(MinecraftServer server,ServerPlayerEntity player,Snapshot prior,Snapshot now) {
+    for(int i=0;i<now.inventory.size();i++) {
+      Slot before=prior.inventory.get(i), after=now.inventory.get(i);
+      if(before.equals(after))continue;
+      JsonObject detail=new JsonObject();
+      detail.addProperty("slot",i);
+      detail.addProperty("beforeItem",before.item());
+      detail.addProperty("beforeCount",before.count());
+      detail.addProperty("beforeComponents",before.components());
+      detail.addProperty("afterItem",after.item());
+      detail.addProperty("afterCount",after.count());
+      detail.addProperty("afterComponents",after.components());
+      detail.addProperty("observationType","end_of_tick_slot_delta");
+      emit("player_inventory_slot_changed",server,player,now,detail);
+    }
+    emit("player_inventory_changed",server,player,now);
+  }
+  private void drainEvents() {
+    try {
+      while(writing || !pending.isEmpty()) {
+        String line=pending.poll(250,TimeUnit.MILLISECONDS);
+        if(line!=null) { writer.write(line); writer.newLine(); }
+        if(pending.isEmpty())writer.flush();
+      }
+      writer.flush();
+      writer.close();
+    } catch(Exception error) {
+      System.err.println("[craftle-observer] writer failure: " + error);
+      writing=false;
+    }
+  }
   private void emit(String type,MinecraftServer server,ServerPlayerEntity player,Snapshot state) {
+    emit(type,server,player,state,null);
+  }
+  private void emit(String type,MinecraftServer server,ServerPlayerEntity player,Snapshot state,JsonObject detail) {
     if(writer==null)return;
     JsonObject row=new JsonObject();
     row.addProperty("schema","craftle.server-event.v1");
@@ -96,7 +156,10 @@ public final class CraftleServerObserver implements ModInitializer {
       row.addProperty("inventoryFingerprint",state.inventoryHash);
       row.addProperty("dead",state.dead);
     }
-    try {writer.write(gson.toJson(row));writer.newLine();writer.flush();}
-    catch(IOException error){throw new IllegalStateException("Craftle server event output failed",error);}
+    if(detail!=null)row.add("detail",detail);
+    if(!pending.offer(gson.toJson(row))) {
+      droppedEvents++;
+      if(droppedEvents==1 || droppedEvents%1000==0) System.err.println("[craftle-observer] EVENT LOSS: queue full, dropped=" + droppedEvents);
+    }
   }
 }
