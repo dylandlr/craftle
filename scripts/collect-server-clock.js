@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import {ServerTickClock} from '../src/server-tick-clock.js';
 import {parseGameTime,rconQuery} from '../src/minecraft-clock-rcon.js';
 const host=process.env.CRAFTLE_RCON_HOST??'minecraft';
@@ -8,7 +9,7 @@ const worldId=process.env.CRAFTLE_CLOCK_WORLD_ID??'filming-vanilla-1.21.1';
 const output=process.env.CRAFTLE_CLOCK_OUTPUT??'/state/observer/server-clock.jsonl';
 const interval=Math.max(1000,Number(process.env.CRAFTLE_CLOCK_INTERVAL_MS??5000));
 if(!password)throw Error('No RCON password');
-fs.mkdirSync(new URL('.', 'file://'+output).pathname,{recursive:true});
+fs.mkdirSync(path.dirname(output),{recursive:true});
 const clock=new ServerTickClock();let running=false;
 async function sample(){
  if(running)return;running=true;
