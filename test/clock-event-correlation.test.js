@@ -111,3 +111,21 @@ test('equal millisecond query and event stamps require wider enclosing samples',
  }
  assert.equal(bracketEvent(at(3000),samples).status,'unbounded');
 });
+
+test('coverage failure reasons distinguish empty clocks, edges and discontinuities',()=>{
+ assert.equal(bracketEvent(at(1600),[]).reason,'no_valid_clock_samples');
+ assert.equal(bracketEvent(at(500),samples).reason,'before_clock_coverage');
+ assert.equal(bracketEvent(at(4000),samples).reason,'after_clock_coverage');
+ assert.equal(bracketEvent(at(1050),samples).reason,'missing_before_sample');
+ assert.equal(bracketEvent(at(3000),samples).reason,'missing_after_sample');
+ assert.equal(bracketEvent(at(1020),[samples[0]]).reason,'missing_both_enclosing_samples');
+ assert.equal(bracketEvent(at(1600),[samples[0],{...samples[1],epoch:1}]).reason,'between_clock_segments');
+ assert.equal(bracketEvent(at(1600),[...samples,samples[0],samples[1]]).reason,'ambiguous_clock_segments');
+ assert.equal(bracketEvent(at(1600),samples,{maxSampleGapMs:1000}).reason,'sample_span_exceeds_limit');
+ const index=createClockIndex(samples);
+ const result=boundDuration(index.bracket(at(1600)),index.bracket(at(4000)));
+ assert.equal(result.endReason,'after_clock_coverage');assert.equal(result.startStatus,'bracketed');
+ assert.equal(index.diagnostics.firstSampleRequestedAt,1000);
+ assert.equal(index.diagnostics.lastSampleCompletedAt,3050);
+ assert.equal(createClockIndex([]).diagnostics.firstSampleRequestedAt,null);
+});

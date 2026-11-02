@@ -47,10 +47,13 @@ export function createClockIndex(samples, {maxSampleGapMs = 15000, clockSkewMs =
     validSamples++;
   }
   return {
-    diagnostics: {validSamples, invalidSamples, clockSegments: segments.length},
+    diagnostics: {validSamples, invalidSamples, clockSegments: segments.length,
+      firstSampleRequestedAt: validSamples ? firstRequest : null,
+      lastSampleCompletedAt: validSamples ? lastCompletion : null},
     bracket(event) {
       const time = timeOf(event);
-      if (!Number.isFinite(time)) return {status: 'invalid_event_timestamp'};
+      if (!Number.isFinite(time)) return {status: 'invalid_event_timestamp', reason: 'invalid_event_timestamp'};
+      if (!validSamples) return {status: 'unbounded', reason: 'no_valid_clock_samples', eventTime: time};
       const low = time - clockSkewMs, high = time + clockSkewMs;
       const enclosing = [];
       // Wall rollback can produce multiple plausible timelines: reject ambiguity.
@@ -59,16 +62,21 @@ export function createClockIndex(samples, {maxSampleGapMs = 15000, clockSkewMs =
         if (items[0].requestedAt > high || items.at(-1).completedAt < low) continue;
         enclosing.push(segment);
       }
-      if (enclosing.length > 1) return {status: 'clock_discontinuity', eventTime: time};
+      if (enclosing.length > 1) return {status: 'clock_discontinuity', reason: 'ambiguous_clock_segments', eventTime: time};
       const items = enclosing[0]?.samples;
-      if (!items) return {status: time >= firstRequest && time <= lastCompletion ? 'clock_discontinuity' : 'unbounded', eventTime: time};
+      if (!items) {
+        const inside = time >= firstRequest && time <= lastCompletion;
+        return {status: inside ? 'clock_discontinuity' : 'unbounded',
+          reason: inside ? 'between_clock_segments' : time < firstRequest ? 'before_clock_coverage' : 'after_clock_coverage', eventTime: time};
+      }
       // Equal millisecond stamps do not establish sub-millisecond ordering.
       const beforeIndex = lowerBound(items, low, 'completedAt') - 1;
       const before = items[beforeIndex], after = items[lowerBound(items, high, 'requestedAt', true)];
-      if (!before || !after) return {status: 'unbounded', eventTime: time};
-      if (event.worldId != null && event.worldId !== before.worldId) return {status: 'world_mismatch', eventTime: time};
+      if (!before || !after) return {status: 'unbounded', eventTime: time,
+        reason: !before && !after ? 'missing_both_enclosing_samples' : !before ? 'missing_before_sample' : 'missing_after_sample'};
+      if (event.worldId != null && event.worldId !== before.worldId) return {status: 'world_mismatch', reason: 'event_world_mismatch', eventTime: time};
       const sampleSpanMs = after.completedAt - before.requestedAt;
-      if (sampleSpanMs > maxSampleGapMs) return {status: 'stale_clock_gap', eventTime: time, sampleSpanMs};
+      if (sampleSpanMs > maxSampleGapMs) return {status: 'stale_clock_gap', reason: 'sample_span_exceeds_limit', eventTime: time, sampleSpanMs};
       return {
         status: 'bracketed', eventTime: time, worldId: before.worldId, epoch: before.epoch,
         collectorSessionId: before.collectorSessionId ?? null, clockSegment: enclosing[0].id,
@@ -88,7 +96,9 @@ export function bracketEvent(event, samples, options) {
 
 export function boundDuration(start, end) {
   const rejected = status => ({status, trainingEligible: false});
-  if (start?.status !== 'bracketed' || end?.status !== 'bracketed') return rejected('unbounded_endpoint');
+  if (start?.status !== 'bracketed' || end?.status !== 'bracketed') return {
+    ...rejected('unbounded_endpoint'), startStatus: start?.status ?? 'missing', endStatus: end?.status ?? 'missing',
+    startReason: start?.reason ?? null, endReason: end?.reason ?? null};
   for (const bracket of [start, end]) {
     if (!integer(bracket.minTick) || !integer(bracket.maxTick) || bracket.minTick > bracket.maxTick ||
         !Number.isFinite(bracket.eventTime) || !nonempty(bracket.worldId) || !integer(bracket.epoch) ||

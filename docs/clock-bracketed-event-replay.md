@@ -72,6 +72,21 @@ enclosing query span is 15,000 ms; longer gaps report `stale_clock_gap`. RCON
 round-trip time is included in that span. Missing before/after coverage reports
 `unbounded`. Reports expose all status counts instead of only a success count.
 
+`diagnostics.bracketFailureReasons` distinguishes events before/after clock
+coverage, missing strictly enclosing samples, ambiguous overlapping clock
+segments, gaps between segments, stale spans, and invalid timestamps. The first
+request and last completion are reported as numeric Unix milliseconds; they are
+the coverage envelope, not a promise of uninterrupted coverage. Duration failures
+also retain the two endpoint statuses and reasons.
+
+`summary` includes decision coverage, bounded duration count, durations whose
+lower bound is zero, and the number of decisions using legacy identity. Width
+statistics (`min`, `p50`, `p95`, `max`) use nearest-rank percentiles over successful
+bounds only; failed bounds are excluded, not treated as zero uncertainty. Empty
+populations use `null`. These are uncertainty widths in ticks, not action-length
+estimates. Event bracket status counts describe associations in the selected
+records; duplicate decision records can repeat the same associated event.
+
 A collector UUID is **not a server boot ID or world incarnation ID**. Restoring
 or restarting a world without an observed gametime decrease remains undetectable.
 Exact learning transitions would require server-side event stamps, stable world
@@ -89,12 +104,57 @@ node --test test/clock-event-correlation.test.js test/clock-bracketed-replay.tes
 npm test
 ```
 
-Validated locally with Node 22.15.0: **364 tests passed, 0 failed**. Coverage
+Validated locally with Node 22.15.0: **368 tests passed, 0 failed**. Coverage
 includes exhaustive small-interval duration bounds, the supplied #6606 example,
 query-boundary timestamp ties, rollback/restart ambiguity, session collisions,
 legacy multi-agent logs, duplicate endpoints, output overwrite protection, and a
 mock RCON server that verifies collector restarts and read-only commands. No live
 Minecraft service or learner was started by these checks.
+All PowerShell command blocks also pass PowerShell's syntax parser; the live
+deployment commands themselves have not been executed here.
+
+### Copyable PowerShell update commands
+
+Run this block from the **existing live Craftle repository root**. It creates a
+separate detached worktree for the updated tools and reads the live logs using
+absolute paths. It does not switch the live branch or restart any service. These
+focused tests use Node built-ins and do not need an npm install. Use Node 22.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$live = (Get-Location).Path
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+$review = Join-Path (Split-Path $live -Parent) "craftle-replay-$stamp"
+git fetch origin feat/clock-bracketed-event-replay
+if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
+git worktree add --detach $review origin/feat/clock-bracketed-event-replay
+if ($LASTEXITCODE -ne 0) { throw 'Could not create replay checkout' }
+$output = Join-Path $live "clock-bracketed-events-v2-$stamp.json"
+Push-Location $review
+try {
+  node --test test/clock-event-correlation.test.js test/clock-bracketed-replay.test.js test/clock-collector.test.js test/event-envelope.test.js test/server-tick-clock.test.js test/minecraft-clock-rcon.test.js
+  if ($LASTEXITCODE -ne 0) { throw 'Replay tests failed' }
+  node scripts/build-clock-bracketed-replay.js `
+    (Join-Path $live 'deploy/filming/state/agent/continuous/agent.log') `
+    (Join-Path $live 'deploy/filming/state/observer/server-clock.jsonl') `
+    $output 200 --max-sample-gap-ms 15000 --clock-skew-ms 0
+  if ($LASTEXITCODE -ne 0) { throw 'Replay generation failed' }
+} finally {
+  Pop-Location
+}
+$report = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+$report.summary | ConvertTo-Json -Depth 5
+$report.diagnostics | ConvertTo-Json -Depth 5
+$report.records | Where-Object { $_.tickBracket.status -ne 'bracketed' } |
+  Select-Object decisionId, timestamp, @{n='status';e={$_.tickBracket.status}}, @{n='reason';e={$_.tickBracket.reason}} |
+  Format-Table -AutoSize
+```
+
+The default log paths match the supplied live run. If logs live elsewhere, change
+only those two `Join-Path` arguments. The `--clock-skew-ms 0` setting assumes a
+shared synchronized clock; replace it with a measured error bound if necessary.
+Retain `$review` for later reruns and the optional observer update below. The
+summary and diagnostics are the useful output to return for the next analysis.
 
 Generate against existing log paths (reading them is sufficient; the collector
 and agent need not restart). Choose a new output filename for every run:
@@ -124,13 +184,24 @@ server. In the existing deployment checkout, copy only the reviewed
 separate checkout, then restart only the observer service:
 
 ```powershell
-docker compose -f deploy/filming/compose.yml --profile clock up -d --no-deps clock
-docker compose -f deploy/filming/compose.yml --profile clock restart clock
-Get-Content .\deploy\filming\state\observer\server-clock.jsonl -Tail 5
+# Continue in the same PowerShell session after the update block above.
+$collectorFiles = @('scripts/collect-server-clock.js', 'src/server-tick-clock.js')
+git -C $live diff --quiet HEAD -- $collectorFiles
+if ($LASTEXITCODE -ne 0) { throw 'Collector files have local changes; preserve them before updating' }
+$backup = Join-Path $live "recordings/clock-update-backup-$stamp"
+New-Item -ItemType Directory -Path $backup | Out-Null
+foreach ($file in $collectorFiles) {
+  Copy-Item -LiteralPath (Join-Path $live $file) -Destination $backup
+  Copy-Item -LiteralPath (Join-Path $review $file) -Destination (Join-Path $live $file)
+}
+docker compose -f (Join-Path $live 'deploy/filming/compose.yml') --profile clock up -d --no-deps --force-recreate clock
+if ($LASTEXITCODE -ne 0) { throw 'Collector rollout failed; original files are in the backup folder' }
+Start-Sleep -Seconds 12
+Get-Content (Join-Path $live 'deploy/filming/state/observer/server-clock.jsonl') -Tail 5
 ```
 
-The second command is necessary when an already-running bind-mounted collector
-must reload changed code. Do not run a blanket `compose up`, restart the agent,
+Recreation reloads the bind-mounted collector code. Do not run a blanket
+`compose up`, restart the agent,
 or replace checkpoint/state directories for this report update. Verify new
 samples have a nonempty `collectorSessionId`, increasing `sampleSequence`, and
 valid requested/completed times. Expect a conservative boundary at the collector

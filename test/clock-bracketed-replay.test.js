@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {buildReplay,main} from '../scripts/build-clock-bracketed-replay.js';
+import {buildReplay,main,summarizeRecords} from '../scripts/build-clock-bracketed-replay.js';
 const event=(type,id=1,extra={})=>({type,decisionId:id,agent_id:'a',sessionId:'run',timestamp:new Date(type==='decision_trace_v1'?1600:1700).toISOString(),...extra});
 const decision=(id=1,extra={})=>event('decision_trace_v1',id,{selection:'explore',...extra});
 const transition=(id=1,extra={})=>event('target_transition',id,{action:'explore',...extra});
@@ -87,8 +87,43 @@ test('invalid CLI limits and flags fail rather than silently selecting no record
  const input=fixture(t,[]),output=path.join(input.root,'report.json');
  for(const last of ['NaN','0','-1','1.2','2001'])await assert.rejects(main([input.agentLog,input.clockLog,output,last]),/lastN/);
  await assert.rejects(main([input.agentLog,input.clockLog,output,'1','--bogus','1']),/Unknown/);
+ for(const flag of ['constructor','__proto__','toString'])await assert.rejects(main([input.agentLog,input.clockLog,output,'1',flag,'1']),/Unknown/);
  await assert.rejects(main([input.agentLog,input.clockLog,output,'1','--clock-skew-ms','bad']),/Invalid clock/);
  assert.equal(fs.existsSync(output),false);
+});
+
+test('coverage summary explains 158 of 200 without counting missing bounds as zero width',async t=>{
+ const events=[];
+ for(let id=1;id<=200;id++){
+  const time=id<=42?500:1600;
+  events.push(decision(id,{timestamp:new Date(time).toISOString()}),transition(id,{timestamp:new Date(time+100).toISOString()}));
+ }
+ const report=await buildReplay(fixture(t,events));
+ assert.equal(report.summary.coveragePercent,79);
+ assert.equal(report.summary.bracketedDecisions,158);
+ assert.equal(report.summary.boundedDurations,158);
+ assert.equal(report.summary.zeroLowerBoundDurations,158);
+ assert.equal(report.diagnostics.bracketFailureReasons.before_clock_coverage,42);
+ assert.equal(report.diagnostics.eventBracketStatuses.unbounded,42);
+ assert.deepEqual(report.summary.decisionBracketWidth,{count:158,min:20,p50:20,p95:20,max:20,method:'nearest_rank',unit:'ticks'});
+});
+
+test('empty replay reports unknown coverage and widths, not zero uncertainty',async t=>{
+ const report=await buildReplay(fixture(t,[],[]));
+ assert.equal(report.summary.coveragePercent,null);
+ assert.equal(report.summary.decisionBracketWidth.count,0);
+ for(const key of ['min','p50','p95','max'])assert.equal(report.summary.decisionBracketWidth[key],null);
+ assert.equal(report.diagnostics.firstSampleRequestedAt,null);
+});
+
+test('width percentiles include zero-width bounds and use documented nearest rank',()=>{
+ const records=[101,0,20,1].map(tickWidth=>({sessionId:null,tickBracket:{status:'bracketed',tickWidth},
+  duration:{status:'bounded',minTicks:tickWidth?1:0,tickWidth},eventBrackets:[],correlated:{rejected:{}}}));
+ const {summary}=summarizeRecords(records);
+ assert.deepEqual(summary.decisionBracketWidth,{count:4,min:0,p50:1,p95:101,max:101,method:'nearest_rank',unit:'ticks'});
+ assert.deepEqual(summary.durationBoundWidth,summary.decisionBracketWidth);
+ assert.equal(summary.legacyDecisions,4);assert.equal(summary.zeroLowerBoundDurations,1);
+ assert.equal(summary.trainingEligible,false);
 });
 
 test('an earlier log line with the same millisecond is not a decision outcome',async t=>{

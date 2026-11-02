@@ -14,6 +14,39 @@ const validIdentity = e => typeof e?.agent_id === 'string' && e.agent_id.trim() 
 const keyOf = e => JSON.stringify([e.agent_id, e.sessionId ?? null, e.sessionId == null ? e.replaySegment : null, e.decisionId]);
 const count = (object, key) => { object[key] = (object[key] ?? 0) + 1; };
 
+function widthSummary(values) {
+  const sorted = values.toSorted((a, b) => a - b);
+  const percentile = p => sorted.length ? sorted[Math.ceil(p * sorted.length) - 1] : null;
+  return {count: sorted.length, min: sorted[0] ?? null, p50: percentile(0.5),
+    p95: percentile(0.95), max: sorted.at(-1) ?? null, method: 'nearest_rank', unit: 'ticks'};
+}
+
+export function summarizeRecords(records) {
+  const bracketStatuses = {}, durationStatuses = {}, bracketFailureReasons = {}, eventBracketStatuses = {}, rejectedEvents = {};
+  const widths = [], durationWidths = [];
+  let boundedDurations = 0, zeroLowerBoundDurations = 0, legacyDecisions = 0;
+  for (const record of records) {
+    count(bracketStatuses, record.tickBracket.status);
+    count(durationStatuses, record.duration.status);
+    if (record.tickBracket.status === 'bracketed') widths.push(record.tickBracket.tickWidth);
+    else count(bracketFailureReasons, record.tickBracket.reason ?? record.tickBracket.status);
+    if (record.duration.status === 'bounded') {
+      boundedDurations++;
+      durationWidths.push(record.duration.tickWidth);
+      if (record.duration.minTicks === 0) zeroLowerBoundDurations++;
+    }
+    if (record.sessionId == null) legacyDecisions++;
+    for (const event of record.eventBrackets) count(eventBracketStatuses, event.bracket.status);
+    for (const [reason, n] of Object.entries(record.correlated.rejected)) rejectedEvents[reason] = (rejectedEvents[reason] ?? 0) + n;
+  }
+  return {bracketStatuses, durationStatuses, bracketFailureReasons, eventBracketStatuses, rejectedEvents,
+    summary: {decisions: records.length, bracketedDecisions: widths.length,
+      coveragePercent: records.length ? 100 * widths.length / records.length : null,
+      boundedDurations, zeroLowerBoundDurations, legacyDecisions,
+      decisionBracketWidth: widthSummary(widths), durationBoundWidth: widthSummary(durationWidths),
+      trainingEligible: false}};
+}
+
 // A fixed prefix on an open descriptor allows appends/rotation without chasing
 // the live writer. Hash both passes to detect edits/truncation of that prefix.
 async function* lines(snapshot, digest) {
@@ -108,16 +141,12 @@ export async function buildReplay({agentLog, clockLog, lastN = 200, maxEventsPer
           eventSequence: x.eventSequence ?? null, reason: x.reason ?? x.status ?? null})),
           decisionOccurrences: group.decisions, ambiguous, droppedEvents: group.dropped}, eventBrackets};
     });
-    const bracketStatuses = {}, durationStatuses = {}, rejectedEvents = {};
-    for (const record of records) {
-      count(bracketStatuses, record.tickBracket.status);
-      count(durationStatuses, record.duration.status);
-      for (const [reason, n] of Object.entries(record.correlated.rejected)) rejectedEvents[reason] = (rejectedEvents[reason] ?? 0) + n;
-    }
+    const {summary, ...recordDiagnostics} = summarizeRecords(records);
     return {schema: 'craftle.clock-bracketed-replay.v2', readOnly: true, trainingEligible: false,
       agentLog, clockLog, snapshotBytes: {agent: agent.size, clock: clock.size},
       clockSampleCount, recordCount: records.length, options: {lastN, maxEventsPerDecision, maxSampleGapMs, clockSkewMs},
-      diagnostics: {...diagnostics, malformedClockLines, ...index.diagnostics, bracketStatuses, durationStatuses, rejectedEvents},
+      summary,
+      diagnostics: {...diagnostics, malformedClockLines, ...index.diagnostics, ...recordDiagnostics},
       caveat: 'Bounds describe log instants under declared clock assumptions, not exact event ticks or causal option outcomes. Legacy session identity is inferred. Never train SMDP from this report.',
       records};
   } finally {
@@ -133,14 +162,15 @@ export async function main(args = process.argv.slice(2)) {
   const options = {};
   for (let i = 0; i < flags.length; i += 2) {
     const name = {'--max-sample-gap-ms': 'maxSampleGapMs', '--clock-skew-ms': 'clockSkewMs'}[flags[i]];
-    if (!name || flags[i + 1] == null) throw Error('Unknown or incomplete replay option: ' + flags[i]);
+    if (typeof name !== 'string' || flags[i + 1] == null) throw Error('Unknown or incomplete replay option: ' + flags[i]);
     options[name] = Number(flags[i + 1]);
   }
   const report = await buildReplay({agentLog, clockLog, lastN: Number(last), ...options});
   // Exclusive creation also protects inputs/checkpoints from accidental overwrite.
   fs.writeFileSync(output, JSON.stringify(report, null, 2) + '\n', {flag: 'wx'});
   console.log(JSON.stringify({output, clockSampleCount: report.clockSampleCount, recordCount: report.recordCount,
-    bracketed: report.diagnostics.bracketStatuses.bracketed ?? 0, durationStatuses: report.diagnostics.durationStatuses}));
+    bracketed: report.diagnostics.bracketStatuses.bracketed ?? 0, summary: report.summary,
+    bracketFailureReasons: report.diagnostics.bracketFailureReasons, durationStatuses: report.diagnostics.durationStatuses}));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(error => { console.error(error.message); process.exitCode = 1; });
