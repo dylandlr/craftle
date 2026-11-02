@@ -119,6 +119,29 @@ services:
     secrets:
       - rcon_password
     init: true
+  clock:
+    image: node:22-alpine
+    profiles: [clock]
+    restart: unless-stopped
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    working_dir: /app
+    command: ['node', '/app/scripts/collect-server-clock.js']
+    environment:
+      CRAFTLE_RCON_HOST: minecraft
+      CRAFTLE_RCON_PORT: '25575'
+      CRAFTLE_RCON_PASSWORD_FILE: /run/secrets/rcon_password
+      CRAFTLE_CLOCK_WORLD_ID: '${CRAFTLE_DISCOVERY_WORLD_ID:-filming-vanilla-1.21.1-seed-20261205}'
+      CRAFTLE_CLOCK_INTERVAL_MS: '${CRAFTLE_CLOCK_INTERVAL_MS:-5000}'
+      CRAFTLE_CLOCK_OUTPUT: /state/observer/server-clock.jsonl
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ../../src:/app/src:ro
+      - ./state/observer:/state/observer
+    secrets:
+      - rcon_password
+    init: true
   commentary:
     image: node:22-alpine
     profiles: [commentary]
