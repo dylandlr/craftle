@@ -25,7 +25,10 @@ try {
   Write-Host "Installed test-server JARs:"
   $mods
   $headers = @{ "User-Agent" = "Craftle-compatibility-probe/0.1 (research mod audit)" }
-  $versions = @(Invoke-RestMethod -Uri "https://api.modrinth.com/v2/project/$ProjectId/version?loaders=%5B%22fabric%22%5D" -Headers $headers)
+  $response = Invoke-RestMethod -Uri "https://api.modrinth.com/v2/project/$ProjectId/version?loaders=%5B%22fabric%22%5D" -Headers $headers
+  # Invoke-RestMethod can return the JSON array as one pipeline object. Force each version to be a separate object.
+  $versions = @($response | ForEach-Object { $_ })
+  Write-Host "Fabric version records found: $($versions.Count)"
   $candidates = @($versions | Where-Object { $_.game_versions -contains "1.21.1" } | Sort-Object date_published -Descending)
   if ($candidates.Count -gt 0) {
     $chosen = $candidates[0]
