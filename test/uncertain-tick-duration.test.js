@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {durationBounds,trainingTickGate,discountedBootstrapRange} from '../src/uncertain-tick-duration.js';
+const b=(minTick,maxTick)=>({status:'bracketed',worldId:'w',epoch:0,minTick,maxTick});
+test('same bracket cannot establish duration',()=>{const x=trainingTickGate(b(100,201),b(100,201));assert.equal(x.trainable,false);assert.equal(x.minimumTicks,0);assert.equal(x.maximumTicks,101)});
+test('nonoverlapping brackets bound duration conservatively',()=>{const x=durationBounds(b(100,120),b(150,170));assert.deepEqual({min:x.minimumTicks,max:x.maximumTicks},{min:30,max:70})});
+test('exact independent server tick stamps permit training',()=>{const x=trainingTickGate(b(100,100),b(140,140));assert.equal(x.trainable,true);assert.equal(x.duration,40)});
+test('zero duration remains forbidden even with exact samples',()=>assert.equal(trainingTickGate(b(100,100),b(100,100)).trainable,false));
+test('cross-epoch events cannot be joined',()=>assert.equal(durationBounds(b(100,100),{...b(120,120),epoch:1}).status,'clock_discontinuity'));
+test('positive and negative future Q produce correct interval ordering',()=>{const p=discountedBootstrapRange({gamma:.9,minimumTicks:1,maximumTicks:3,nextQ:5});assert.ok(Math.abs(p.minimum-3.645)<1e-12);assert.ok(Math.abs(p.maximum-4.5)<1e-12);const n=discountedBootstrapRange({gamma:.9,minimumTicks:1,maximumTicks:3,nextQ:-5});assert.ok(n.minimum<n.maximum)});
+test('uncertain event does not train',()=>assert.equal(trainingTickGate({status:'unbounded'},b(10,12)).trainable,false));
