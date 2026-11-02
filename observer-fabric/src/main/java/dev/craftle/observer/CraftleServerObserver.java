@@ -28,7 +28,7 @@ public final class CraftleServerObserver implements ModInitializer {
   @Override public void onInitialize() {
     ServerLifecycleEvents.SERVER_STARTED.register(server -> {
       try {
-        Path dir = server.getRunDirectory().toPath().resolve("craftle-observer");
+        Path dir = Path.of("craftle-observer");
         Files.createDirectories(dir);
         logPath = dir.resolve("server-events.jsonl");
         writer = Files.newBufferedWriter(logPath, StandardCharsets.UTF_8,
