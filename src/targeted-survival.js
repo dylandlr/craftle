@@ -261,8 +261,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     }
     if(tick%10===0)log({type:'canopy_egress_no_route',reason:escape.reason,
      health:bot.health,food:bot.food,examined:escape.examined,
-     frontierNodes:escape.frontierNodes??null,learned:false,
-     informationAccess:'privileged_mineflayer_state'});
+     frontierNodes:escape.frontierNodes??null,rejections:escape.rejections??null,
+     footprint:escape.footprint??null,lowerGroundSamples:escape.lowerGroundSamples??[],
+     maxDrop:escape.maxDrop??null,position:{x:p.x,y:p.y,z:p.z},
+     learned:false,informationAccess:'privileged_mineflayer_state'});
    }
    if(goal?.key==='canopy_egress'){
     const old={...goal};clearGoal();
