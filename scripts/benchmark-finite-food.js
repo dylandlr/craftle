@@ -87,7 +87,13 @@ try{
   return {version,meanFrozenEats:mean('eats'),meanCollected:mean('collect'),
    meanHarvested:mean('harvest'),meanExplored:mean('explore'),
    meanApproaches:mean('approach'),meanDeaths:mean('death'),
-   meanHungerAtEnd:mean('finalFood')};
+   meanHungerAtEnd:mean('finalFood'),
+   meanHarvestOpportunities:mean('availableHarvestDecisions'),
+   meanSkippedHarvestForApproach:mean('selectedApproachWhenHarvestAvailable'),
+   meanSkippedHarvestForExplore:mean('selectedExploreWhenHarvestAvailable'),
+   meanEatOpportunities:mean('availableEatDecisions'),
+   meanSkippedEatForApproach:mean('selectedApproachWhenEatAvailable'),
+   meanSkippedEatForExplore:mean('selectedExploreWhenEatAvailable')};
  });
  console.log(JSON.stringify({schema:'craftle.finite-resource-benchmark.v1',
   actualController:true,syntheticMinecraft:false,trainStepsPerSeed:500,evalStepsPerSeed:250,
