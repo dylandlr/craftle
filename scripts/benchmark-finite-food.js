@@ -8,7 +8,7 @@ import {createTargetedController} from '../src/targeted-controller.js';
 import {encodeTargets,TARGET_ACTIONS} from '../src/target-opportunities.js';
 const seeds=[1,7,19,42,101];
 const versions=['v1','v2','v3'];
-function run({controller,steps,seed}){
+function run({controller,steps,seed,maskRedundantPlantApproach=false}){
  const patches=Array.from({length:16},(_,i)=>10+i*18+(seed%3)*2);
  const plants=new Set(patches),drops=new Set();
  let x=0,food=10,health=20,inventory=0,displacement=0;
@@ -31,7 +31,7 @@ function run({controller,steps,seed}){
   const observation={health,food,foodAvailable:inventory>0,foodUnits:inventory,
    foodPoints:inventory*2,hostileDistance:24,blocked:false,displacement,
    position:{x,y:70,z:0},targets:candidates.slice(0,4)};
-  const {mask}=encodeTargets(observation);
+  const {mask}=encodeTargets(observation,{maskRedundantPlantApproach});
   const available=TARGET_ACTIONS.filter((_,i)=>mask[i]);
   const harvestAvailable=available.some(a=>a.startsWith('harvest_'));
   const approachAvailable=available.some(a=>a.startsWith('approach_'));
@@ -72,19 +72,19 @@ function run({controller,steps,seed}){
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-resource-benchmark-'));
 try{
  const results=[];
- for(const version of versions)for(const seed of seeds){
-  const checkpoint=path.join(temporary,version+'-'+seed+'.json');
+ for(const version of versions)for(const maskRedundantPlantApproach of [false,true])for(const seed of seeds){
+  const checkpoint=path.join(temporary,version+'-'+(maskRedundantPlantApproach?'masked':'baseline')+'-'+seed+'.json');
   const train=run({controller:createTargetedController({
-   checkpoint,mode:'training',epsilon:0.25,seed,rewardVersion:version}),steps:500,seed});
+   checkpoint,mode:'training',epsilon:0.25,seed,rewardVersion:version,maskRedundantPlantApproach}),steps:500,seed,maskRedundantPlantApproach});
   // Different plant layout from training, no training updates.
   const evaluate=run({controller:createTargetedController({
-   checkpoint,mode:'frozen',epsilon:0,seed:seed+900,rewardVersion:version}),steps:250,seed:seed+100});
-  results.push({version,seed,train,evaluate});
+   checkpoint,mode:'frozen',epsilon:0,seed:seed+900,rewardVersion:version,maskRedundantPlantApproach}),steps:250,seed:seed+100,maskRedundantPlantApproach});
+  results.push({version,maskRedundantPlantApproach,seed,train,evaluate});
  }
- const summary=versions.map(version=>{
-  const group=results.filter(r=>r.version===version);
+ const summary=versions.flatMap(version=>[false,true].map(maskRedundantPlantApproach=>{
+  const group=results.filter(r=>r.version===version&&r.maskRedundantPlantApproach===maskRedundantPlantApproach);
   const mean=k=>+(group.reduce((s,r)=>s+r.evaluate[k],0)/group.length).toFixed(3);
-  return {version,meanFrozenEats:mean('eats'),meanCollected:mean('collect'),
+  return {version,maskRedundantPlantApproach,meanFrozenEats:mean('eats'),meanCollected:mean('collect'),
    meanHarvested:mean('harvest'),meanExplored:mean('explore'),
    meanApproaches:mean('approach'),meanDeaths:mean('death'),
    meanHungerAtEnd:mean('finalFood'),
@@ -94,10 +94,11 @@ try{
    meanEatOpportunities:mean('availableEatDecisions'),
    meanSkippedEatForApproach:mean('selectedApproachWhenEatAvailable'),
    meanSkippedEatForExplore:mean('selectedExploreWhenEatAvailable')};
- });
- console.log(JSON.stringify({schema:'craftle.finite-resource-benchmark.v1',
+ }));
+ console.log(JSON.stringify({schema:'craftle.finite-resource-benchmark.v2',
   actualController:true,syntheticMinecraft:false,trainStepsPerSeed:500,evalStepsPerSeed:250,
   trainEvalLayoutDifferent:true,plantSupplyFinite:true,foodPickupRequired:true,
+  maskAblation:'When enabled: approach to a visible, reachable plant is not offered; harvest remains available. Drops and animals remain approachable.',
   seeds,summary,results,limits:[
    'Simplified 1D movement; no pathfinding, combat, crafting, server physics, or Mineflayer inventory.',
    'Only the synthetic plant layout changes between training and frozen evaluation.',
