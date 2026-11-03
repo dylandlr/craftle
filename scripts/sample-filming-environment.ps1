@@ -33,7 +33,20 @@ try {
   $entry=[ordered]@{schema='craftle.spectator-environment-sample.v1';phase=$Phase;
     sample=$i;atUtc=[DateTimeOffset]::UtcNow.ToString('o');responses=[ordered]@{}}
   foreach($q in $queries){$entry.responses[$q]=Query $q}
-  ($entry|ConvertTo-Json -Depth 6 -Compress)|Add-Content -LiteralPath $file -Encoding UTF8
+  $line=$entry|ConvertTo-Json -Depth 6 -Compress
+  $saved=$false
+  for($attempt=1;$attempt -le 12;$attempt++){
+   try{
+    Add-Content -LiteralPath $file -Value $line -Encoding UTF8 -ErrorAction Stop
+    $saved=$true
+    break
+   }catch [System.IO.IOException]{
+    if($attempt -eq 12){throw}
+    Write-Warning "Transient file lock writing sample $($i+1); retry $attempt/12"
+    Start-Sleep -Milliseconds ([Math]::Min(2000,200*$attempt))
+   }
+  }
+  if(-not $saved){throw "Sample write failed without saving: $($i+1)"}
   Write-Host "$Phase $($i+1)/$Samples"
   if($i -lt $Samples-1){Start-Sleep -Seconds $IntervalSeconds}
  }
