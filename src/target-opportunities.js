@@ -1,5 +1,6 @@
 // Assisted semantic perception: food categories/maturity are supplied knowledge.
 import {FOOD_PLANTS,foodPlantAction,plantKey} from './food-foraging.js';
+import {canSeeTargetEntity} from './target-visibility.js';
 export const TARGET_SLOTS=4;
 export const TARGET_ACTIONS=Object.freeze(['eat','explore','retreat',...Array.from({length:TARGET_SLOTS},(_,i)=>['approach','harvest','attack'].map(skill=>`${skill}_${i}`)).flat()]);
 export const TARGET_SCHEMA='craftle.targeted.dqn.v1';
@@ -19,7 +20,7 @@ export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displac
   const kind=edible(bot,drop)?'drop':['pig','cow','sheep','rabbit'].includes(entity.name)?'animal':null;
   if(!kind)continue;
   counts.eligibleEntityCategories++;
-  if(!bot.canSeeEntity?.(entity)){
+  if(!canSeeTargetEntity(bot,entity)){
    counts.entityVisibilityRejected++;
    if(auditEnabled&&rejectedEntityExamples.length<6)rejectedEntityExamples.push({
     kind,name:String(entity.name??'unknown'),distanceBlocks:Math.round(distance(position,entity.position)*100)/100,
@@ -47,7 +48,7 @@ export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displac
  const foods=inventory.filter(item=>edible(bot,item));
  counts.inventoryFoodItems=foods.length;
  if(auditEnabled)audit({schema:'craftle.target-perception-audit.v2',...counts,
-  visibilityMethodAvailable:typeof bot.canSeeEntity==='function',nearbyEntityTypes,rejectedEntityExamples,
+  visibilityMethodAvailable:typeof bot.blockAt==='function'&&typeof bot.entity?.position?.offset==='function',nearbyEntityTypes,rejectedEntityExamples,
   totalCandidates:candidates.length,selectedTargets:targets.length,foodPlantRegistryIds:ids.length,searchRadiusBlocks:24});
  return {schema:'craftle.target-observation.v1',health:bot.health,food:bot.food,foodAvailable:foods.length>0,
   foodUnits:foods.reduce((sum,item)=>sum+item.count,0),foodPoints:foods.reduce((sum,item)=>sum+item.count*(bot.registry.foodsByName[item.name].foodPoints??0),0),
