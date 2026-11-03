@@ -49,6 +49,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const saveDiscovery=()=>{if(!discovery)return;try{discovery.save();}catch(error){log({type:'discovery_memory_save_error',message:error.message});}};
  let previousFoodUnits=null;
  let lastLookScan=0;
+ let lastTargetAudit=0;
+ const targetAuditEnabled=process.env.CRAFTLE_TARGET_PERCEPTION_AUDIT==='1';
  const nativeRouteGate=createNativeRouteFailureGate();
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
@@ -227,7 +229,11 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     }
    }
    settleRecovery(p);
-   const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement});
+   const now=clock();
+   const sampleAudit=targetAuditEnabled&&(lastTargetAudit===0||now-lastTargetAudit>=15000);
+   const observation=observeTargets(bot,{hostileNames:HOSTILE_MOBS,blocked:stalls>=3,displacement,
+    audit:sampleAudit?details=>log({type:'target_perception_audit',...details}):null});
+   if(sampleAudit)lastTargetAudit=now;
    const proposed=decisionController.choose(observation);
    const choice=typeof proposed?.then==='function'?await proposed:proposed;
    if(!valid())return;
