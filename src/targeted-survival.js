@@ -20,6 +20,8 @@ import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
 import {findCanopyStepdown,shouldInspectCanopyStepdown} from './canopy-stepdown.js';
 import {planCanopyGroundRoute} from './canopy-ground-route.js';
+import {createCanopyRiskLearner} from './canopy-risk-learner.js';
+import {canopyBlockSnapshot,findObservedFall} from './canopy-risk-geometry.js';
 import {auditDiggingNeighbors} from './dig-navigation-audit.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
@@ -59,6 +61,12 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const canopyStepdown=process.env.CRAFTLE_CANOPY_STEPDOWN==='1';
  const canopyGroundRoute=process.env.CRAFTLE_CANOPY_GROUND_ROUTE==='1';
  let lastStepdown=0;
+ const riskEnabled=process.env.CRAFTLE_CANOPY_RISK_LEARNING==='1';
+ const riskLearner=riskEnabled?createCanopyRiskLearner({
+  file:(process.env.CRAFTLE_PERSISTENT_ROOT??'/state/agent')+'/canopy-risk-v1.json',
+  epsilon:Number(process.env.CRAFTLE_CANOPY_RISK_EPSILON??0.3),log
+ }):null;
+ let lastRiskChoice=0,lastCanopySnapshot=0;
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
  const recentExploreDestinations=[];
@@ -131,8 +139,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   return false;
  };
  const cancel=()=>{nativeRouteGate.reset();clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
- const death=()=>{if(ended||dead)return;pendingRecovery=null;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
- const spawn=()=>{if(ended)return;pendingRecovery=null;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
+ const death=()=>{if(ended||dead)return;riskLearner?.finish({outcome:'death'});pendingRecovery=null;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
+ const spawn=()=>{if(ended)return;riskLearner?.finish({outcome:'respawn_without_confirmed_landing'});pendingRecovery=null;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};markConnectedFailure(failed);if(groundedExplore&&failed.key==='explore'){failedExplore.add([Math.floor(failed.x),Math.floor(failed.z)].join(','));if(failedExplore.size>256)failedExplore.clear();}clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
  const pathReset=reason=>log({type:'native_pathfinder_reset',reason,
@@ -269,6 +277,52 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      lastPosition={x:p.x,z:p.z};
      tick++;
      return;
+    }
+    // One bounded local geometry snapshot per ~minute, useful for explaining
+    // whether the canopy has a reachable non-fatal descent at this position.
+    if(clock()-lastCanopySnapshot>=60000){
+     lastCanopySnapshot=clock();
+     log({type:'canopy_geometry_snapshot',health:bot.health,food:bot.food,
+      snapshot:canopyBlockSnapshot({position:p,
+       blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)}),
+      learned:false,informationAccess:'mineflayer_cached_blocks'});
+    }
+    if(riskLearner&&clock()-lastRiskChoice>=15000&&!riskLearner.pending()){
+     lastRiskChoice=clock();
+     const destination=findObservedFall({position:p,samples:escape.lowerGroundSamples,
+      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
+     if(destination){
+      const picked=riskLearner.choose({health:bot.health,drop:destination.drop,position:{x:p.x,y:p.y,z:p.z}});
+      log({type:'canopy_risk_candidate',destination,selection:picked.action,
+       health:bot.health,food:bot.food,learnedPolicy:'auxiliary_tabular_not_DQN'});
+      if(picked.action==='attempt'&&bot.waitForTicks){
+       clearGoal();
+       const start={x:p.x,y:p.y,z:p.z},lifeBefore=life;
+       try{
+        await bot.lookAt(p.offset(destination.x+0.5-p.x,0,destination.z+0.5-p.z),true);
+        if(!valid())return;
+        bot.setControlState('forward',true);
+        for(let n=0;n<24;n++){
+         await bot.waitForTicks(2);
+         if(!valid())break;
+         const v=bot.entity.position;
+         if(v.y<=destination.y+0.3)break;
+         if(Math.hypot(v.x-start.x,v.z-start.z)>2.3)break;
+        }
+       }finally{bot.setControlState('forward',false);}
+       if(!valid()||life!==lifeBefore)return;
+       const end=bot.entity.position;
+       const landed=end.y<=destination.y+0.4&&bot.health>0;
+       log({type:'canopy_risk_execution',start,end:{x:end.x,y:end.y,z:end.z},
+        destination,landed,healthAfter:bot.health,foodAfter:bot.food,
+        learnedPolicy:'auxiliary_tabular_not_DQN'});
+       riskLearner.finish({outcome:landed?'landed':'did_not_land',landedOnGround:landed});
+       lastPosition={x:end.x,z:end.z};tick++;
+       return;
+      }
+     }else log({type:'canopy_risk_no_verified_adjacent_fall',
+      position:{x:p.x,y:p.y,z:p.z},candidateCount:escape.lowerGroundSamples?.length??0,
+      learnedPolicy:'auxiliary_tabular_not_DQN'});
     }
     if(tick%10===0)log({type:'canopy_egress_no_route',reason:escape.reason,
      health:bot.health,food:bot.food,examined:escape.examined,
