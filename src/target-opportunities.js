@@ -6,25 +6,37 @@ export const TARGET_SCHEMA='craftle.targeted.dqn.v1';
 export const TARGET_INPUTS=8+9*TARGET_SLOTS;
 export function edible(bot,item){return Boolean(item&&bot.registry?.foodsByName?.[item.name]&&!['pufferfish','poisonous_potato','spider_eye','rotten_flesh','chicken'].includes(item.name));}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
-export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displacement=0}={}){
+export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displacement=0,audit=null}={}){
  const position=bot.entity.position,inventory=bot.inventory.items(),candidates=[];
+ const counts={nearbyEntities:0,eligibleEntityCategories:0,entityVisibilityAccepted:0,entityVisibilityRejected:0,plantBlocksFound:0,actionablePlantBlocks:0,plantVisibilityAccepted:0,plantVisibilityRejected:0,inventoryFoodItems:0};
  for(const entity of Object.values(bot.entities)){
   if(!entity?.position||distance(position,entity.position)>24)continue;
+  counts.nearbyEntities++;
   const drop=entity.getDroppedItem?.();
   const kind=edible(bot,drop)?'drop':['pig','cow','sheep','rabbit'].includes(entity.name)?'animal':null;
-  if(!kind||!bot.canSeeEntity?.(entity))continue;
+  if(!kind)continue;
+  counts.eligibleEntityCategories++;
+  if(!bot.canSeeEntity?.(entity)){counts.entityVisibilityRejected++;continue;}
+  counts.entityVisibilityAccepted++;
   candidates.push({id:`entity:${entity.id}`,kind,position:{...entity.position},distance:distance(position,entity.position),visible:true});
  }
  const ids=FOOD_PLANTS.map(name=>bot.registry?.blocksByName?.[name]?.id).filter(Number.isInteger);
  if(ids.length&&bot.findBlocks){
   const positions=bot.findBlocks({matching:ids,maxDistance:24,count:16,useExtraInfo:block=>Boolean(foodPlantAction(block))});
+  counts.plantBlocksFound=positions.length;
   for(const p of positions){const block=bot.blockAt(p);
-   if(foodPlantAction(block)&&bot.canSeeBlock?.(block))candidates.push({id:plantKey(block),kind:'plant',position:{x:p.x,y:p.y,z:p.z},distance:distance(position,p),visible:true});
+   if(!foodPlantAction(block))continue;
+   counts.actionablePlantBlocks++;
+   if(!bot.canSeeBlock?.(block)){counts.plantVisibilityRejected++;continue;}
+   counts.plantVisibilityAccepted++;
+   candidates.push({id:plantKey(block),kind:'plant',position:{x:p.x,y:p.y,z:p.z},distance:distance(position,p),visible:true});
   }
  }
  candidates.sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
  const targets=candidates.slice(0,TARGET_SLOTS).map(t=>({...t,reachable:t.distance<(t.kind==='animal'?3:t.kind==='plant'?4.2:1)}));
  const foods=inventory.filter(item=>edible(bot,item));
+ counts.inventoryFoodItems=foods.length;
+ if(typeof audit==='function')audit({schema:'craftle.target-perception-audit.v1',...counts,totalCandidates:candidates.length,selectedTargets:targets.length,foodPlantRegistryIds:ids.length,searchRadiusBlocks:24});
  return {schema:'craftle.target-observation.v1',health:bot.health,food:bot.food,foodAvailable:foods.length>0,
   foodUnits:foods.reduce((sum,item)=>sum+item.count,0),foodPoints:foods.reduce((sum,item)=>sum+item.count*(bot.registry.foodsByName[item.name].foodPoints??0),0),
   hostileDistance:Math.min(24,...Object.values(bot.entities).filter(e=>e?.position&&hostileNames.has(e.name)).map(e=>distance(position,e.position))),
