@@ -103,3 +103,27 @@ test('canopy planner rejects unknown landing shafts and falls over three blocks'
  const result=chooseConnectedExploreGoal({origin:{x:0,y:75,z:0},blockAt:blocks,allowShortDescent:true});
  assert.equal(result.selected,null);
 });
+
+test('stranded on a connected canopy selects a safe leaf waypoint without pretending it found ground',()=>{
+ const blockAt=(x,y,z)=>{
+  if(y===70&&x>=0&&x<=4&&z===0)return solid('oak_leaves');
+  if(y===71||y===72)return air;
+  return null;
+ };
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:71,z:0},radius:5,blockAt});
+ assert.ok(result.selected,'reachable known leaf positions should be available');
+ assert.equal(result.reason,'known_canopy_waypoint_no_ground_route');
+ assert.equal(result.selected.leaves,true);
+ assert.ok(result.selected.position.x>=2);
+ assert.equal(result.selected.position.y,71);
+});
+test('temporary canopy waypoint never overrides a connected safe-ground escape',()=>{
+ const blockAt=(x,y,z)=>{
+  if(y===70)return solid(x>=2?'grass_block':'oak_leaves');
+  if(y===71||y===72)return air;
+  return null;
+ };
+ const result=chooseConnectedExploreGoal({origin:{x:0,y:71,z:0},radius:4,blockAt});
+ assert.equal(result.reason,'known_connected_footing');
+ assert.equal(result.selected.leaves,false);
+});
