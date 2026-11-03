@@ -11,7 +11,7 @@ test('solid barrier occludes both sampled aim points',()=>{
  assert.equal(canSeeTargetEntity(make(p=>p.x>2&&p.x<3?{boundingBox:'block'}:{boundingBox:'empty'}),cow),false);
 });
 test('an uncovered upper target remains visible',()=>{
- assert.equal(canSeeTargetEntity(make(p=>p.x>2&&p.x<3&&p.y>65?{boundingBox:'block'}:{boundingBox:'empty'}),cow),true);
+ assert.equal(canSeeTargetEntity(make(p=>p.x>2&&p.x<3&&p.y<65.3?{boundingBox:'block'}:{boundingBox:'empty'}),cow),true);
 });
 test('unloaded blocks fail closed',()=>{
  assert.equal(canSeeTargetEntity(make(()=>null),cow),false);
