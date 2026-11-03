@@ -3,6 +3,7 @@ import {loader as autoEatPlugin} from 'mineflayer-auto-eat';
 import pathfinderPackage from 'mineflayer-pathfinder';
 import {HOSTILE_MOBS} from './survival-reference.js';
 import {observeTargets,edible} from './target-opportunities.js';
+import {canSeeTargetEntity} from './target-visibility.js';
 import {foodPlantAction} from './food-foraging.js';
 import {attachFoodProvenance} from './food-provenance.js';
 import {createFoodSequenceTracker} from './food-sequence-tracker.js';
@@ -330,7 +331,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      }
     }else if(choice.skill==='attack'&&target?.kind==='animal'){
      const entity=Object.values(bot.entities).find(e=>`entity:${e?.id}`===target.id);
-     if(entity?.position&&entity.position.distanceTo(p)<3&&bot.canSeeEntity?.(entity)){log({type:'target_attack_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,targetPosition:{x:entity.position.x,y:entity.position.y,z:entity.position.z}});await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
+     if(entity?.position&&entity.position.distanceTo(p)<3&&canSeeTargetEntity(bot,entity)){log({type:'target_attack_intent',timestampMs:clock(),decisionId:choice.decisionId,targetId:target.id,targetPosition:{x:entity.position.x,y:entity.position.y,z:entity.position.z}});await bot.lookAt(entity.position.offset(0,(entity.height??1)/2,0),true);if(!valid())return;bot.attack(entity);log({type:'target_attack_attempt',decisionId:choice.decisionId,targetId:target.id});}
     }
    }
    if(!valid())return;
