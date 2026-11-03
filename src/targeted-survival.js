@@ -263,6 +263,16 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
      avoid:failedConnected
     });
+    // Snapshot irrespective of route success. Previously this only ran when
+    // no route was available, obscuring successful planning and pathfinder stalls.
+    if(clock()-lastCanopySnapshot>=60000){
+     lastCanopySnapshot=clock();
+     log({type:'canopy_geometry_snapshot',health:bot.health,food:bot.food,
+      routeReason:escape.reason,selected:escape.selected?.position??null,
+      snapshot:canopyBlockSnapshot({position:p,
+       blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)}),
+      learned:false,informationAccess:'mineflayer_cached_blocks'});
+    }
     if(escape.selected){
      const waypoint=escape.selected.position;
      const was=goal?.key==='canopy_egress';
@@ -277,15 +287,6 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      lastPosition={x:p.x,z:p.z};
      tick++;
      return;
-    }
-    // One bounded local geometry snapshot per ~minute, useful for explaining
-    // whether the canopy has a reachable non-fatal descent at this position.
-    if(clock()-lastCanopySnapshot>=60000){
-     lastCanopySnapshot=clock();
-     log({type:'canopy_geometry_snapshot',health:bot.health,food:bot.food,
-      snapshot:canopyBlockSnapshot({position:p,
-       blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)}),
-      learned:false,informationAccess:'mineflayer_cached_blocks'});
     }
     if(riskLearner&&clock()-lastRiskChoice>=15000&&!riskLearner.pending()){
      lastRiskChoice=clock();
