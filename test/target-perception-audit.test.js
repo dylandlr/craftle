@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {observeTargets,encodeTargets} from '../src/target-opportunities.js';
+const pos=(x,y,z)=>({x,y,z,offset(dx,dy,dz){return pos(x+dx,y+dy,z+dz);}});
 function botWithEntities(visible){
  return {
-  entity:{position:{x:0,y:64,z:0}}, inventory:{items:()=>[]}, registry:{foodsByName:{},blocksByName:{}},
-  entities:{a:{id:1,name:'cow',position:{x:3,y:64,z:4}},b:{id:2,name:'zombie',position:{x:2,y:64,z:2}}},
-  canSeeEntity:()=>visible, health:20,food:12
+  entity:{position:pos(0,64,0)}, inventory:{items:()=>[]}, registry:{foodsByName:{},blocksByName:{}},
+  entities:{a:{id:1,name:'cow',position:pos(3,64,4)},b:{id:2,name:'zombie',position:pos(2,64,2)}},
+  blockAt:()=>visible?{boundingBox:'empty'}:{boundingBox:'block'}, health:20,food:12
  };
 }
 test('perception audit reports category and visibility stages without changing mask',()=>{
@@ -36,9 +37,9 @@ test('visible survival animal enters candidate list and audit',()=>{
  assert.equal(reports[0].selectedTargets,1);
 });
 
-test('missing entity visibility method is explicitly identified without changing masking',()=>{
+test('missing block observation method is explicitly identified without changing masking',()=>{
  const bot=botWithEntities(false);
- delete bot.canSeeEntity;
+ delete bot.blockAt;
  const reports=[];
  const observed=observeTargets(bot,{audit:e=>reports.push(e)});
  assert.equal(observed.targets.length,0);
