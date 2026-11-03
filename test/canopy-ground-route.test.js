@@ -64,7 +64,7 @@ test('rejects lower landing when the vertical descent shaft is obstructed',()=>{
   if(z!==0||x<0||x>3)return null;
   if(x<=2&&y===74)return solid('oak_leaves');
   if(x===3&&y===72)return solid('grass_block');
-  if(x===3&&y===74)return solid('stone');
+  if(x===3&&y===75)return solid('stone');
   if(y>=73&&y<=77)return air;
   return null;
  };
