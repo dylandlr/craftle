@@ -87,3 +87,18 @@ test('accepts a safer raised stone foothold instead of forcing a drop',()=>{
  assert.deepEqual(route.selected.position,{x:3,y:76,z:0});
  assert.equal(route.selected.ground,'stone');
 });
+
+test('short egress waypoint remains on the verified route and can be advanced incrementally',()=>{
+ const blocks=(x,y,z)=>{
+  if(z!==0||x<0||x>9)return null;
+  if(y===69)return solid(x<9?'oak_leaves':'grass_block');
+  if(y===70||y===71)return air;
+  return null;
+ };
+ const route=planCanopyGroundRoute({origin:{x:0.5,y:70,z:0.5},blockAt:blocks,maxWaypoints:2});
+ assert.equal(route.reason,'verified_connected_ground_route');
+ assert.deepEqual(route.selected.position,{x:2,y:70,z:0});
+ const advanced=planCanopyGroundRoute({origin:{x:2.5,y:70,z:0.5},blockAt:blocks,maxWaypoints:2});
+ assert.equal(advanced.reason,'verified_connected_ground_route');
+ assert.deepEqual(advanced.selected.position,{x:4,y:70,z:0});
+});
