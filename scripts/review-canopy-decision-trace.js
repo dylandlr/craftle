@@ -26,7 +26,32 @@ const geometry=filtered.filter(e=>e.type==='canopy_geometry_snapshot').at(-1);
 const noRoute=filtered.filter(e=>e.type==='canopy_egress_no_route').at(-1);
 const risky=filtered.filter(e=>e.type.startsWith('canopy_risk_')).slice(-10);
 const compact=filtered.filter(e=>['target_navigation_result','target_terminal','death_screen_observed','life_feedback_available'].includes(e.type)).slice(-12);
+const canopyEvents=events.filter(e=>typeof e.type==='string'&&e.type.startsWith('canopy_'));
+const lastAction=events.filter(e=>e.type==='target_action').at(-1)??null;
+const latestPose=events.filter(e=>e.type==='pose_sample').at(-1)??null;
+const lastEvent=events.at(-1)??null;
+const recent=events.slice(-2000);
+const canopyTypes=Object.fromEntries([...new Set(canopyEvents.map(e=>e.type))].sort()
+  .map(type=>[type,canopyEvents.filter(e=>e.type===type).length]));
+const lastCanopyEvent=canopyEvents.at(-1)??null;
+const lastNavigationGoal=events.filter(e=>e.type==='target_navigation_goal').at(-1)??null;
+const lastStall=events.filter(e=>e.type==='target_navigation_stall').at(-1)??null;
+const errors=events.filter(e=>e.type==='target_runtime_error').slice(-5);
+const lifecycleSummary={deaths:events.filter(e=>e.type==='death_screen_observed').length,
+  respawns:events.filter(e=>e.type==='life_feedback_available').length};
+
 console.log(JSON.stringify({schema:'craftle.canopy-decision-review.v1',readOnly:true,
   log:file,tailBytes:bytes,eventsRead:events.length,lastGeometry:geometry??null,
   lastNoRoute:noRoute??null,lastDecisions:traces,riskEvents:risky,lifecycle:compact,
+  lastEventAt:lastEvent?.timestamp??null,lastAction:lastAction?{
+   at:lastAction.timestamp,skill:lastAction.skill,health:lastAction.health,
+   food:lastAction.food,position:lastAction.position}:null,
+  latestPose:latestPose?{at:latestPose.timestamp,position:latestPose.position}:null,
+  recentCanopy:{eventCounts:canopyTypes,lastEvent:lastCanopyEvent?
+   {at:lastCanopyEvent.timestamp,type:lastCanopyEvent.type,
+    reason:lastCanopyEvent.reason??null,position:lastCanopyEvent.position??null}:null,
+   inLast2000Events:recent.filter(e=>typeof e.type==='string'&&e.type.startsWith('canopy_')).length},
+  lastNavigationGoal:lastNavigationGoal?{at:lastNavigationGoal.timestamp,goal:lastNavigationGoal.goal}:null,
+  lastStall:lastStall?{at:lastStall.timestamp,position:lastStall.position,stalls:lastStall.stalls}:null,
+  recentRuntimeErrors:errors,lifecycleSummary,
   limitation:'Only events captured in the final log tail are analyzed; no direct access to Minecraft world state.'},null,2));
