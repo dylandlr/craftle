@@ -22,6 +22,10 @@ test('perception audit reports category and visibility stages without changing m
  assert.equal(captured[0].totalCandidates,0);
  assert.equal(captured[0].selectedTargets,0);
  assert.equal(captured[0].inventoryFoodItems,0);
+ assert.equal(captured[0].visibilityMethodAvailable,true);
+ assert.equal(captured[0].nearbyEntityTypes.cow,1);
+ assert.equal(captured[0].nearbyEntityTypes.zombie,1);
+ assert.deepEqual(captured[0].rejectedEntityExamples,[{kind:'animal',name:'cow',distanceBlocks:5,deltaYBlocks:0,entityId:1}]);
 });
 test('visible survival animal enters candidate list and audit',()=>{
  const reports=[];
@@ -30,4 +34,14 @@ test('visible survival animal enters candidate list and audit',()=>{
  assert.equal(observed.targets[0].kind,'animal');
  assert.equal(reports[0].entityVisibilityAccepted,1);
  assert.equal(reports[0].selectedTargets,1);
+});
+
+test('missing entity visibility method is explicitly identified without changing masking',()=>{
+ const bot=botWithEntities(false);
+ delete bot.canSeeEntity;
+ const reports=[];
+ const observed=observeTargets(bot,{audit:e=>reports.push(e)});
+ assert.equal(observed.targets.length,0);
+ assert.equal(reports[0].visibilityMethodAvailable,false);
+ assert.equal(reports[0].entityVisibilityRejected,1);
 });
