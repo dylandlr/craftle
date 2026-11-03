@@ -6,7 +6,6 @@ const count=(items,name)=>items[name]??0;
 const blockName=b=>b?.name??null;
 const position=b=>b?.position?{x:b.position.x,y:b.position.y,z:b.position.z}:null;
 const validName=s=>typeof s==='string'&&/^[a-z0-9_]+$/.test(s);
-const samePos=(a,b)=>a&&b&&a.x===b.x&&a.y===b.y&&a.z===b.z;
 const within=(bot,b,limit)=>Boolean(bot.entity?.position&&b?.position&&bot.entity.position.distanceTo(b.position)<=limit);
 export function createSurvivalExecutors(bot,{log=()=>{}}={}){
  if(!bot?.inventory?.items||!bot?.entity?.position)throw Error('Mineflayer inventory and position required');
@@ -68,11 +67,9 @@ export function createSurvivalExecutors(bot,{log=()=>{}}={}){
    const item=bot.inventory.items().find(i=>i.name===itemName);
    if(!item)return {ok:false,reason:'item_not_in_inventory'};
    events('place_block','attempt',{itemName,target:position({position:target})});
-   try{await bot.equip(item,'hand');await bot.placeBlock(referenceBlock,faceVector);}catch(e){
+   try{await bot.equip(item,'hand');await bot.placeBlock(referenceBlock,target.minus(referenceBlock.position));}catch(e){
     return {ok:false,reason:'execution_error',message:e.message};}
    const after=bot.blockAt(target);
-   const ok=after?.boundingBox==='block'&&!samePos(position(beforeBlock),position(after));
-   // Comparing positions is insufficient: target coordinates stay constant.
    const confirmed=after?.boundingBox==='block'&&after?.name!==beforeBlock?.name;
    events('place_block','observed',{before:beforeBlock?.name??null,after:after?.name??null,confirmed});
    return {ok:confirmed,reason:confirmed?'block_placement_observed':'no_observed_placement',before:beforeBlock?.name??null,after:after?.name??null};
