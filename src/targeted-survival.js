@@ -202,7 +202,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    // Periodically inspect safe descent while traversing leaves, not only when stationary.
    // The connected canopy-waypoint fallback can otherwise keep stalls at zero indefinitely.
    const canopyUnderfoot=bot.blockAt(p.offset(0,-0.3,0),false)?.name??null;
-   const onLeafCanopy=canopyUnderfoot.includes('leaves');
+   const onLeafCanopy=canopyUnderfoot?.includes('leaves')??false;
    if(shouldInspectCanopyStepdown({enabled:canopyStepdown,connected:connectedExplore,stalls,onLeafCanopy,elapsedMs:clock()-lastStepdown})){
     lastStepdown=clock();
     const candidate=findCanopyStepdown({position:p,health:bot.health,
