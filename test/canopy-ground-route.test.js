@@ -102,3 +102,31 @@ test('short egress waypoint remains on the verified route and can be advanced in
  assert.equal(advanced.reason,'verified_connected_ground_route');
  assert.deepEqual(advanced.selected.position,{x:4,y:70,z:0});
 });
+
+test('reports why a canopy island has no known descent despite ground below',()=>{
+ const blocks=(x,y,z)=>{
+  if(Math.abs(x)>2||Math.abs(z)>2)return null;
+  if(y===75)return solid('oak_leaves');
+  if(y===67)return solid('grass_block');
+  if(y>=68&&y<=78)return air;
+  return null;
+ };
+ const result=planCanopyGroundRoute({origin:{x:0,y:76,z:0},blockAt:blocks});
+ assert.equal(result.reason,'no_verified_ground_route');
+ assert.equal(result.selected,null);
+ assert.ok(result.frontierNodes>=1);
+ assert.ok(result.lowerGroundSamples.some(p=>p.drop>3&&p.ground==='grass_block'));
+ assert.ok(Number.isFinite(result.footprint.minY));
+ assert.ok(result.rejections.blockedFooting>0);
+});
+test('diagnostics distinguish missing terrain from impossible verified terrain',()=>{
+ const blocks=(x,y,z)=>{
+  if(x===0&&z===0&&y===70)return solid('oak_leaves');
+  if(x===0&&z===0&&(y===71||y===72))return air;
+  return null;
+ };
+ const result=planCanopyGroundRoute({origin:{x:0,y:71,z:0},blockAt:blocks});
+ assert.equal(result.reason,'no_verified_ground_route');
+ assert.ok(result.rejections.unknownFooting>0);
+ assert.deepEqual(result.lowerGroundSamples,[]);
+});
