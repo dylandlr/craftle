@@ -19,6 +19,7 @@ import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety
 import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
 import {findCanopyStepdown,shouldInspectCanopyStepdown} from './canopy-stepdown.js';
+import {planCanopyGroundRoute} from './canopy-ground-route.js';
 import {auditDiggingNeighbors} from './dig-navigation-audit.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
@@ -56,6 +57,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
  const canopyStepdown=process.env.CRAFTLE_CANOPY_STEPDOWN==='1';
+ const canopyGroundRoute=process.env.CRAFTLE_CANOPY_GROUND_ROUTE==='1';
  let lastStepdown=0;
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
@@ -255,9 +257,19 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    else if(choice.skill==='explore'){
     if(goal?.key!=='explore'||stalls>=3||clock()-goal.at>=15000){
      if(groundedExplore){
-      const choice=connectedExplore
-       ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected,allowShortDescent:canopyDescent,scoreNode:explorationNoveltyScore})
-       : chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
+      const canopyRoute=canopyGroundRoute&&connectedExplore&&bot.blockAt(p.offset(0,-0.3,0),false)?.name?.includes('leaves')
+       ? planCanopyGroundRoute({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),health:bot.health,avoid:failedConnected})
+       : null;
+      if(canopyRoute)log({type:'canopy_ground_route_audit',decisionId:activeDecision?.decisionId??null,
+       reason:canopyRoute.reason,selected:canopyRoute.selected?.position??null,routeSteps:canopyRoute.routeSteps??null,
+       examined:canopyRoute.examined,maxDrop:canopyRoute.maxDrop??null,
+       path:canopyRoute.route?.length?canopyRoute.route.slice(0,40).map(n=>({x:n.x,y:n.y,z:n.z,footing:n.ground})):[],
+       learned:false,informationAccess:'privileged_mineflayer_state'});
+      const choice=canopyRoute?.selected
+       ? {...canopyRoute,reason:canopyRoute.reason,examined:canopyRoute.examined}
+       : connectedExplore
+        ? chooseConnectedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),avoid:failedConnected,allowShortDescent:canopyDescent,scoreNode:explorationNoveltyScore})
+        : chooseGroundedExploreGoal({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),failed:failedExplore,seed:tick});
       log({type:'grounded_exploration_candidates',decisionId:activeDecision?.decisionId,viableCandidates:choice.viableCandidates,totalCandidates:choice.totalCandidates,chosen:choice.selected?.position??null,ground:choice.selected?.ground??null,leafFooting:choice.selected?.leaves??null});
       if(connectedExplore)log({type:'connected_exploration_audit',decisionId:activeDecision?.decisionId,reason:choice.reason,examined:choice.examined,selected:choice.selected?.position??null,footing:choice.selected?.ground??null,learned:false});
       if(choice.selected){
