@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createTargetedController} from '../src/targeted-controller.js';
+import {encodeTargets,TARGET_ACTIONS} from '../src/target-opportunities.js';
 const seeds=[1,7,19,42,101];
 const versions=['v1','v2','v3'];
 function run({controller,steps,seed}){
@@ -12,7 +13,11 @@ function run({controller,steps,seed}){
  const plants=new Set(patches),drops=new Set();
  let x=0,food=10,health=20,inventory=0,displacement=0;
  const stats={steps:0,explore:0,approach:0,harvest:0,collect:0,eats:0,death:0,
-  plantFound:0,foodCollected:0,failedHarvest:0,finalFood:0,finalHealth:0};
+  plantFound:0,foodCollected:0,failedHarvest:0,finalFood:0,finalHealth:0,
+  availableHarvestDecisions:0,availableApproachDecisions:0,availableEatDecisions:0,
+  selectedApproachWhenHarvestAvailable:0,selectedExploreWhenHarvestAvailable:0,
+  selectedApproachWhenEatAvailable:0,selectedExploreWhenEatAvailable:0,
+  blockedByTargetSlotLimit:0};
  for(let step=0;step<steps;step++){
   // Detect visible finite food resources in a local 24 block sensory window.
   const candidates=[...plants].filter(p=>Math.abs(p-x)<=24).map(p=>({
@@ -26,7 +31,20 @@ function run({controller,steps,seed}){
   const observation={health,food,foodAvailable:inventory>0,foodUnits:inventory,
    foodPoints:inventory*2,hostileDistance:24,blocked:false,displacement,
    position:{x,y:70,z:0},targets:candidates.slice(0,4)};
+  const {mask}=encodeTargets(observation);
+  const available=TARGET_ACTIONS.filter((_,i)=>mask[i]);
+  const harvestAvailable=available.some(a=>a.startsWith('harvest_'));
+  const approachAvailable=available.some(a=>a.startsWith('approach_'));
+  const eatAvailable=available.includes('eat');
+  if(harvestAvailable)stats.availableHarvestDecisions++;
+  if(approachAvailable)stats.availableApproachDecisions++;
+  if(eatAvailable)stats.availableEatDecisions++;
   const choice=controller.choose(observation);stats.steps++;
+  if(harvestAvailable&&choice.skill==='approach')stats.selectedApproachWhenHarvestAvailable++;
+  if(harvestAvailable&&choice.skill==='explore')stats.selectedExploreWhenHarvestAvailable++;
+  if(eatAvailable&&choice.skill==='approach')stats.selectedApproachWhenEatAvailable++;
+  if(eatAvailable&&choice.skill==='explore')stats.selectedExploreWhenEatAvailable++;
+  if(candidates.length>4)stats.blockedByTargetSlotLimit++;
   let delta=0;
   if(choice.skill==='explore'){delta=5;stats.explore++;}
   else if(choice.skill==='approach'){
