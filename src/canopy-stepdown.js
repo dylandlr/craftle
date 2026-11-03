@@ -1,5 +1,8 @@
 // Experimental embodied canopy recovery: walk off a known short edge.
 // No teleport, digging, unknown landing, or blind jump. All observations are local.
+export function shouldInspectCanopyStepdown({enabled=false,connected=false,stalls=0,onLeafCanopy=false,elapsedMs=0,cooldownMs=15000}={}){
+ return Boolean(enabled&&connected&&(stalls>=3||onLeafCanopy)&&elapsedMs>cooldownMs);
+}
 const hazard=new Set(['lava','flowing_lava','fire','soul_fire','magma_block','cactus','campfire','soul_campfire']);
 export function findCanopyStepdown({position,blockAt,health=20,maxDrop=3}={}){
  if(!position||typeof blockAt!=='function'||!Number.isFinite(health)||health<8)
