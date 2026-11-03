@@ -36,7 +36,7 @@ export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNod
     // Verify every block in the landing shaft before stepping onto lower terrain.
     if(dy<0){
      let shaftClear=true;
-     for(let h=node.y;h>y;h++)if(!isEmpty(at(x,h,z))){shaftClear=false;break;}
+     for(let h=node.y;h>y;h--)if(!isEmpty(at(x,h,z))){shaftClear=false;break;}
      if(!shaftClear)continue;
     }
     if(dy===1&&!isEmpty(at(node.x,node.y+2,node.z)))continue;
