@@ -253,6 +253,10 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
       goal:goal?{...goal}:null,health:bot.health,food:bot.food,
       examined:escape.examined,learned:false,
       informationAccess:'privileged_mineflayer_state'});
+     // This branch exits before the normal DQN decision/accounting footer.
+     // Keep movement-stall detection and periodic audit cadence operational.
+     lastPosition={x:p.x,z:p.z};
+     tick++;
      return;
     }
     if(tick%10===0)log({type:'canopy_egress_no_route',reason:escape.reason,
