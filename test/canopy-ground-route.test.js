@@ -59,16 +59,31 @@ test('does not plan ground route when already safely on ground',()=>{
  assert.equal(p.selected,null);
 });
 
-test('rejects lower landing when the vertical descent shaft is obstructed',()=>{
+test('rejects descent where a solid wall blocks all locally reachable exits',()=>{
  const blocks=(x,y,z)=>{
   if(z!==0||x<0||x>3)return null;
   if(x<=2&&y===74)return solid('oak_leaves');
   if(x===3&&y===72)return solid('grass_block');
-  if(x===3&&y===75)return solid('stone');
+  if(x===3&&y>=74&&y<=77)return solid('stone');
   if(y>=73&&y<=77)return air;
   return null;
  };
  const p=planCanopyGroundRoute({origin:{x:0,y:75,z:0},blockAt:blocks});
  assert.equal(p.selected,null);
  assert.equal(p.reason,'no_verified_ground_route');
+});
+
+test('accepts a safer raised stone foothold instead of forcing a drop',()=>{
+ const blocks=(x,y,z)=>{
+  if(z!==0||x<0||x>3)return null;
+  if(x<=2&&y===74)return solid('oak_leaves');
+  if(x===3&&y===72)return solid('grass_block');
+  if(x===3&&y===75)return solid('stone');
+  if(y>=73&&y<=78)return air;
+  return null;
+ };
+ const route=planCanopyGroundRoute({origin:{x:0,y:75,z:0},blockAt:blocks});
+ assert.equal(route.reason,'verified_connected_ground_route');
+ assert.deepEqual(route.selected.position,{x:3,y:76,z:0});
+ assert.equal(route.selected.ground,'stone');
 });
