@@ -66,7 +66,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   file:(process.env.CRAFTLE_PERSISTENT_ROOT??'/state/agent')+'/canopy-risk-v1.json',
   epsilon:Number(process.env.CRAFTLE_CANOPY_RISK_EPSILON??0.3),log
  }):null;
- let lastRiskChoice=0,lastCanopySnapshot=0;
+ let lastRiskChoice=0,lastCanopySnapshot=0,lastRiskDeath=null;
  const groundedExplore=connectedExplore||process.env.CRAFTLE_GROUNDED_EXPLORATION==='1';
  const failedExplore=new Set();
  const recentExploreDestinations=[];
@@ -139,8 +139,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   return false;
  };
  const cancel=()=>{nativeRouteGate.reset();clearGoal();bot.clearControlStates();bot.deactivateItem?.();lastPosition=null;stalls=0;};
- const death=()=>{if(ended||dead)return;riskLearner?.finish({outcome:'death'});pendingRecovery=null;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
- const spawn=()=>{if(ended)return;riskLearner?.finish({outcome:'respawn_without_confirmed_landing'});pendingRecovery=null;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
+ const death=()=>{if(ended||dead)return;lastRiskDeath=riskLearner?.finish({outcome:'death'})??null;pendingRecovery=null;for(const event of canopyTracker.reset('death'))log(event);dead=true;bot.__craftleActiveDecision=null;life++;sequences.death();decisionController.terminal();cancel();};
+ const spawn=()=>{if(ended)return;riskLearner?.finish({outcome:'respawn_without_confirmed_landing'});if(lastRiskDeath){log({type:'canopy_risk_respawn_observed',previousDeath:lastRiskDeath,learnedPolicy:'auxiliary_tabular_not_DQN'});lastRiskDeath=null;}pendingRecovery=null;for(const event of canopyTracker.reset('respawn'))log(event);dead=false;bot.__craftleActiveDecision=null;life++;decisionController.truncate?.();cancel();};
  const reached=()=>{goal=null;};
  const pathUpdate=result=>{if(result.status==='noPath'&&goal){const failed={...goal};markConnectedFailure(failed);if(groundedExplore&&failed.key==='explore'){failedExplore.add([Math.floor(failed.x),Math.floor(failed.z)].join(','));if(failedExplore.size>256)failedExplore.clear();}clearGoal();log({type:'target_navigation_result',status:'noPath',life,decisionId:activeDecision?.decisionId??null,skill:activeDecision?.skill??null,goal:failed,position:bot.entity?.position?{x:bot.entity.position.x,y:bot.entity.position.y,z:bot.entity.position.z}:null,pathStatus:result.status});}};
  const pathReset=reason=>log({type:'native_pathfinder_reset',reason,
