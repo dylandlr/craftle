@@ -28,7 +28,7 @@ function finishWater(){
  if(!longestWater||result.seconds>longestWater.seconds)longestWater=result;
  if(waterEpisodes.length<waterMaxEpisodes)waterEpisodes.push(result);
  else {
-  const shortest=waterEpisodes.reduce((a,b,i)=>waterEpisodes[b].seconds<waterEpisodes[a].seconds?b:a,0);
+  const shortest=waterEpisodes.reduce((best,episode,index)=>episode.seconds<waterEpisodes[best].seconds?index:best,0);
   if(result.seconds>waterEpisodes[shortest].seconds)waterEpisodes[shortest]=result;
  }
  waterEpisode=null;
