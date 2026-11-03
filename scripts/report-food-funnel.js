@@ -1,6 +1,7 @@
 // Read-only food acquisition funnel from authoritative *observed* agent JSONL.
 // Correlation only: inventory gain alone does not prove a particular attack succeeded.
 import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
 export function summarizeFoodFunnel(events){
  const counts={};const increment=k=>counts[k]=(counts[k]??0)+1;
  const decisions={};let lastDecision=null,first=null,last=null;
@@ -71,7 +72,7 @@ export function loadFoodEvents(file,{tailBytes=32*1024*1024}={}){
    try{return [JSON.parse(line)];}catch{return [];}});
  }finally{fs.closeSync(fd);}
 }
-if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
+if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1] || process.argv[1]?.endsWith('/report-food-funnel.js') || process.argv[1]?.endsWith('\\report-food-funnel.js')){
  const file=process.argv[2]??'/state/agent/continuous/agent.log';
  console.log(JSON.stringify(summarizeFoodFunnel(loadFoodEvents(file)),null,2));
 }
