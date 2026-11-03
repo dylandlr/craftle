@@ -311,7 +311,19 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     if(threat){
      if(connectedExplore){
       const startDistance=Math.hypot(p.x-threat.position.x,p.z-threat.position.z);
-      const route=chooseConnectedExploreGoal({
+      const escape=canopyGroundRoute&&bot.blockAt(p.offset(0,-0.3,0),false)?.name?.includes('leaves')
+       ? planCanopyGroundRoute({origin:p,blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),health:bot.health,avoid:failedConnected})
+       : null;
+      const escapeDistance=escape?.selected?.position
+       ? Math.hypot(escape.selected.position.x-threat.position.x,escape.selected.position.z-threat.position.z)
+       : -Infinity;
+      // Never replace a retreat with a route that moves toward the currently nearest threat.
+      const useEscape=escape?.selected&&escapeDistance>=startDistance-0.5;
+      if(escape)log({type:'canopy_retreat_ground_route_audit',decisionId:choice.decisionId,
+       reason:escape.reason,selected:escape.selected?.position??null,routeSteps:escape.routeSteps??null,
+       examined:escape.examined,threatDistanceBefore:startDistance,threatDistanceAtWaypoint:escapeDistance,
+       accepted:Boolean(useEscape),learned:false,informationAccess:'privileged_mineflayer_state'});
+      const route=useEscape?escape:chooseConnectedExploreGoal({
        origin:p,
        blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
        avoid:failedConnected,
