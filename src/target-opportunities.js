@@ -43,7 +43,11 @@ export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displac
    candidates.push({id:plantKey(block),kind:'plant',position:{x:p.x,y:p.y,z:p.z},distance:distance(position,p),visible:true});
   }
  }
- candidates.sort((a,b)=>a.distance-b.distance||a.id.localeCompare(b.id));
+ // Reserve target capacity for edible drops and harvestable plants when they
+ // are in range; otherwise four nearer animals can crowd out immediate food.
+ // This is an explicit semantic perception heuristic, not a learned priority.
+ const priority=t=>t.kind==='drop'?0:t.kind==='plant'?1:2;
+ candidates.sort((a,b)=>priority(a)-priority(b)||a.distance-b.distance||a.id.localeCompare(b.id));
  const targets=candidates.slice(0,TARGET_SLOTS).map(t=>({...t,reachable:t.distance<(t.kind==='animal'?3:t.kind==='plant'?4.2:1)}));
  const foods=inventory.filter(item=>edible(bot,item));
  counts.inventoryFoodItems=foods.length;
