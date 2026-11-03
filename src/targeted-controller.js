@@ -4,7 +4,7 @@ import {createOptionDQN} from './option-dqn.js';
 import {seededOptionRandom} from './learning-options.js';
 import {rewardV3,REWARD_V3_WEIGHTS} from './target-reward-v3.js';
 import {TARGET_ACTIONS,TARGET_INPUTS,TARGET_SCHEMA,encodeTargets,decodeTargetAction} from './target-opportunities.js';
-export function createTargetedController({checkpoint,mode='training',seed=1,epsilon=0.3,rewardVersion='v1',log=()=>{}}={}){
+export function createTargetedController({checkpoint,mode='training',seed=1,epsilon=0.3,rewardVersion='v1',maskRedundantPlantApproach=false,log=()=>{}}={}){
  if(!['training','frozen','random','scripted','auto_eat'].includes(mode))throw Error('Invalid targeted policy mode');
  if(!Number.isFinite(epsilon)||epsilon<0||epsilon>1)throw Error('Invalid targeted epsilon');
  if(!['v1','v2','v3'].includes(rewardVersion))throw Error('Invalid targeted reward version');
@@ -18,7 +18,7 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
  const save=()=>{if(mode!=='training'||!checkpoint)return;fs.mkdirSync(path.dirname(checkpoint),{recursive:true});fs.writeFileSync(checkpoint+'.tmp',JSON.stringify(learner.snapshot()));fs.renameSync(checkpoint+'.tmp',checkpoint);};
  return {
   choose(o){
-   const {features,mask,requiresRecovery}=encodeTargets(o);
+   const {features,mask,requiresRecovery}=encodeTargets(o,{maskRedundantPlantApproach});
    if(requiresRecovery){
     log({type:'target_no_executable_action',reason:'planner_declared_exploration_unavailable',exploreFeasible:o.exploreFeasible??null,policyChanged:false});
     throw new Error('No executable targeted action: executive recovery required');
@@ -60,10 +60,10 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
     index=TARGET_ACTIONS.indexOf(action??'explore');
     if(mode==='auto_eat'&&index===0)throw Error('Auto-eat control cannot choose neural eat action');
    }else {const selected=learner.choose(features,mask);index=selected.index;neuralTrace=selected.trace;}
-   const choice=decodeTargetAction(index,o),decisionId=++serial;
+   const choice=decodeTargetAction(index,o,{maskRedundantPlantApproach}),decisionId=++serial;
    pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,food:o.food,credit:0,decisionId};
-   log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,capabilityTier:'scripted_targeted_skills'});
-   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actionAvailability:{exploreFeasible:o.exploreFeasible??null,requiresRecovery:false},actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,source:'assisted_semantic_mineflayer_no_pixels'});
+   log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,maskRedundantPlantApproach,capabilityTier:'scripted_targeted_skills'});
+   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actionAvailability:{exploreFeasible:o.exploreFeasible??null,requiresRecovery:false},actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,maskRedundantPlantApproach,source:'assisted_semantic_mineflayer_no_pixels'});
    if(mode==='training'&&stats().updates%40===0)save();
    return {...choice,decisionId};
   },
