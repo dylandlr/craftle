@@ -39,9 +39,23 @@ if(continuous){
  fs.mkdirSync(root,{recursive:true});
  const source=path.join(root,'accepted-policy.json');
  const rewardVersion=process.env.CRAFTLE_TARGET_REWARD_VERSION??'v1';
- if(!['v1','v2'].includes(rewardVersion))throw Error('Unknown targeted reward version');
- const target=path.join(root,rewardVersion==='v2'?'continuous-policy-reward-v2.json':'continuous-policy.json');
- if(!fs.existsSync(target)&&fs.existsSync(source))fs.copyFileSync(source,target);
+ if(!['v1','v2','v3'].includes(rewardVersion))throw Error('Unknown targeted reward version');
+ const targetName=rewardVersion==='v3'?'continuous-policy-reward-v3-candidate.json':
+  rewardVersion==='v2'?'continuous-policy-reward-v2.json':'continuous-policy.json';
+ const target=path.join(root,targetName);
+ if(!fs.existsSync(target)&&fs.existsSync(source)){
+  if(rewardVersion==='v3'){
+   // Warm-start only network weights from the accepted compatible v1 head.
+   // v1 reward replay/target networks must NOT be resumed under v3 rewards.
+   const baseline=JSON.parse(fs.readFileSync(source,'utf8'));
+   if(baseline.schema!=='craftle.targeted.dqn.v1')throw Error('Incompatible accepted baseline for reward v3');
+   delete baseline.trainingState;
+   baseline.updates=0;
+   fs.writeFileSync(target,JSON.stringify(baseline));
+   console.log(JSON.stringify({type:'reward_v3_candidate_initialized',
+    checkpoint:target,source,weightsWarmStarted:true,priorReplayDiscarded:true}));
+  }else fs.copyFileSync(source,target);
+ }
  if(!fs.existsSync(target))throw Error('Continuous mode requires an existing accepted or continuous checkpoint');
  const continuousDir=path.join(root,'continuous');
  fs.mkdirSync(continuousDir,{recursive:true});
