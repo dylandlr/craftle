@@ -156,6 +156,17 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   busy=true;const epoch=life,valid=()=>!ended&&!dead&&epoch===life;
   try{
    let p=bot.entity.position;
+   // Match pathfinder fall limits to current health and the locally verified
+   // canopy plan. A low-health agent must not retain a previously safe drop cap.
+   if(canopyGroundRoute&&canopyDescent&&traversalMode==='conservative'){
+    const desiredDrop=bot.health>=14?5:bot.health>=8?3:1;
+    if(movements.maxDropDown!==desiredDrop){
+     movements.maxDropDown=desiredDrop;
+     bot.pathfinder.setMovements(movements);
+     log({type:'canopy_dynamic_drop_limit',maxDropDown:desiredDrop,
+      health:bot.health,learned:false});
+    }
+   }
    if(discovery){
     discovery.sample({position:p,dimension:bot.game?.dimension??'overworld',
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
