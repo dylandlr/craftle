@@ -199,12 +199,16 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     catch(e){log({type:'trap_visual_survey_error',message:e.message});}
     if(!valid())return;
    }
-   if(canopyStepdown&&connectedExplore&&stalls>=3&&clock()-lastStepdown>15000){
+   // Periodically inspect safe descent while traversing leaves, not only when stationary.
+   // The connected canopy-waypoint fallback can otherwise keep stalls at zero indefinitely.
+   const canopyUnderfoot=bot.blockAt(p.offset(0,-0.3,0),false)?.name??null;
+   const onLeafCanopy=canopyUnderfoot.includes('leaves');
+   if(canopyStepdown&&connectedExplore&&(stalls>=3||onLeafCanopy)&&clock()-lastStepdown>15000){
     lastStepdown=clock();
     const candidate=findCanopyStepdown({position:p,health:bot.health,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
     log({type:'canopy_stepdown_plan',reason:candidate.reason,selected:candidate.selected,
-     decisionId:activeDecision?.decisionId??null,learned:false});
+     decisionId:activeDecision?.decisionId??null,onLeafCanopy,stalls,learned:false});
     if(candidate.selected&&bot.waitForTicks){
      clearGoal();
      const start={x:p.x,y:p.y,z:p.z},q=candidate.selected;
