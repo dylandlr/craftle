@@ -70,7 +70,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
   return netDistance*1.2-node.cost*.23-revisitPenalty+mapNovelty;
  };
  const failedConnected=new Set();
- const markConnectedFailure=g=>{if(!connectedExplore||g?.key!=='explore')return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
+ const markConnectedFailure=g=>{if(!connectedExplore||!['explore','canopy_egress'].includes(g?.key))return;failedConnected.add([Math.floor(g.x),Math.floor(g.y),Math.floor(g.z)].join(','));if(failedConnected.size>180)failedConnected.delete(failedConnected.values().next().value);};
  log({type:'native_traversal_config',mode:traversalMode,maxDropDown:movements.maxDropDown,allowParkour:movements.allowParkour,canDig:movements.canDig,learned:false});
  log({type:'exploration_execution_variant',variant:connectedExplore?'connected_cached_v1':groundedExplore?'grounded_v1':'legacy_v1',canopyDescent,maximumDrop:canopyDescent?3:1,learned:false});
  const clearGoal=()=>{goal=null;bot.pathfinder.setGoal(null);};
@@ -168,7 +168,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    }
    const displacement=lastPosition?Math.hypot(p.x-lastPosition.x,p.z-lastPosition.z):0;
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
-   if(stalls===3&&goal?.key==='explore'&&connectedExplore){markConnectedFailure(goal);log({type:'connected_navigation_recovery',reason:'three_low_displacement_samples',failedGoal:{...goal},learned:false});clearGoal();}
+   if(stalls===3&&['explore','canopy_egress'].includes(goal?.key)&&connectedExplore){markConnectedFailure(goal);log({type:'connected_navigation_recovery',reason:'three_low_displacement_samples',failedGoal:{...goal},learned:false});clearGoal();}
    if(stalls===3||stalls===8)log({type:'target_navigation_stall',decisionId:activeDecision?.decisionId??null,stalls,displacement,goal:goal?{...goal}:null,position:{x:p.x,y:p.y,z:p.z}});
    if(connectedExplore&&(stalls===3||stalls===8||(stalls>8&&stalls%100===0))){
     const at=(dy)=>{const b=bot.blockAt(p.offset(0,dy,0),false);return b?{name:b.name,boundingBox:b.boundingBox,position:{x:b.position.x,y:b.position.y,z:b.position.z}}:null;};
@@ -234,6 +234,36 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
      lastPosition={x:end.x,z:end.z};
      return;
     }
+   }
+   // Emergency locomotion primitive: do not let alternating explore/retreat
+   // objectives replace a verified canopy escape before reaching the ground.
+   // This is SCRIPTED assistance, not a DQN choice or a learned skill.
+   if(canopyGroundRoute&&connectedExplore&&onLeafCanopy){
+    const escape=planCanopyGroundRoute({
+     origin:p,health:bot.health,maxWaypoints:2,
+     blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
+     avoid:failedConnected
+    });
+    if(escape.selected){
+     const waypoint=escape.selected.position;
+     const was=goal?.key==='canopy_egress';
+     setGoal('canopy_egress',waypoint,1,false);
+     if(!was||tick%10===0)log({type:'canopy_egress_execution_audit',
+      reason:escape.reason,routeSteps:escape.routeSteps??null,waypoint,
+      goal:goal?{...goal}:null,health:bot.health,food:bot.food,
+      examined:escape.examined,learned:false,
+      informationAccess:'privileged_mineflayer_state'});
+     return;
+    }
+    if(tick%10===0)log({type:'canopy_egress_no_route',reason:escape.reason,
+     health:bot.health,food:bot.food,examined:escape.examined,
+     frontierNodes:escape.frontierNodes??null,learned:false,
+     informationAccess:'privileged_mineflayer_state'});
+   }
+   if(goal?.key==='canopy_egress'){
+    const old={...goal};clearGoal();
+    log({type:'canopy_egress_released',reason:onLeafCanopy?'no_verified_route':'nonleaf_footing',
+     previous:old,learned:false});
    }
    settleRecovery(p);
    const now=clock();
