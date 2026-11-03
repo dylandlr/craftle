@@ -59,7 +59,7 @@ export function observeTargets(bot,{hostileNames=new Set(),blocked=false,displac
   hostileDistance:Math.min(24,...Object.values(bot.entities).filter(e=>e?.position&&hostileNames.has(e.name)).map(e=>distance(position,e.position))),
   blocked,displacement:displacement??0,position:{x:position.x,y:position.y,z:position.z},targets};
 }
-export function encodeTargets(o){
+export function encodeTargets(o,{maskRedundantPlantApproach=false}={}){
  const clamp=(n,scale)=>Math.max(-1,Math.min(1,n/scale));
  const features=[o.health/20,o.food/20,Number(o.foodAvailable),clamp(o.foodUnits,64),clamp(o.foodPoints,80),clamp(o.hostileDistance,24),Number(o.blocked),clamp(o.displacement,4)];
  for(let i=0;i<TARGET_SLOTS;i++){
@@ -72,14 +72,15 @@ export function encodeTargets(o){
   if(action==='explore')return o.exploreFeasible!==false;
   if(action==='retreat')return o.hostileDistance<24;
   const [skill,slot]=action.split('_'),t=o.targets[Number(slot)];
+  if(skill==='approach'&&maskRedundantPlantApproach&&t?.kind==='plant'&&t.visible&&t.reachable)return false;
   return Boolean(t&&t.visible&&(skill==='approach'||t.reachable&&(skill==='harvest'?t.kind==='plant':t.kind==='animal')));
  });
  // Never silently construct an empty action set: caller needs an explicit recovery/interrupt path.
  if(!mask.some(Boolean))return {features,mask,requiresRecovery:true};
  return {features,mask,requiresRecovery:false};
 }
-export function decodeTargetAction(index,o){
- const {mask}=encodeTargets(o);if(!Number.isInteger(index)||!mask[index])throw Error('Unavailable target action');
+export function decodeTargetAction(index,o,options){
+ const {mask}=encodeTargets(o,options);if(!Number.isInteger(index)||!mask[index])throw Error('Unavailable target action');
  const [skill,slot]=TARGET_ACTIONS[index].split('_');
  return {index,skill,targetId:slot===undefined?null:o.targets[Number(slot)].id};
 }
