@@ -130,3 +130,45 @@ test('diagnostics distinguish missing terrain from impossible verified terrain',
  assert.ok(result.rejections.unknownFooting>0);
  assert.deepEqual(result.lowerGroundSamples,[]);
 });
+
+test('healthy Turesla can plan an observed five-block descent from the canopy',()=>{
+ const blocks=(x,y,z)=>{
+  if(z!==0||x<0||x>2)return null;
+  if(x===0&&y===74)return solid('oak_leaves');
+  if(x>=1&&y===69)return solid('grass_block');
+  if(y>=70&&y<=78)return air;
+  return null;
+ };
+ const p=planCanopyGroundRoute({origin:{x:0.5,y:75,z:0.5},health:20,blockAt:blocks});
+ assert.equal(p.maxDrop,5);
+ assert.equal(p.reason,'verified_connected_ground_route');
+ assert.equal(p.route.at(-1).y,70);
+ assert.equal(p.route.at(-1).ground,'grass_block');
+});
+test('five-block descent is rejected below the health-reserve threshold',()=>{
+ const blocks=(x,y,z)=>{
+  if(z!==0||x<0||x>2)return null;
+  if(x===0&&y===74)return solid('oak_leaves');
+  if(x>=1&&y===69)return solid('grass_block');
+  if(y>=70&&y<=78)return air;
+  return null;
+ };
+ for(const health of [1,7,8,13]){
+  const p=planCanopyGroundRoute({origin:{x:0.5,y:75,z:0.5},health,blockAt:blocks});
+  assert.equal(p.reason,'no_verified_ground_route');
+  assert.equal(p.selected,null);
+ }
+});
+test('five-block descent rejects obstructed landing columns',()=>{
+ const blocks=(x,y,z)=>{
+  if(z!==0||x<0||x>1)return null;
+  if(x===0&&y===74)return solid('oak_leaves');
+  if(x===1&&y===69)return solid('grass_block');
+  if(x===1&&y>=72&&y<=77)return solid('stone');
+  if(y>=70&&y<=79)return air;
+  return null;
+ };
+ const p=planCanopyGroundRoute({origin:{x:0.5,y:75,z:0.5},health:20,blockAt:blocks});
+ assert.equal(p.reason,'no_verified_ground_route');
+ assert.equal(p.selected,null);
+});
