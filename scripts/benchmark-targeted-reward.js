@@ -50,14 +50,15 @@ const contract={
    mine:actionSpace.some(a=>a.startsWith('mine')),craft:actionSpace.some(a=>a.startsWith('craft')),
    place:actionSpace.some(a=>a.startsWith('place')),descend:actionSpace.some(a=>a.startsWith('descend'))},
   rewardFormulas:{v1:'credit + min(0,healthDelta)*0.7 - 0.03',
-   v2:'v1 + firstCell*0.12 + min(0.45,foodGain*0.15) + min(0.03,displacement*0.01)'},
+   v2:'v1 + firstCell*0.12 + min(0.45,foodGain*0.15) + min(0.03,displacement*0.01)',
+   v3:'-0.03 + 0.8*healthLoss + 0.02*hungerLoss + 0.025*newCellWhenFoodAbove8 + min(0.36,foodGain*0.12) + 2*verifiedEat'},
   caveats:['Synthetic mature plant remains reachable at all times.',
    'No world physics, inventory pickup, navigation, item consumption latency, or mobs.',
    'Evaluation is an abstract frozen-policy smoke test, not a Minecraft survival benchmark.']};
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'craftle-reward-probe-'));
 try{
  const results=[];
- for(const version of ['v1','v2']){
+ for(const version of ['v1','v2','v3']){
   for(const seed of seeds){
    const checkpoint=path.join(root,version+'-'+seed+'.json');
    const trainController=createTargetedController({checkpoint,mode:'training',seed,epsilon:0.25,rewardVersion:version});
@@ -68,7 +69,7 @@ try{
   }
  }
  contract.results=results;
- contract.summary=['v1','v2'].map(version=>{
+ contract.summary=['v1','v2','v3'].map(version=>{
   const group=results.filter(r=>r.version===version);
   return {version,meanFrozenEats:mean(group.map(r=>r.evaluation.verifiedEats)),
    meanFrozenExplore:mean(group.map(r=>r.evaluation.explore)),
