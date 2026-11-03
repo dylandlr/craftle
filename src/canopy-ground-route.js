@@ -18,7 +18,9 @@ export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNod
  const start=inspect(o.x,o.y,o.z);
  if(!start)return {reason:'no_known_start_footing',selected:null,route:[],examined:0};
  if(!start.leaves)return {reason:'already_on_nonleaf_ground',selected:null,route:[],examined:0};
- const maxDrop=Number.isFinite(health)&&health>=8?3:1;
+ // A verified five-block fall normally costs about two health points.
+ // Require a substantial reserve; low-health recovery remains conservative.
+ const maxDrop=Number.isFinite(health)&&health>=14?5:Number.isFinite(health)&&health>=8?3:1;
  const rejections={unknownFooting:0,unknownClearance:0,blockedFooting:0,blockedClearance:0,
   unsafeFooting:0,shaftBlocked:0,avoided:0,outOfRadius:0};
  const lowerGroundSamples=[];
