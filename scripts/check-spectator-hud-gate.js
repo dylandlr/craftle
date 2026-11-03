@@ -2,6 +2,7 @@
 // This is an observational gate, NOT proof of causal non-interference.
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 function load(file){
  if(!fs.existsSync(file))throw new Error('Missing phase file: '+file);
  const rows=fs.readFileSync(file,'utf8').split(/\r?\n/).filter(Boolean).map((line,i)=>{
@@ -53,7 +54,7 @@ export function assessObserverSamples({baseline,spectator,camera='dyl_is_here',a
 export function runObserverHudGate(dir){
  return assessObserverSamples({baseline:load(path.join(dir,'baseline.jsonl')),spectator:load(path.join(dir,'spectator.jsonl'))});
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===path.resolve(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:\/)/,''))){
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  try{
   const dir=process.argv[2];
   if(!dir)throw new Error('Usage: node scripts/check-spectator-hud-gate.js <phase-directory>');
