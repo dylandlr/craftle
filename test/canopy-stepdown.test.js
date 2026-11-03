@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {findCanopyStepdown} from '../src/canopy-stepdown.js';
+import {findCanopyStepdown,shouldInspectCanopyStepdown} from '../src/canopy-stepdown.js';
 const air={name:'air',boundingBox:'empty'},leaves={name:'oak_leaves',boundingBox:'block'},grass={name:'grass_block',boundingBox:'block'};
 const blocks=(x,y,z)=>{
  if(x===0&&z===0&&y===70)return leaves;
@@ -20,4 +20,12 @@ test('never walks off canopy into nearby lava or unknown blocks',()=>{
 test('low health and non-canopy starting positions do not attempt drop',()=>{
  assert.equal(findCanopyStepdown({position:{x:0.5,y:71,z:0.5},blockAt:blocks,health:1}).selected,null);
  assert.equal(findCanopyStepdown({position:{x:0.5,y:71,z:0.5},blockAt:()=>grass}).selected,null);
+});
+
+test('moving on leaves periodically triggers descent inspection without a stall',()=>{
+ assert.equal(shouldInspectCanopyStepdown({enabled:true,connected:true,onLeafCanopy:true,stalls:0,elapsedMs:16000}),true);
+ assert.equal(shouldInspectCanopyStepdown({enabled:true,connected:true,onLeafCanopy:true,stalls:0,elapsedMs:5000}),false);
+ assert.equal(shouldInspectCanopyStepdown({enabled:true,connected:true,onLeafCanopy:false,stalls:0,elapsedMs:16000}),false);
+ assert.equal(shouldInspectCanopyStepdown({enabled:true,connected:true,onLeafCanopy:false,stalls:3,elapsedMs:16000}),true);
+ assert.equal(shouldInspectCanopyStepdown({enabled:false,connected:true,onLeafCanopy:true,stalls:3,elapsedMs:16000}),false);
 });
