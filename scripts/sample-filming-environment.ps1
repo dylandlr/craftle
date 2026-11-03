@@ -44,7 +44,7 @@ try {
   # Windows search, sync, antivirus or IDE watchers can repeatedly lock.
   # Preserve these individual files even if the final JSONL cannot be assembled.
   $sampleFile=Join-Path $sampleDir ('{0:D4}.json' -f $i)
-  [System.IO.File]::WriteAllText($sampleFile,$line+"\u0060n",$utf8)
+  [System.IO.File]::WriteAllText($sampleFile,$line,$utf8)
   $lines.Add($line)
   Write-Host "$Phase $($i+1)/$Samples"
   if($i -lt $Samples-1){Start-Sleep -Seconds $IntervalSeconds}
