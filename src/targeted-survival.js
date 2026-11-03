@@ -18,7 +18,7 @@ import {shouldReplaceNavigationGoal} from './navigation-goal-control.js';
 import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety.js';
 import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
-import {findCanopyStepdown} from './canopy-stepdown.js';
+import {findCanopyStepdown,shouldInspectCanopyStepdown} from './canopy-stepdown.js';
 import {auditDiggingNeighbors} from './dig-navigation-audit.js';
 // Each decision selects one skill and one concrete target. No automatic forage chain.
 export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigation=pathfinderPackage,autoStart=true,intervalMs=1800,clock=Date.now,autoEatControl=false}={}){
@@ -203,7 +203,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    // The connected canopy-waypoint fallback can otherwise keep stalls at zero indefinitely.
    const canopyUnderfoot=bot.blockAt(p.offset(0,-0.3,0),false)?.name??null;
    const onLeafCanopy=canopyUnderfoot.includes('leaves');
-   if(canopyStepdown&&connectedExplore&&(stalls>=3||onLeafCanopy)&&clock()-lastStepdown>15000){
+   if(shouldInspectCanopyStepdown({enabled:canopyStepdown,connected:connectedExplore,stalls,onLeafCanopy,elapsedMs:clock()-lastStepdown})){
     lastStepdown=clock();
     const candidate=findCanopyStepdown({position:p,health:bot.health,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
