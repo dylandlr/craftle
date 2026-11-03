@@ -14,15 +14,20 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
  const start=inspect(o.x,o.y,o.z);
  if(!start)return {selected:null,reason:'no_known_start_footing',examined:0};
  const nodes=[{...start,cost:0,steps:0}],seen=new Set([K(o.x,o.y,o.z)]);
- let best=null,examined=0;
+ let best=null,bestCanopy=null,examined=0;
  for(let i=0;i<nodes.length&&i<maxNodes;i++){
   const n=nodes[i];examined++;
-  if(n.steps>=2&&!n.leaves&&!avoid.has(K(n.x,n.y,n.z))){
+  if(n.steps>=2&&!avoid.has(K(n.x,n.y,n.z))){
    // Favor stable ground and discovery distance, penalize leaf paths and vertical climbs.
    const netDistance=Math.hypot(n.x-o.x,n.z-o.z);
    const score=scoreNode?scoreNode(n,{origin:o,netDistance}):netDistance*1.2-n.cost*.23;
    if(!Number.isFinite(score))continue;
-   if(!best||score>best.score)best={position:{x:n.x,y:n.y,z:n.z},score,ground:n.footing,leaves:n.leaves,steps:n.steps};
+   const candidate={position:{x:n.x,y:n.y,z:n.z},score,ground:n.footing,leaves:n.leaves,steps:n.steps};
+   if(n.leaves){
+    // A reachable canopy waypoint is a temporary observation destination, not a ground escape.
+    // Prefer real ground whenever any connected ground destination exists.
+    if(start.leaves&&(!bestCanopy||score>bestCanopy.score))bestCanopy=candidate;
+   }else if(!best||score>best.score)best=candidate;
   }
   for(const [dx,dz] of directions){
    const x=n.x+dx,z=n.z+dz;
@@ -56,5 +61,6 @@ export function chooseConnectedExploreGoal({origin,blockAt,radius=9,maxNodes=220
    }
   }
  }
- return {selected:best,reason:best?'known_connected_footing':'no_known_connected_route',examined};
+ const selected=best??bestCanopy;
+ return {selected,reason:best?'known_connected_footing':bestCanopy?'known_canopy_waypoint_no_ground_route':'no_known_connected_route',examined};
 }
