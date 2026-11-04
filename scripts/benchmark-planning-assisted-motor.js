@@ -9,8 +9,8 @@ const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
  !Number.isInteger(imitationPasses)||imitationPasses<1||imitationPasses>500)
  throw Error('Invalid benchmark parameters');
-const construct=({seed,span=3,layout='chasm',limit=30})=>
- createMutableTerrain({seed,span,layout,platformHeight:4+seed%3,
+const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east'})=>
+ createMutableTerrain({seed,span,layout,chasmDirection,platformHeight:4+seed%3,
   initialBlocks:span+3,maxSteps:limit});
 function collectDemo(seed){
  const world=construct({seed});
@@ -48,8 +48,8 @@ for(let epoch=0;epoch<imitationPasses;epoch++){
 }
 const frozen=createMotorQPolicy({seed:71,epsilon:0,training:false,
  snapshot:assisted.snapshot()});
-function evaluate(policy,{seed,span=3,allowPlace=true}={}){
- const w=construct({seed,span});
+function evaluate(policy,{seed,span=3,allowPlace=true,chasmDirection='east'}={}){
+ const w=construct({seed,span,chasmDirection});
  const operations={};const trace=[];let placed=0,dug=0;
  while(!w.snapshot().done){
   const state=w.observe(),candidates=w.affordances()
@@ -64,18 +64,26 @@ function evaluate(policy,{seed,span=3,allowPlace=true}={}){
    args:chosen.arguments,change:out.change,after:out.after,damage:out.damage});
  }
  const s=w.snapshot();
- return {seed,span,allowPlace,success:s.done&&s.health>0&&
-  s.position.x>=span&&s.position.y===s.goal.y,
+ const along=chasmDirection==='east'?s.position.x:chasmDirection==='west'?-s.position.x:
+  chasmDirection==='north'?-s.position.z:s.position.z;
+ const across=chasmDirection==='east'||chasmDirection==='west'?s.position.z:s.position.x;
+ return {seed,span,allowPlace,chasmDirection,success:s.done&&s.health>0&&
+  along>=span&&Math.abs(across)<=1&&s.position.y===s.goal.y,
   health:s.health,steps:s.steps,placed,dug,operations,trace};
 }
 const heldoutSeeds=Array.from({length:18},(_,i)=>5001+i);
-const results={assisted:[],withoutPlace:[],untrained:[],outOfDistribution:[]};
+const results={assisted:[],withoutPlace:[],untrained:[],outOfDistribution:[],
+ rotatedWest:[],rotatedNorth:[],rotatedSouth:[],rotatedWithoutPlace:[]};
 const untrained=createMotorQPolicy({seed:17,epsilon:0,training:false});
 for(const seed of heldoutSeeds){
  results.assisted.push(evaluate(frozen,{seed}));
  results.withoutPlace.push(evaluate(frozen,{seed,allowPlace:false}));
  results.untrained.push(evaluate(untrained,{seed}));
  results.outOfDistribution.push(evaluate(frozen,{seed,span:4}));
+ results.rotatedWest.push(evaluate(frozen,{seed,chasmDirection:'west'}));
+ results.rotatedNorth.push(evaluate(frozen,{seed,chasmDirection:'north'}));
+ results.rotatedSouth.push(evaluate(frozen,{seed,chasmDirection:'south'}));
+ results.rotatedWithoutPlace.push(evaluate(frozen,{seed,chasmDirection:'west',allowPlace:false}));
 }
 const summary=(label,rows)=>({label,n:rows.length,
  successes:rows.filter(x=>x.success).length,
@@ -100,5 +108,6 @@ console.log(JSON.stringify({
  'This is assisted learning, not independently discovered construction.',
  'The generic search planner is not wired to the Minecraft agent.',
  'Held-out seeds use the same small chasm family; span 4 is a limited shift.',
+ 'Rotated evaluation changes direction but does not alter training examples.',
  'Successful motor controls do not establish physical Minecraft competence.']
 },null,2));
