@@ -9,8 +9,8 @@ const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
  !Number.isInteger(imitationPasses)||imitationPasses<1||imitationPasses>500)
  throw Error('Invalid benchmark parameters');
-const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east',goalObstructed=false,initialBlocks=null})=>
- createMutableTerrain({seed,span,layout,chasmDirection,goalObstructed,platformHeight:4+seed%3,
+const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east',goalObstructed=false,obstacleDepth=1,initialBlocks=null})=>
+ createMutableTerrain({seed,span,layout,chasmDirection,goalObstructed,obstacleDepth,platformHeight:4+seed%3,
   initialBlocks:initialBlocks??span+3,maxSteps:limit});
 function collectDemo(seed,goalObstructed=false){
  const world=construct({seed,goalObstructed});
@@ -54,8 +54,8 @@ function train(records){
 const baseline=train(openRecords);
 const mixed=train([...openRecords,...obstacleRecords]);
 function evaluate(policy,{seed,span=3,allowPlace=true,allowDig=true,
- chasmDirection='east',goalObstructed=false,initialBlocks=null}={}){
- const w=construct({seed,span,chasmDirection,goalObstructed,initialBlocks});
+ chasmDirection='east',goalObstructed=false,obstacleDepth=1,initialBlocks=null}={}){
+ const w=construct({seed,span,chasmDirection,goalObstructed,obstacleDepth,initialBlocks});
  const operations={};const trace=[];let placed=0,dug=0;
  while(!w.snapshot().done){
   const state=w.observe(),candidates=w.affordances()
@@ -74,8 +74,9 @@ function evaluate(policy,{seed,span=3,allowPlace=true,allowDig=true,
  const along=chasmDirection==='east'?s.position.x:chasmDirection==='west'?-s.position.x:
   chasmDirection==='north'?-s.position.z:s.position.z;
  const across=chasmDirection==='east'||chasmDirection==='west'?s.position.z:s.position.x;
- return {seed,span,allowPlace,allowDig,chasmDirection,goalObstructed,success:s.done&&s.health>0&&
-  along>=span&&Math.abs(across)<=1&&s.position.y===s.goal.y,
+ return {seed,span,allowPlace,allowDig,chasmDirection,goalObstructed,obstacleDepth,
+  success:s.done&&s.health>0&&along>=span+(goalObstructed?obstacleDepth-1:0)&&
+  Math.abs(across)<=1&&s.position.y===s.goal.y,
   health:s.health,steps:s.steps,placed,dug,operations,trace};
 }
 const heldoutSeeds=Array.from({length:18},(_,i)=>5001+i);
@@ -90,7 +91,11 @@ const configs=[
  {label:'obstructedNorth',args:{goalObstructed:true,chasmDirection:'north'}},
  {label:'obstructedSouth',args:{goalObstructed:true,chasmDirection:'south'}},
  {label:'obstructedWithoutDig',args:{goalObstructed:true,allowDig:false}},
- {label:'obstructedWithoutPlace',args:{goalObstructed:true,allowPlace:false}}
+ {label:'obstructedWithoutPlace',args:{goalObstructed:true,allowPlace:false}},
+ {label:'twoLayerBarrierEast',args:{goalObstructed:true,obstacleDepth:2}},
+ {label:'twoLayerBarrierWest',args:{goalObstructed:true,obstacleDepth:2,chasmDirection:'west'}},
+ {label:'threeLayerBarrierNorth',args:{goalObstructed:true,obstacleDepth:3,chasmDirection:'north'}},
+ {label:'threeLayerBarrierNoDig',args:{goalObstructed:true,obstacleDepth:3,allowDig:false}}
 ];
 const summary=(label,records)=>({
  label,runs:records.length,
@@ -110,7 +115,7 @@ for(const [arm,trained] of [['east_only',baseline],['mixed_search',mixed]]){
  for(const {label,args} of configs){
   const records=heldoutSeeds.map(seed=>evaluate(trained.policy,{seed,...args}));
   evaluations.push({arm,...summary(label,records)});
-  if(['obstructedEast','obstructedWest','openEast'].includes(label))
+  if(['obstructedEast','obstructedWest','openEast','twoLayerBarrierEast','threeLayerBarrierNorth'].includes(label))
    examples[arm+'_'+label]={
     success:records.find(r=>r.success)?.trace??null,
     failure:records.find(r=>!r.success)?.trace?.slice(0,12)??null
@@ -134,6 +139,7 @@ console.log(JSON.stringify({
   'Only eastward worlds are demonstrated; rotated outcomes are held out.',
   'Mixed model sees obstacle worlds during teaching; success is not independent discovery.',
   'No changes to live Turesla or its original DQN checkpoint.',
+  'Multi-layer barrier depths 2 and 3 are completely excluded from teacher examples.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
