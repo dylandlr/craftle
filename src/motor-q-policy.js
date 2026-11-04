@@ -68,7 +68,8 @@ export function createMotorQPolicy({seed=17,epsilon=0.3,gamma=0.95,alpha=0.001,
    if(!Array.isArray(features)||features.length!==MOTOR_FEATURE_COUNT||
     !features.every(Number.isFinite)||!Number.isFinite(reward))throw Error('Invalid transition');
    const {h,q}=forward(features);
-   const next=terminal?0:Math.max(0,...rank(nextObservation,nextCandidates).map(s=>s.q));
+   const future=terminal?[]:rank(nextObservation,nextCandidates);
+   const next=terminal||!future.length?0:Math.max(...future.map(s=>s.q));
    const td=Math.max(-5,Math.min(5,reward+Math.pow(gamma,steps)*next-q));
    const old=v.slice();
    for(let j=0;j<hidden;j++){
