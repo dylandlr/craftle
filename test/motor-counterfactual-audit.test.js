@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compareCandidateMenus} from '../src/motor-counterfactual-audit.js';
+import {compareCandidateMenus,revalidateMotorCandidates} from '../src/motor-counterfactual-audit.js';
 import {createMutableTerrain} from '../src/mutable-terrain-env.js';
 import {createMotorQPolicy} from '../src/motor-q-policy.js';
 test('candidate menu changes alone do not imply learned value changes',()=>{
@@ -75,4 +75,30 @@ test('identical candidate objects respond to a single observed block occupancy c
  assert.notEqual(b.q,m.q,'same forward action must encode observed occupancy');
  assert.deepEqual(w.observe().position,obs.position,
   'perception intervention cannot mutate real simulator state');
+});
+
+test('stale dig disappears after perceptual removal without altering Q weights',()=>{
+ const w=createMutableTerrain({layout:'chasm',goalObstructed:true,
+  platformHeight:5,span:3});
+ const advance=()=>w.affordances().find(c=>c.operation==='move'&&c.arguments.dx===1);
+ assert.equal(w.act(advance()).ok,true);
+ const place=w.affordances().find(c=>c.operation==='place'&&
+  c.evidence.destination.x===2&&c.evidence.destination.y===4&&
+  c.evidence.destination.z===0);
+ assert.equal(w.act(place).ok,true);
+ assert.equal(w.act(advance()).ok,true);
+ const candidates=w.affordances(),obs=w.observe(),goal=obs.goal;
+ const altered={...obs,blockAt:(x,y,z)=>
+  x===goal.x&&y===goal.y&&z===goal.z?
+   {name:'air',boundingBox:'empty'}:obs.blockAt(x,y,z)};
+ const legal=revalidateMotorCandidates(altered,candidates);
+ const target=c=>c.operation==='dig'&&
+  c.arguments.position.x===goal.x&&
+  c.arguments.position.y===goal.y&&
+  c.arguments.position.z===goal.z;
+ assert.ok(candidates.some(target),'blocked candidate was originally available');
+ assert.equal(legal.some(target),false,'stale excavation must be rejected');
+ const forward=c=>c.operation==='move'&&c.arguments.dx===1;
+ assert.ok(legal.some(forward),'forward movement remains a valid option');
+ assert.deepEqual(w.snapshot().position,obs.position);
 });
