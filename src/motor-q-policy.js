@@ -76,6 +76,14 @@ export function createMotorQPolicy({seed=17,epsilon=0.3,gamma=0.95,alpha=0.001,
  const rank=(obs,candidates)=>eligible(obs,candidates).map(row=>({
   ...row,q:forward(row.features).q}));
  return {
+  // Read-only policy audit: exposes comparable candidate scores without
+  // changing policy weights, RNG state, or action availability.
+  scoreCandidates(obs,candidates){
+   return rank(obs,candidates).map(row=>({
+    id:row.candidate.id,operation:row.candidate.operation,
+    arguments:row.candidate.arguments,q:row.q
+   }));
+  },
   choose(obs,candidates){
    const scores=rank(obs,candidates);
    if(!scores.length)return {candidate:null,reason:'no_executable_candidate'};
