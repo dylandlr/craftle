@@ -9,7 +9,8 @@ export function findCanopyStepdown({position,blockAt,health=20,maxDrop=3}={}){
   return {selected:null,reason:'missing_observation_or_dead'};
  const o={x:Math.floor(position.x),y:Math.floor(position.y),z:Math.floor(position.z)};
  const under=blockAt(o.x,o.y-1,o.z);
- if(!under?.name?.includes('leaves'))return {selected:null,reason:'not_on_canopy',underfoot:under?.name??null};
+ const isTreeFooting=name=>typeof name==='string'&&(name.includes('leaves')||name.endsWith('_log')||name.endsWith('_stem'));
+ if(!isTreeFooting(under?.name))return {selected:null,reason:'not_on_tree',underfoot:under?.name??null};
  // A single-block step down is normally non-damaging; do not forbid it at 1 HP.
  // Never propose a deeper step when health is critical.
  const observedMaxDrop=health<8?1:Math.min(maxDrop,3);
@@ -21,7 +22,7 @@ export function findCanopyStepdown({position,blockAt,health=20,maxDrop=3}={}){
   for(let drop=1;drop<=observedMaxDrop;drop++){
    const y=o.y-drop;
    const ground=blockAt(x,y-1,z);
-   if(!full(ground)||ground.name?.includes('leaves'))continue;
+   if(!full(ground)||isTreeFooting(ground.name))continue;
    let clear=true;
    for(let h=y;h<=o.y+1;h++)if(!empty(blockAt(x,h,z))){clear=false;break;}
    if(!clear)continue;
