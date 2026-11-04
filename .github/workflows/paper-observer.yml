@@ -1,7 +1,7 @@
 name: Paper server observer integration
 on:
   push:
-    branches: [main]
+    branches: [main, feat/fabric-authoritative-server-observer]
     paths:
       - 'observer/**'
       - '.github/workflows/paper-observer.yml'
@@ -18,6 +18,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify motor receipt matching
+        run: node --test test/server-motor-receipts.test.js test/motor-freshness-guard.test.js test/motor-counterfactual-audit.test.js
       - name: Compile Paper observer
         run: mvn -B -f observer/pom.xml package
       - name: Launch instrumented Paper 1.21.1
