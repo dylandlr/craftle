@@ -51,3 +51,28 @@ test('unimplemented motor executor cannot be counted as available',()=>{
  assert.ok(candidates.length);
  assert.equal(candidates.some(c=>c.operation==='dig'||c.operation==='place'),false);
 });
+
+test('chasm makes direct crossing fatal instead of granting free descent',()=>{
+ const w=createMutableTerrain({layout:'chasm',span:3,platformHeight:5,initialBlocks:5});
+ const east=()=>choose(w,'move',c=>c.arguments.dx===1);
+ w.act(east());
+ const out=w.act(east());
+ assert.equal(out.voidDeath,true);
+ assert.equal(out.done,true);
+ assert.equal(out.reachedLowerGround,false);
+});
+test('atomic placements can modify an otherwise lethal chasm without a bridge action',()=>{
+ const w=createMutableTerrain({layout:'chasm',span:3,platformHeight:5,initialBlocks:5});
+ const east=()=>choose(w,'move',c=>c.arguments.dx===1);
+ w.act(east());
+ const place=choose(w,'place',c=>c.evidence.destination.x===2&&
+  c.evidence.destination.y===4&&c.evidence.destination.z===0);
+ assert.ok(place,'one-block extension must be a legal generic placement');
+ const out=w.act(place);
+ assert.equal(out.ok,true);
+ assert.equal(w.blockAt(2,4,0).name,'dirt');
+ const move=w.act(east());
+ assert.equal(move.ok,true);
+ assert.equal(move.fall,0);
+ assert.equal(move.after.x,2);
+});
