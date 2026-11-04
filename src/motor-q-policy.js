@@ -101,6 +101,36 @@ export function createMotorQPolicy({seed=17,epsilon=0.3,gamma=0.95,alpha=0.001,
    updates++;
    return {tdError:td,updates};
   },
+  // Planner-assisted imitation is a separate experimental arm, NOT unassisted RL.
+  // Generic search supplies an observed successful action, not a named recipe.
+  // Train against a hard negative among other legal candidates, using the same
+  // Q network. Each input is a frozen feature vector from the decision time.
+  imitate({positiveFeatures,negativeFeatures=[],margin=0.5,weight=1}={}){
+   if(!training)throw Error('Cannot imitate on frozen policy');
+   const valid=x=>Array.isArray(x)&&x.length===MOTOR_FEATURE_COUNT&&x.every(Number.isFinite);
+   if(!valid(positiveFeatures)||!Array.isArray(negativeFeatures)||
+    !negativeFeatures.every(valid)||!Number.isFinite(margin)||margin<=0||
+    !Number.isFinite(weight)||weight<=0)throw Error('Invalid imitation sample');
+   if(!negativeFeatures.length)return {updated:false,reason:'no_negative_candidates'};
+   const p=forward(positiveFeatures);
+   const ranked=negativeFeatures.map(features=>({features,...forward(features)}));
+   const worst=ranked.reduce((best,row)=>!best||row.q>best.q?row:best,null);
+   const violation=margin+worst.q-p.q;
+   if(violation<=0)return {updated:false,reason:'margin_satisfied',violation};
+   const step=alpha*weight;
+   const old=v.slice();
+   // Pairwise hinge gradient: increase Q(positive) and decrease Q(negative).
+   for(let j=0;j<hidden;j++){
+    v[j]+=step*(p.h[j]-worst.h[j]);
+    const posGrad=old[j]*(1-p.h[j]*p.h[j]);
+    const negGrad=old[j]*(1-worst.h[j]*worst.h[j]);
+    for(let i=0;i<MOTOR_FEATURE_COUNT;i++)
+     w[j][i]+=step*(posGrad*positiveFeatures[i]-negGrad*worst.features[i]);
+    w[j][MOTOR_FEATURE_COUNT]+=step*(posGrad-negGrad);
+   }
+   updates++;
+   return {updated:true,reason:'pairwise_margin_update',violation,updates};
+  },
   stats:()=>({schema:PARAMETRIC_POLICY_SCHEMA,updates,training}),
   snapshot:()=>({schema:PARAMETRIC_POLICY_SCHEMA,hidden,updates,w:w.map(r=>r.slice()),
    v:v.slice(),note:'experimental candidate scorer; not the v1 targeted DQN'})
