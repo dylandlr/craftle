@@ -54,7 +54,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    if(c.operation==='dig')return c.arguments.position.y>=1&&
       reachable(c.arguments.position);
    if(c.operation==='place')return inventory>0&&
-      reachable(c.evidence.destination);
+      reachable(c.evidence.destination)&&
+      !possible(c.evidence.destination)&&
+      !(c.evidence.destination.x===position.x&&
+        c.evidence.destination.y===position.y+1&&
+        c.evidence.destination.z===position.z);
    return true;
   });
  };
@@ -80,6 +84,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   }else if(candidate.operation==='place'){
    const q=candidate.evidence?.destination,r=a.reference;
    if(inventory>0&&a.itemName===DIRT&&q&&r&&reachable(q)&&reachable(r)&&
+      !possible(q)&&!(q.x===position.x&&q.y===position.y+1&&q.z===position.z)&&
       solid(blockAt(r.x,r.y,r.z))&&!solid(blockAt(q.x,q.y,q.z))){
     change={x:q.x,y:q.y,z:q.z,before:AIR,after:DIRT};
     set(q.x,q.y,q.z,DIRT);inventory--;ok=true;reason='block_changed';
