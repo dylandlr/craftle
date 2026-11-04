@@ -19,6 +19,8 @@ import {configurePathfinderSafety,summarizePathUpdate} from './pathfinder-safety
 import {discoverNativeRoute} from './native-navigation-discovery.js';
 import {createNativeRouteFailureGate} from './native-route-failure-gate.js';
 import {findCanopyStepdown,shouldInspectCanopyStepdown} from './canopy-stepdown.js';
+import {planDescent} from './unified-descent.js';
+import {executeShortDescent} from './descent-executor.js';
 import {planCanopyGroundRoute} from './canopy-ground-route.js';
 import {createCanopyRiskLearner} from './canopy-risk-learner.js';
 import {canopyBlockSnapshot,findObservedFall} from './canopy-risk-geometry.js';
@@ -59,6 +61,8 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
  const connectedExplore=process.env.CRAFTLE_TREE_NAVIGATION==='1';
  const nativeDiscovery=process.env.CRAFTLE_NATIVE_ROUTE_DISCOVERY==='1';
  const canopyStepdown=process.env.CRAFTLE_CANOPY_STEPDOWN==='1';
+ const unifiedDescent=process.env.CRAFTLE_UNIFIED_DESCENT==='1';
+ const failedDescent=new Set();let lastUnifiedDescent=0;
  const canopyGroundRoute=process.env.CRAFTLE_CANOPY_GROUND_ROUTE==='1';
  let lastStepdown=0;
  const riskEnabled=process.env.CRAFTLE_CANOPY_RISK_LEARNING==='1';
@@ -237,6 +241,34 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     try{await bot.look(yaw,Math.PI/12,true);}
     catch(e){log({type:'trap_visual_survey_error',message:e.message});}
     if(!valid())return;
+   }
+   // Generic opt-in descent is independent of the type of footing.
+   // Only attempt a verified one-block, zero-expected-damage movement here.
+   // Larger drops, water, ladders and construction must use their own executors.
+   if(unifiedDescent&&connectedExplore&&stalls>=3&&clock()-lastUnifiedDescent>=12000){
+    lastUnifiedDescent=clock();
+    const plan=planDescent({position:p,health:bot.health,
+     blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
+     inventory:bot.inventory.items(),failed:failedDescent});
+    log({type:'unified_descent_plan',decisionId:activeDecision?.decisionId??null,
+     health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z},
+     reason:plan.reason,selected:plan.selected,optionCount:plan.options?.length??0,
+     rejections:plan.rejections??null,capabilities:plan.capabilities??[],
+     stalls,learned:false,automaticPolicyOverride:false});
+    if(plan.selected?.kind==='step_down'&&bot.waitForTicks){
+     clearGoal();
+     const result=await executeShortDescent(bot,plan.selected,{valid});
+     log({type:'unified_descent_execution',decisionId:activeDecision?.decisionId??null,
+      candidate:plan.selected,...result,learned:false,scriptedNavigationPrimitive:true});
+     if(!result.ok){
+      failedDescent.add(plan.selected.key);
+      if(failedDescent.size>64)failedDescent.delete(failedDescent.values().next().value);
+     }else failedDescent.clear();
+     // Keep stall accounting truthful, even if movement failed.
+     lastPosition={x:p.x,z:p.z};
+     tick++;
+     return;
+    }
    }
    // Periodically inspect safe descent while traversing leaves, not only when stationary.
    // The connected canopy-waypoint fallback can otherwise keep stalls at zero indefinitely.
