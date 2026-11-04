@@ -104,6 +104,11 @@ console.log(JSON.stringify({
   .map(r=>({seed:r.seed,trace:r.trace})),
  failedExamples:results.assisted.filter(r=>!r.success).slice(0,1)
   .map(r=>({seed:r.seed,trace:r.trace})),
+ rotatedExamples:Object.fromEntries(['rotatedWest','rotatedNorth','rotatedSouth']
+  .map(label=>[label,{
+   successful:results[label].find(r=>r.success)?.trace??null,
+   failed:results[label].find(r=>!r.success)?.trace?.slice(0,12)??null
+  }])),
  caveats:['Planner demonstrations have privileged access to forkable simulation.',
  'This is assisted learning, not independently discovered construction.',
  'The generic search planner is not wired to the Minecraft agent.',
