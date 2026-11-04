@@ -37,3 +37,32 @@ export function compareCandidateMenus(blockedScores,clearScores){
   sharedDeltas:deltas
  };
 }
+
+// Diagnostic-only grounding check. Unlike policy preference scoring, it
+// checks whether a candidate's preconditions remain supported by a newer
+// observation. It does not select an action or supply an action sequence.
+export function revalidateMotorCandidates(observation,candidates){
+ if(typeof observation?.blockAt!=='function'||!Array.isArray(candidates))
+  throw Error('Observation and candidates required');
+ const at=observation.blockAt;
+ const block=p=>p&&at(p.x,p.y,p.z);
+ const solid=p=>block(p)?.boundingBox==='block';
+ const empty=p=>block(p)?.boundingBox==='empty';
+ return candidates.filter(c=>{
+  if(!c?.executable)return false;
+  if(c.operation==='dig')return solid(c.arguments?.position);
+  if(c.operation==='place'){
+   const q=c.evidence?.destination,r=c.arguments?.reference;
+   return solid(r)&&empty(q)&&observation.inventory?.some(i=>
+    i.name===c.arguments.itemName&&i.placeable&&i.count>0);
+  }
+  if(c.operation==='move'){
+   const p=observation.position,a=c.arguments;
+   if(!p||!a||Math.abs(a.dx??0)+Math.abs(a.dz??0)!==1||a.dy!==0)
+    return false;
+   const dest={x:p.x+a.dx,y:p.y,z:p.z+a.dz};
+   return empty(dest)&&empty({...dest,y:dest.y+1});
+  }
+  return true;
+ });
+}
