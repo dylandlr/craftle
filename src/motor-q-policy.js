@@ -4,7 +4,7 @@
 import {MOTOR_OPERATIONS} from './motor-affordances.js';
 export const PARAMETRIC_POLICY_SCHEMA='craftle.motor-q.v1.candidate';
 const OP_COUNT=MOTOR_OPERATIONS.length;
-export const MOTOR_FEATURE_COUNT=OP_COUNT+12;
+export const MOTOR_FEATURE_COUNT=OP_COUNT+15;
 const clamp=(n,scale=1)=>Math.max(-1,Math.min(1,Number(n||0)/scale));
 export function encodeMotorCandidate(observation={},candidate={}){
  const op=MOTOR_OPERATIONS.indexOf(candidate.operation);
@@ -17,7 +17,9 @@ export function encodeMotorCandidate(observation={},candidate={}){
   clamp(observation.health,20),clamp(observation.food,20),
   clamp(observation.inventory?.length,36),clamp(observation.stalls,20),
   clamp(at.x-p.x,8),clamp(at.y-p.y,8),clamp(at.z-p.z,8),
-  clamp(item?.count,64),Number(candidate.evidence?.source==='observed_block'),
+  clamp(item?.count,64),clamp(candidate.arguments?.dx),
+  clamp(candidate.arguments?.dy),clamp(candidate.arguments?.dz),
+  Number(candidate.evidence?.source==='observed_block'),
   Number(candidate.evidence?.source==='observed_empty_destination_and_inventory'),
   Number(candidate.arguments?.face?.y===-1),
   Number(candidate.arguments?.face?.y===1)];
