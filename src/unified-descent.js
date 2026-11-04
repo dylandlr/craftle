@@ -26,6 +26,16 @@ export function planDescent({position,health=20,blockAt,maxDrop=12,
  if(!originFooting)return {schema:DESCENT_PLAN_SCHEMA,selected:null,reason:'unknown_origin_footing'};
  const options=[],rejections={unknown:0,hazard:0,blocked:0,unsafeFall:0,failed:0};
  const add=(o)=>{const key=[o.kind,o.x,o.y,o.z].join(':');if(failed.has(key))rejections.failed++;else options.push({...o,key});};
+ // Vertical mediums can permit descent without stepping over a ledge.
+ // These are candidates for separate embodied actuators, not a short-step command.
+ const currentFeet=at(x,y,z),belowFeet=at(x,y-1,z),belowLower=at(x,y-2,z);
+ if((climbable(currentFeet)||climbable(belowFeet))&&belowFeet&&belowLower&&
+   !HAZARD.test(belowLower.name??''))
+  add({kind:'climb_down',x,y:y-1,z,drop:1,expectedDamage:0,verified:true,
+   requires:'climb_executor'});
+ if(water(currentFeet)&&water(belowFeet)&&!HAZARD.test(belowLower?.name??''))
+  add({kind:'swim_down',x,y:y-1,z,drop:1,expectedDamage:0,verified:true,
+   requires:'swim_executor'});
  for(const [dx,dz] of DIRECTIONS){
   const nx=x+dx,nz=z+dz;
   const neighborFeet=at(nx,y,nz),neighborHead=at(nx,y+1,nz);
@@ -81,7 +91,7 @@ export function planDescent({position,health=20,blockAt,maxDrop=12,
  if(inventory.some(i=>i.name==='water_bucket'&&i.count>0))capabilities.push('water_bucket_possible_requires_verified_placement');
  if(inventory.some(i=>i.name?.includes('ladder')&&i.count>0))capabilities.push('ladder_possible_requires_verified_placement');
  capabilities.push('dig_or_bridge_requires_separate_executor');
- const rank={step_down:0,climb_down:1,short_drop:2,water_drop:3,risky_drop:4};
+ const rank={step_down:0,climb_down:1,swim_down:2,short_drop:3,water_drop:4,risky_drop:5};
  options.sort((a,b)=>rank[a.kind]-rank[b.kind]||a.expectedDamage-b.expectedDamage||a.drop-b.drop);
  return {schema:DESCENT_PLAN_SCHEMA,selected:options[0]??null,options,
   reason:options.length?'verified_candidate':'no_verified_executable_descent',
