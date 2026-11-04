@@ -3,6 +3,7 @@
 const directions=[[1,0],[-1,0],[0,1],[0,-1]];
 const hazards=new Set(['lava','flowing_lava','fire','soul_fire','magma_block','cactus','campfire','soul_campfire','powder_snow']);
 const key=p=>[p.x,p.y,p.z].join(',');
+const isTree=name=>typeof name==='string'&&(name.includes('leaves')||name.endsWith('_log')||name.endsWith('_stem'));
 const isEmpty=b=>b?.boundingBox==='empty'&&!hazards.has(b.name);
 const isSolid=b=>b?.boundingBox==='block'&&!hazards.has(b.name);
 export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNodes=900,maxWaypoints=5,avoid=new Set()}={}){
@@ -13,11 +14,11 @@ export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNod
  const inspect=(x,y,z)=>{
   const floor=at(x,y-1,z),feet=at(x,y,z),head=at(x,y+1,z);
   if(!isSolid(floor)||!isEmpty(feet)||!isEmpty(head))return null;
-  return {x,y,z,leaves:floor.name.includes('leaves'),ground:floor.name};
+  return {x,y,z,leaves:floor.name.includes('leaves'),treeFooting:isTree(floor.name),ground:floor.name};
  };
  const start=inspect(o.x,o.y,o.z);
  if(!start)return {reason:'no_known_start_footing',selected:null,route:[],examined:0};
- if(!start.leaves)return {reason:'already_on_nonleaf_ground',selected:null,route:[],examined:0};
+ if(!start.treeFooting)return {reason:'already_on_non_tree_ground',selected:null,route:[],examined:0};
  // A verified five-block fall normally costs about two health points.
  // Require a substantial reserve; low-health recovery remains conservative.
  const maxDrop=Number.isFinite(health)&&health>=14?5:Number.isFinite(health)&&health>=8?3:1;
@@ -29,7 +30,7 @@ export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNod
  let found=-1,examined=0;
  for(let i=0;i<nodes.length&&i<maxNodes;i++){
   const node=nodes[i];examined++;
-  if(!node.leaves&&i!==0){found=i;break;}
+  if(!node.treeFooting&&i!==0){found=i;break;}
   for(const [dx,dz] of directions){
    const x=node.x+dx,z=node.z+dz;
    if(Math.max(Math.abs(x-o.x),Math.abs(z-o.z))>radius){rejections.outOfRadius++;continue;}
@@ -70,7 +71,7 @@ export function planCanopyGroundRoute({origin,blockAt,health=20,radius=24,maxNod
     for(let drop=2;drop<=12;drop++){
      const floor=at(x,node.y-drop-1,z);
      if(!floor)break;
-     if(isSolid(floor)&&!floor.name.includes('leaves')){
+     if(isSolid(floor)&&!isTree(floor.name)){
       lowerGroundSamples.push({x,y:node.y-drop,z,ground:floor.name,
        drop,feetClear:isEmpty(at(x,node.y-drop,z)),headClear:isEmpty(at(x,node.y-drop+1,z))});
       break;
