@@ -10,12 +10,31 @@ function fingerprint(w){
  }).sort((a,b)=>a[0].localeCompare(b[0]));
  return JSON.stringify([s.position,s.health,s.inventory,extra]);
 }
+function reachableSupportPotential(w){
+ const s=w.snapshot(),p=s.position,g=s.goal;
+ const y=p.y,x=p.x,z=p.z;
+ const canStand=(a,b)=>w.blockAt(a,y-1,b)?.boundingBox==='block'&&
+  w.blockAt(a,y,b)?.boundingBox==='empty'&&
+  w.blockAt(a,y+1,b)?.boundingBox==='empty';
+ const queue=[[x,z]],seen=new Set([x+','+z]);let best=Infinity;
+ for(let i=0;i<queue.length&&i<120;i++){
+  const [a,b]=queue[i];
+  best=Math.min(best,Math.abs(g.x-a)+Math.abs(g.z-b));
+  for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const nx=a+dx,nz=b+dz,k=nx+','+nz;
+   if(seen.has(k)||Math.abs(nx-x)>8||Math.abs(nz-z)>8||!canStand(nx,nz))continue;
+   seen.add(k);queue.push([nx,nz]);
+  }
+ }
+ return Math.max(0,16-best);
+}
 function score(w){
  const s=w.snapshot(),p=s.position,g=s.goal;
  const distance=Math.abs(g.x-p.x)+Math.abs(g.z-p.z)+Math.abs(g.y-p.y);
- // Generic geometry-based optimism: the task is to reach goal alive.
- // No shape, material placement recipe or action sequence is rewarded.
- return (20-distance)*2+s.health*0.5-s.steps*.02;
+ // Generic connectivity over physically observed support, not a constructed
+ // bridge template. This is a planning CONTROL only, never policy training input.
+ return (20-distance)*2+s.health*.5-s.steps*.02+
+  reachableSupportPotential(w)*4;
 }
 export function searchMutableTerrain(start,{depth=10,beamWidth=16,maxCandidates=150}={}){
  if(!start?.fork||!start?.affordances||!start?.snapshot)
