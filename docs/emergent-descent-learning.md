@@ -1,0 +1,103 @@
+# Craftle: embodied action and descent learning contract (candidate)
+
+## Scientific objective
+Determine whether a non-LLM agent, given generic Minecraft motor operations and local
+observations, can discover useful resource manipulation and navigation sequences
+without being supplied those sequences by an author.
+
+No authored `bridge`, `dig staircase`, `water-bucket clutch`, or `pillar` macro-action
+may be inserted into the agent policy, action mask, curriculum labels, or reward.
+The underlying game physics, tools, block validity and basic Minecraft item rules
+are environmental constraints, not strategic recipes.
+
+## Boundary: client, agent, and language
+Mineflayer API support is NOT synonymous with a learned skill. Separate:
+- **Client capability**: Minecraft protocol permits a normal player operation.
+- **Executor**: implementation issues the input and awaits an observed outcome.
+- **Affordance**: locally observed operation and arguments may be attempted.
+- **Policy**: selects the affordance; learns from consequences.
+- **Attribution**: records exact attempt, server tick if available, resulting
+  blocks/items/health/position and possible outside intervention.
+
+Chat uses `bot.chat`; there is no free-text generator in the motor Q learner.
+A separate language policy must supply text. Commands are disallowed by default
+and chat delivery is not verified merely because `bot.chat` returned.
+
+## Environment and observations
+Use the Mineflayer self-observation only: nearby known block cells, player
+position/velocity, facing, health, hunger, inventory, equipped item, entities
+and interaction results. Unknown chunks remain unknown. Never feed spectator
+or administrator observations into agent state.
+
+The environment exposes generic operations:
+`move`, `look`, `jump`, `sneak`, `sprint`, `dig`, `place`,
+`equip`, `craft`, `attack`, `use_block`, `use_item`,
+`open_container`, `transfer`, `chat`, `wait`.
+
+The initial affordance and Q implementations are proposals; they are not a
+fully bound Mineflayer action surface. Every executable action must be paired
+with a physically grounded argument and a real actuator.
+
+## Descent formulation
+Treat descent as an *environmental objective*, not a prewritten procedure.
+Learning evaluation may reward sustained progress toward a reachable lower
+destination while penalizing injury, time, starvation and failed actuation.
+Do not reward `place` or `dig` just for selecting those verbs.
+
+The unified descent geometry component is a baseline, not the agent's
+exhaustive planner. It identifies observed short steps, drops, climbable
+terrain and water. It is useful as a safety/reference control.
+
+The emergent treatment must permit arbitrary sequences of generic actions
+to alter world geometry. A policy may learn to create support, remove support,
+use fluids, climb, traverse, or decline to move. Those outcomes must emerge
+from interacting with game physics rather than being chosen from authored
+descent solution names.
+
+Important practical limitation: partial observability and a finite action
+budget make arbitrary creative solutions hard. Evaluate progress and failure,
+not just whether a preselected escape was completed.
+
+## Evaluation matrix
+1. One-block ledge: locomotion control and zero damage.
+2. Tree trunk: generic starting substrate, no oak-specific knowledge.
+3. Descending terraces: repeated decisions with varying terrain.
+4. Isolated platform + initially held blocks: geometry mutation may help.
+5. Isolated platform + initially equipped tool: geometry mutation may help.
+6. Vertical water or climbable column: distinct medium-specific controllers.
+7. Unknown chunks and hazardous landings: explicit uncertainty and risk.
+8. Critical health (1 HP): preserve damage-risk assessment; never assume
+   risky movement is free.
+9. Held-out seeds, heights, geometries and inventory mixes.
+
+Record the outcome distribution across seeds: survival rate, fraction reaching
+lower stable ground, median decisions, total observed vertical displacement,
+blocks broken/placed, verified inventory changes, fall damage, no-op attempts,
+unique action compositions, and intervention rate.
+
+## Baselines and controls
+- Scripted safe geometric descent controller (assisted)
+- Random legal motor choice
+- Variable-candidate Q policy, trained and frozen (non-LLM)
+- Existing 15-action survival controller (cannot choose generic block edits)
+- Optional privileged planning control, tagged separately (never silently
+  substituted into the non-LLM experiment)
+
+Checkpoints for the new candidate use `craftle.motor-q.v1.candidate` and must
+never overwrite `craftle.targeted.dqn.v1`.
+
+## Promotion gates
+- Executor tests, then Mineflayer in-game acceptance for each generic actuator.
+- Exact observed-outcome receipts for every block/inventory mutation.
+- A real Minecraft training run with reward and action attribution.
+- Held-out frozen evaluation with no hidden curriculum scripts.
+- Evidence that a learned composition transfers to multiple terrain types.
+- Demonstrate and separately report any human-authored intervention.
+
+Current implementation state:
+- `src/motor-affordances.js`: generic argument-level candidate enumeration.
+- `src/motor-q-policy.js`: experimental variable-candidate learned scorer.
+- `src/chat-motor.js`: safe output primitive, no language generation.
+- `src/unified-descent.js`: geometric reference candidate planner.
+- `src/descent-executor.js`: one-block embodied attempt with outcome checks.
+- Other Minecraft actions remain partially wired or unverified in a live server.
