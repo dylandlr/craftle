@@ -85,12 +85,10 @@ export function planDescent({position,health=20,blockAt,maxDrop=12,
    if(!empty(feet)||!empty(head)){rejections.blocked++;traversed=false;break;}
   }
  }
- // If terrain has no observed safe exit, identify requirements instead of
- // pretending that dig/place/bucket operations have been executed.
+ // Physical affordances remain distinct from actions the learner may discover.
+ // No hard-coded recipes such as bridge building, mining a staircase or water
+ // placement are suggested by the descent observer.
  const capabilities=[];
- if(inventory.some(i=>i.name==='water_bucket'&&i.count>0))capabilities.push('water_bucket_possible_requires_verified_placement');
- if(inventory.some(i=>i.name?.includes('ladder')&&i.count>0))capabilities.push('ladder_possible_requires_verified_placement');
- capabilities.push('dig_or_bridge_requires_separate_executor');
  const rank={step_down:0,climb_down:1,swim_down:2,short_drop:3,water_drop:4,risky_drop:5};
  options.sort((a,b)=>rank[a.kind]-rank[b.kind]||a.expectedDamage-b.expectedDamage||a.drop-b.drop);
  return {schema:DESCENT_PLAN_SCHEMA,selected:options[0]??null,options,
