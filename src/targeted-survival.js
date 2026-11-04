@@ -250,18 +250,20 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     const plan=planDescent({position:p,health:bot.health,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
      inventory:bot.inventory.items(),failed:failedDescent});
+    const executableCandidate=plan.options?.find(o=>o.kind==='step_down')??null;
     log({type:'unified_descent_plan',decisionId:activeDecision?.decisionId??null,
      health:bot.health,food:bot.food,position:{x:p.x,y:p.y,z:p.z},
-     reason:plan.reason,selected:plan.selected,optionCount:plan.options?.length??0,
+     reason:plan.reason,selected:plan.selected,executableCandidate,
+     optionCount:plan.options?.length??0,
      rejections:plan.rejections??null,capabilities:plan.capabilities??[],
      stalls,learned:false,automaticPolicyOverride:false});
-    if(plan.selected?.kind==='step_down'&&bot.waitForTicks){
+    if(executableCandidate&&bot.waitForTicks){
      clearGoal();
-     const result=await executeShortDescent(bot,plan.selected,{valid});
+     const result=await executeShortDescent(bot,executableCandidate,{valid});
      log({type:'unified_descent_execution',decisionId:activeDecision?.decisionId??null,
-      candidate:plan.selected,...result,learned:false,scriptedNavigationPrimitive:true});
+      candidate:executableCandidate,...result,learned:false,scriptedNavigationPrimitive:true});
      if(!result.ok){
-      failedDescent.add(plan.selected.key);
+      failedDescent.add(executableCandidate.key);
       if(failedDescent.size>64)failedDescent.delete(failedDescent.values().next().value);
      }else failedDescent.clear();
      // Keep stall accounting truthful, even if movement failed.
