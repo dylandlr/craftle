@@ -54,3 +54,34 @@ test('candidate scores encode goal direction and observed footing',()=>{
  const reversed={...base,goal:{x:-4,y:80,z:2}};
  assert.notDeepEqual(encodeMotorCandidate(base,east),encodeMotorCandidate(reversed,east));
 });
+
+test('goal-aligned features are invariant under cardinal rotation of goal, terrain and action',()=>{
+ const source=(goal,dx,dz)=>({
+  health:20,food:20,stalls:0,
+  position:{x:0,y:5,z:0},goal:{x:goal[0],y:5,z:goal[1]},
+  inventory:[{name:'dirt',count:6}],
+  blockAt:(x,y,z)=>({name:y===4&&x===0&&z===0?'dirt':'air',
+   boundingBox:y===4&&x===0&&z===0?'block':'empty'})
+ });
+ const cases=[
+  {goal:[3,0],dx:1,dz:0},
+  {goal:[-3,0],dx:-1,dz:0},
+  {goal:[0,-3],dx:0,dz:-1},
+  {goal:[0,3],dx:0,dz:1}
+ ];
+ const featureVectors=cases.map(({goal,dx,dz})=>
+  encodeMotorCandidate(source(goal,dx,dz),{
+   operation:'move',arguments:{dx,dy:0,dz},executable:true,
+   evidence:{source:'motor_direction'}
+  }));
+ for(const f of featureVectors.slice(1))
+  for(let i=0;i<f.length;i++)assert.ok(Math.abs(f[i]-featureVectors[0][i])<1e-9,
+   'rotated movement feature '+i+' differs');
+});
+test('sideways movement remains distinct from goal-directed movement',()=>{
+ const base={...state,goal:{x:4,y:80,z:2}};
+ const move=(dx,dz)=>({operation:'move',arguments:{dx,dy:0,dz},
+  executable:true,evidence:{source:'motor_direction'}});
+ assert.notDeepEqual(encodeMotorCandidate(base,move(1,0)),
+  encodeMotorCandidate(base,move(0,1)));
+});
