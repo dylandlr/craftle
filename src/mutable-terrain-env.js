@@ -7,7 +7,7 @@ const key=(x,y,z)=>[x,y,z].join(',');
 const solid=b=>b&&b.name!==AIR;
 const block=name=>({name,boundingBox:name===AIR?'empty':'block'});
 export function createMutableTerrain({seed=1,platformHeight=5,span=6,
- initialBlocks=5,maxSteps=120,layout='isolated'}={}){
+ initialBlocks=5,maxSteps=120,layout='isolated',restore=null}={}){
  if(!Number.isInteger(platformHeight)||platformHeight<2||platformHeight>16||
   !Number.isInteger(span)||span<3||span>16||!Number.isInteger(initialBlocks)||
   initialBlocks<0||initialBlocks>64)throw Error('Invalid terrain setup');
@@ -27,6 +27,14 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
  }else if(layout!=='isolated')throw Error('Unknown world layout');
  let position={x:0,y:platformHeight,z:0},health=20,inventory=initialBlocks,
   steps=0,done=false;
+ if(restore){
+  if(restore.schema!=='craftle.mutable-terrain-state.v1'||restore.layout!==layout||
+   restore.span!==span||restore.platformHeight!==platformHeight||
+   !Array.isArray(restore.blocks))throw Error('Incompatible terrain snapshot');
+  world.clear();for(const [cell,name] of restore.blocks)world.set(cell,name);
+  position={...restore.position};health=restore.health;inventory=restore.inventory;
+  steps=restore.steps;done=restore.done;
+ }
  const blockAt=(x,y,z)=>block(world.get(key(x,y,z))??AIR);
  const falling=()=>{
   let d=0;
@@ -38,6 +46,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   health=Math.max(0,health-damage);
   return {fall:d,damage,voidDeath};
  };
+ const exportState=()=>({schema:'craftle.mutable-terrain-state.v1',layout,span,
+  platformHeight,initialBlocks,maxSteps,seed,position:{...position},health,
+  inventory,steps,done,blocks:[...world.entries()]});
+ const fork=()=>createMutableTerrain({seed,platformHeight,span,initialBlocks,
+  maxSteps,layout,restore:exportState()});
  const snapshot=()=>({position:{...position},goal:{x:span,y:layout==='chasm'?platformHeight:1,z:0},health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
   worldBlocks:world.size,steps,done});
@@ -114,7 +127,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    ...physics,reachedLowerGround,done,reward};
  };
  return {schema:'craftle.mutable-terrain.v1',observe,affordances,act,snapshot,
-  blockAt,world,layout,seed,
+  blockAt,world,layout,seed,exportState,fork,
   limits:['Discrete block positions, no Mineflayer movement or Minecraft physics.',
    'No entity, hunger, fluid simulation, crafting or tool durability.',
    'A successful benchmark does not establish live Minecraft mastery.']};
