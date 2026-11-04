@@ -16,9 +16,6 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
  // Flat immutable bedrock level, a reachable ground surface outside a gap,
  // and a starting platform with no hand-authored escape arrangement.
  for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++)set(x,0,z,STONE);
- for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++){
-  if(Math.abs(x)>=span)for(let y=1;y<platformHeight;y++)set(x,y,z,STONE);
- }
  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)set(x,platformHeight-1,z,DIRT);
  if(layout==='terraces'){
   for(let x=2;x<span;x++)for(let z=-1;z<=1;z++)set(x,Math.max(1,platformHeight-1-Math.floor(x/2)),z,STONE);
@@ -93,8 +90,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   done=health<=0||reachedLowerGround||steps>=maxSteps;
   // Outcome reward only: progress is measured vertically and terminal goal.
   // No reward for dig/place or a specific construction geometry.
-  const reward=(reachedLowerGround?12:0)-(before.y-position.y>0?
-    0:0)-physics.damage*3-0.02+(ok?0:-0.15);
+  const reward=(reachedLowerGround?12:0)-physics.damage*3-0.02+(ok?0:-0.15);
   return {ok,reason,action:candidate.operation,change,before,
    after:{...position},healthBefore:beforeHealth,healthAfter:health,
    ...physics,reachedLowerGround,done,reward};
