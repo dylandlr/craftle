@@ -2,16 +2,21 @@
 // built-in construction strategies. Every action candidate must be grounded in
 // current client observations and an available executor.
 import {MOTOR_OPERATIONS} from './motor-affordances.js';
-export const PARAMETRIC_POLICY_SCHEMA='craftle.motor-q.v1.candidate';
+export const PARAMETRIC_POLICY_SCHEMA='craftle.motor-q.v2.candidate';
 const OP_COUNT=MOTOR_OPERATIONS.length;
-export const MOTOR_FEATURE_COUNT=OP_COUNT+15;
+export const MOTOR_FEATURE_COUNT=OP_COUNT+22;
 const clamp=(n,scale=1)=>Math.max(-1,Math.min(1,Number(n||0)/scale));
 export function encodeMotorCandidate(observation={},candidate={}){
  const op=MOTOR_OPERATIONS.indexOf(candidate.operation);
  if(op<0||!candidate.executable)throw Error('Candidate not executable');
  const p=observation.position??{x:0,y:0,z:0};
- const at=candidate.arguments?.position??candidate.arguments?.reference??
-  candidate.evidence?.destination??p;
+ const args=candidate.arguments??{};
+ const at=candidate.evidence?.destination??args.position??args.reference??
+  (candidate.operation==='move'?{x:p.x+(args.dx??0),y:p.y+(args.dy??0),z:p.z+(args.dz??0)}:p);
+ const goal=observation.goal??p;
+ const destination=observation.blockAt?.(Math.floor(at.x),Math.floor(at.y)-1,Math.floor(at.z));
+ const feet=observation.blockAt?.(Math.floor(at.x),Math.floor(at.y),Math.floor(at.z));
+ const currentFoot=observation.blockAt?.(Math.floor(p.x),Math.floor(p.y)-1,Math.floor(p.z));
  const item=observation.inventory?.find(i=>i.name===candidate.arguments?.itemName);
  const vec=[...MOTOR_OPERATIONS.map((_,i)=>Number(i===op)),
   clamp(observation.health,20),clamp(observation.food,20),
@@ -22,7 +27,12 @@ export function encodeMotorCandidate(observation={},candidate={}){
   Number(candidate.evidence?.source==='observed_block'),
   Number(candidate.evidence?.source==='observed_empty_destination_and_inventory'),
   Number(candidate.arguments?.face?.y===-1),
-  Number(candidate.arguments?.face?.y===1)];
+  Number(candidate.arguments?.face?.y===1),
+  clamp(goal.x-p.x,16),clamp(goal.y-p.y,16),clamp(goal.z-p.z,16),
+  clamp(Math.abs(goal.x-p.x)-Math.abs(goal.x-at.x),8),
+  Number(destination?.boundingBox==='block'),
+  Number(feet?.boundingBox==='block'),
+  Number(currentFoot?.boundingBox==='block')];
  if(vec.length!==MOTOR_FEATURE_COUNT||!vec.every(Number.isFinite))
   throw Error('Invalid motor candidate encoding');
  return vec;
