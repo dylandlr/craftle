@@ -189,6 +189,24 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    stalls=lastPosition&&displacement<0.3?stalls+1:0;
    if(stalls===3&&['explore','canopy_egress'].includes(goal?.key)&&connectedExplore){markConnectedFailure(goal);log({type:'connected_navigation_recovery',reason:'three_low_displacement_samples',failedGoal:{...goal},learned:false});clearGoal();}
    if(stalls===3||stalls===8)log({type:'target_navigation_stall',decisionId:activeDecision?.decisionId??null,stalls,displacement,goal:goal?{...goal}:null,position:{x:p.x,y:p.y,z:p.z}});
+   // Long-lived immobility must remain observable after the initial 3/8 samples.
+   // This does not interfere with the learned controller, modify the world,
+   // or claim the agent can escape a route that has not been verified.
+   if(connectedExplore&&bot.health<=2&&stalls>=12&&(stalls===12||stalls%60===0)){
+    const footing=bot.blockAt(p.offset(0,-0.3,0),false);
+    const feet=bot.blockAt(p,false),head=bot.blockAt(p.offset(0,1,0),false);
+    log({type:'critical_survival_deadlock_audit',
+     decisionId:activeDecision?.decisionId??null,health:bot.health,food:bot.food,
+     stalls,displacement,position:{x:p.x,y:p.y,z:p.z},
+     underfoot:footing?.name??null,feet:feet?.name??null,head:head?.name??null,
+     onLeafCanopy:Boolean(footing?.name?.includes('leaves')),
+     onGround:bot.entity.onGround??null,isInWater:Boolean(bot.entity.isInWater),
+     goal:goal?{...goal}:null,
+     pathfinderMoving:bot.pathfinder.isMoving?.()??null,
+     riskEnabled:Boolean(riskLearner),riskPending:Boolean(riskLearner?.pending()),
+     canopyStepdown,canopyGroundRoute,
+     learned:false,informationAccess:'mineflayer_cached_blocks'});
+   }
    if(connectedExplore&&(stalls===3||stalls===8||(stalls>8&&stalls%100===0))){
     const at=(dy)=>{const b=bot.blockAt(p.offset(0,dy,0),false);return b?{name:b.name,boundingBox:b.boundingBox,position:{x:b.position.x,y:b.position.y,z:b.position.z}}:null;};
     const footing=diagnoseFooting({position:p,onGround:bot.entity.onGround??null,
@@ -229,7 +247,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
     const candidate=findCanopyStepdown({position:p,health:bot.health,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
     log({type:'canopy_stepdown_plan',reason:candidate.reason,selected:candidate.selected,
-     decisionId:activeDecision?.decisionId??null,onLeafCanopy,stalls,learned:false});
+     decisionId:activeDecision?.decisionId??null,onLeafCanopy,underfoot:canopyUnderfoot,health:bot.health,stalls,learned:false});
     if(candidate.selected&&bot.waitForTicks){
      clearGoal();
      const start={x:p.x,y:p.y,z:p.z},q=candidate.selected;
