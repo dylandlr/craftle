@@ -26,9 +26,10 @@ test('available depends on actual executor instead of nominal ability',()=>{
  assert.equal(r.executableCandidates,0);
 });
 test('chat affordance is conditional and does not generate text',()=>{
- const a=enumerateMotorAffordances({position,chatAvailable:true,executors:{chat:()=>{}}});
+ const a=enumerateMotorAffordances({position,chatAvailable:true,proposedChatText:'hello',executors:{chat:()=>{}}});
  assert.equal(a.candidates.find(c=>c.operation==='chat')?.arguments.textSource,'separate_language_policy');
  assert.equal(enumerateMotorAffordances({position}).candidates.some(c=>c.operation==='chat'),false);
+ assert.equal(enumerateMotorAffordances({position,chatAvailable:true}).candidates.some(c=>c.operation==='chat'),false);
 });
 test('chat output transmits provided text, rejects commands and rate limits',()=>{
  const messages=[],bot={chat:s=>messages.push(s),_client:{state:'play'}};
