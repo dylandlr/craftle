@@ -143,3 +143,19 @@ teacher demonstrations. Compare frozen policies across unseen directions,
 resource scarcity and no-dig/no-place ablations. Treat loss on open tasks as
 catastrophic interference and report the teacher's successful demonstration
 coverage explicitly. No mixed-arm results are currently verified.
+
+## Repeated excavation evidence and delayed-obstruction holdout
+
+Reported synthetic results: all 30 selected tests passed. The frozen mixed
+planner-assisted learner achieved 18/18 on each held-out two-layer east/west
+barrier and 18/18 on a three-layer north barrier. The mean trajectory used
+one placement plus exactly two or three digs respectively; no-dig control
+achieved zero. These outcomes are evidence of repeated reactive primitive
+selection within the known generator, not independent invention.
+
+The next held-out evaluation varies `obstacleOffset` to move the barrier
+beyond one or two traversable platform cells. Training demonstrations remain
+offset zero. It also combines offset two and depth two in a rotated world.
+This rules out some fixed-position action sequences and records failure traces,
+but the entire task is still a deliberately simplified artificial world.
+Do not claim the new offset results until they have been executed.
