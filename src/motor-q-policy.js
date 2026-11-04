@@ -2,7 +2,7 @@
 // built-in construction strategies. Every action candidate must be grounded in
 // current client observations and an available executor.
 import {MOTOR_OPERATIONS} from './motor-affordances.js';
-export const PARAMETRIC_POLICY_SCHEMA='craftle.motor-q.v2.candidate';
+export const PARAMETRIC_POLICY_SCHEMA='craftle.motor-q.v3.goal-frame';
 const OP_COUNT=MOTOR_OPERATIONS.length;
 export const MOTOR_FEATURE_COUNT=OP_COUNT+22;
 const clamp=(n,scale=1)=>Math.max(-1,Math.min(1,Number(n||0)/scale));
@@ -14,6 +14,14 @@ export function encodeMotorCandidate(observation={},candidate={}){
  const at=candidate.evidence?.destination??args.position??args.reference??
   (candidate.operation==='move'?{x:p.x+(args.dx??0),y:p.y+(args.dy??0),z:p.z+(args.dz??0)}:p);
  const goal=observation.goal??p;
+ // Canonical horizontal goal frame: forward points toward the objective and
+ // lateral is the perpendicular direction. Rotate *all* horizontal action
+ // features consistently. Do not give the policy a compass-based recipe.
+ const gx=goal.x-p.x,gz=goal.z-p.z;
+ const norm=Math.hypot(gx,gz);
+ const fx=norm>1e-8?gx/norm:1,fz=norm>1e-8?gz/norm:0;
+ const forward=(dx,dz)=>dx*fx+dz*fz;
+ const lateral=(dx,dz)=>-dx*fz+dz*fx;
  const destination=observation.blockAt?.(Math.floor(at.x),Math.floor(at.y)-1,Math.floor(at.z));
  const feet=observation.blockAt?.(Math.floor(at.x),Math.floor(at.y),Math.floor(at.z));
  const currentFoot=observation.blockAt?.(Math.floor(p.x),Math.floor(p.y)-1,Math.floor(p.z));
@@ -21,15 +29,17 @@ export function encodeMotorCandidate(observation={},candidate={}){
  const vec=[...MOTOR_OPERATIONS.map((_,i)=>Number(i===op)),
   clamp(observation.health,20),clamp(observation.food,20),
   clamp(observation.inventory?.length,36),clamp(observation.stalls,20),
-  clamp(at.x-p.x,8),clamp(at.y-p.y,8),clamp(at.z-p.z,8),
-  clamp(item?.count,64),clamp(candidate.arguments?.dx),
-  clamp(candidate.arguments?.dy),clamp(candidate.arguments?.dz),
+  clamp(forward(at.x-p.x,at.z-p.z),8),clamp(at.y-p.y,8),
+  clamp(lateral(at.x-p.x,at.z-p.z),8),
+  clamp(item?.count,64),clamp(forward(args.dx??0,args.dz??0)),
+  clamp(args.dy),clamp(lateral(args.dx??0,args.dz??0)),
   Number(candidate.evidence?.source==='observed_block'),
   Number(candidate.evidence?.source==='observed_empty_destination_and_inventory'),
   Number(candidate.arguments?.face?.y===-1),
   Number(candidate.arguments?.face?.y===1),
-  clamp(goal.x-p.x,16),clamp(goal.y-p.y,16),clamp(goal.z-p.z,16),
-  clamp(Math.abs(goal.x-p.x)-Math.abs(goal.x-at.x),8),
+  clamp(forward(gx,gz),16),clamp(goal.y-p.y,16),
+  clamp(lateral(gx,gz),16),
+  clamp(norm-Math.hypot(goal.x-at.x,goal.z-at.z),8),
   Number(destination?.boundingBox==='block'),
   Number(feet?.boundingBox==='block'),
   Number(currentFoot?.boundingBox==='block')];
