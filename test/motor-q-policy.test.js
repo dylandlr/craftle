@@ -137,7 +137,13 @@ test('a one-cell obstruction intervention preserves agent state and goal',()=>{
  clear.world.delete([goal.x,goal.y,goal.z].join(','));
  assert.equal(blocked.blockAt(goal.x,goal.y,goal.z).name,'stone');
  assert.equal(clear.blockAt(goal.x,goal.y,goal.z).name,'air');
- assert.deepEqual(blocked.snapshot(),clear.snapshot());
+ const blockedState=blocked.snapshot(),clearState=clear.snapshot();
+ assert.equal(blockedState.worldBlocks-clearState.worldBlocks,1,
+  'the intervention must remove exactly one block');
+ const {worldBlocks:blockedCount,...blockedAgentState}=blockedState;
+ const {worldBlocks:clearCount,...clearAgentState}=clearState;
+ assert.deepEqual(blockedAgentState,clearAgentState,
+  'position, goal, inventory, health, and time must remain matched');
  const policy=createMotorQPolicy({training:false});
  assert.ok(policy.scoreCandidates(blocked.observe(),blocked.affordances()).length);
  assert.ok(policy.scoreCandidates(clear.observe(),clear.affordances()).length);
