@@ -85,7 +85,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    if(c.operation==='dig')return c.arguments.position.y>=1&&
       reachable(c.arguments.position);
    if(c.operation==='place')return inventory>0&&
-      reachable(c.evidence.destination)&&
+      reachable(c.arguments.reference)&&reachable(c.evidence.destination)&&
       !possible(c.evidence.destination)&&
       !(c.evidence.destination.x===position.x&&
         c.evidence.destination.y===position.y+1&&
