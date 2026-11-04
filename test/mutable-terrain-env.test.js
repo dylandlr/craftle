@@ -212,3 +212,38 @@ test('obstacle depth is validated and preserved across exact forks',()=>{
  assert.throws(()=>createMutableTerrain({layout:'chasm',goalObstructed:true,
   obstacleDepth:1,restore:w.exportState()}),/Incompatible/);
 });
+
+test('delayed barrier requires movement on clear ground before excavation',()=>{
+ for(const offset of [1,2]){
+  const w=createMutableTerrain({layout:'chasm',goalObstructed:true,
+   obstacleOffset:offset,span:3,platformHeight:5,initialBlocks:5,maxSteps:30});
+  assert.deepEqual(w.observe().goal,{x:3+offset,y:5,z:0});
+  const east=()=>choose(w,'move',a=>a.arguments.dx===1);
+  assert.equal(w.act(east()).ok,true);
+  const support=choose(w,'place',a=>a.evidence.destination.x===2&&
+   a.evidence.destination.y===4&&a.evidence.destination.z===0);
+  assert.ok(support);
+  assert.equal(w.act(support).ok,true);
+  assert.equal(w.act(east()).ok,true);
+  for(let x=3;x<3+offset;x++){
+   assert.equal(w.blockAt(x,5,0).name,'air');
+   assert.equal(w.act(east()).ok,true);
+  }
+  const barrier=3+offset;
+  assert.equal(w.blockAt(barrier,5,0).name,'stone');
+  assert.equal(w.act(east()).ok,false);
+  const dig=choose(w,'dig',a=>a.arguments.position.x===barrier&&
+   a.arguments.position.y===5&&a.arguments.position.z===0);
+  assert.ok(dig);
+  assert.equal(w.act(dig).ok,true);
+  assert.equal(w.act(east()).reachedLowerGround,true);
+  assert.equal(w.snapshot().health,20);
+ }
+});
+test('obstacle offset is included in fork identity and validated',()=>{
+ assert.throws(()=>createMutableTerrain({obstacleOffset:-1}),/Invalid obstacle offset/);
+ const w=createMutableTerrain({layout:'chasm',goalObstructed:true,obstacleOffset:2});
+ assert.equal(w.fork().obstacleOffset,2);
+ assert.throws(()=>createMutableTerrain({layout:'chasm',goalObstructed:true,
+  obstacleOffset:1,restore:w.exportState()}),/Incompatible/);
+});
