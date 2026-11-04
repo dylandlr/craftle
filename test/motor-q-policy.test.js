@@ -41,3 +41,16 @@ test('tampered model weights are rejected',()=>{
  snapshot.w[0][0]=Infinity;
  assert.throws(()=>createMotorQPolicy({snapshot}),/Incompatible/);
 });
+
+test('candidate scores encode goal direction and observed footing',()=>{
+ const base={...state,goal:{x:4,y:80,z:2},
+  blockAt:(x,y,z)=>y===79&&x===2?{name:'stone',boundingBox:'block'}:
+   {name:'air',boundingBox:'empty'}};
+ const east={operation:'move',arguments:{dx:1,dy:0,dz:0},
+  executable:true,evidence:{source:'motor_direction'}};
+ const west={operation:'move',arguments:{dx:-1,dy:0,dz:0},
+  executable:true,evidence:{source:'motor_direction'}};
+ assert.notDeepEqual(encodeMotorCandidate(base,east),encodeMotorCandidate(base,west));
+ const reversed={...base,goal:{x:-4,y:80,z:2}};
+ assert.notDeepEqual(encodeMotorCandidate(base,east),encodeMotorCandidate(reversed,east));
+});
