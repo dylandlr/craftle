@@ -125,3 +125,21 @@ a real Mineflayer agent. Future work must restrict a learned world model to
 agent-generated observation/action histories before testing model-based
 planning in Minecraft. Report planner teacher provenance and separate
 simulation performance from real Minecraft block-change receipts.
+
+## Motor Q v3 outcomes and compositional evaluation
+
+Local synthetic results reported by the experiment runner: 27/27 regression
+tests; original eastward planner-assisted demonstrations transfer to all
+four rotations (18/18 each), to span-4 (18/18), and to one-block inventory
+(18/18). The same frozen policy achieves 0/18 on an obstructed eastward
+chasm and 0/18 on obstructed westward chasm. The obstruction is independently
+known to be removable via atomic `dig` after ordinary placement and movement.
+
+The new `benchmark-compositional-motor.js` is a **different experimental
+arm**: the baseline gets eastward open-world generic search examples only;
+the mixed arm gets eastward open and obstructed search examples. Neither
+gets a named construction/excavation recipe, but both receive privileged
+teacher demonstrations. Compare frozen policies across unseen directions,
+resource scarcity and no-dig/no-place ablations. Treat loss on open tasks as
+catastrophic interference and report the teacher's successful demonstration
+coverage explicitly. No mixed-arm results are currently verified.
