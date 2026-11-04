@@ -85,3 +85,27 @@ test('sideways movement remains distinct from goal-directed movement',()=>{
  assert.notDeepEqual(encodeMotorCandidate(base,move(1,0)),
   encodeMotorCandidate(base,move(0,1)));
 });
+
+test('rotated generic placement candidates share goal-relative features',()=>{
+ const directions=[
+  {name:'east',dx:1,dz:0},
+  {name:'west',dx:-1,dz:0},
+  {name:'north',dx:0,dz:-1},
+  {name:'south',dx:0,dz:1}
+ ];
+ const rows=directions.map(({name,dx,dz})=>{
+  const w=createMutableTerrain({layout:'chasm',chasmDirection:name,
+   span:3,platformHeight:5,initialBlocks:5});
+  const advance=w.affordances().find(c=>c.operation==='move'&&
+   c.arguments.dx===dx&&c.arguments.dz===dz);
+  assert.equal(w.act(advance).ok,true);
+  const c=w.affordances().find(c=>c.operation==='place'&&
+   c.evidence.destination.x===dx*2&&c.evidence.destination.z===dz*2&&
+   c.evidence.destination.y===4);
+  assert.ok(c,name+' must permit a physically legal placement');
+  return encodeMotorCandidate(w.observe(),c);
+ });
+ for(const row of rows.slice(1))
+  for(let i=0;i<row.length;i++)assert.ok(Math.abs(row[i]-rows[0][i])<1e-9,
+   'rotated placement feature '+i+' differs');
+});
