@@ -38,7 +38,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   health=Math.max(0,health-damage);
   return {fall:d,damage,voidDeath};
  };
- const snapshot=()=>({position:{...position},health,food:20,
+ const snapshot=()=>({position:{...position},goal:{x:span,y:layout==='chasm'?platformHeight:1,z:0},health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
   worldBlocks:world.size,steps,done});
  const possible=(id)=>position.x===id.x&&position.y===id.y&&position.z===id.z;
@@ -103,7 +103,12 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   done=health<=0||reachedLowerGround||steps>=maxSteps;
   // Outcome reward only: progress is measured vertically and terminal goal.
   // No reward for dig/place or a specific construction geometry.
-  const reward=(reachedLowerGround?12:0)-physics.damage*3-0.02+(ok?0:-0.15);
+  const oldDistance=Math.abs(span-before.x)+Math.abs(before.z);
+  const newDistance=Math.abs(span-position.x)+Math.abs(position.z);
+  const progress=oldDistance-newDistance;
+  // Geometry-independent navigation progress, not rewards for edit verbs.
+  // Damage dominates progress; standing still incurs an opportunity cost.
+  const reward=(reachedLowerGround?12:0)+0.25*progress-physics.damage*3-0.02+(ok?0:-0.15);
   return {ok,reason,action:candidate.operation,change,before,
    after:{...position},healthBefore:beforeHealth,healthAfter:health,
    ...physics,reachedLowerGround,done,reward};
