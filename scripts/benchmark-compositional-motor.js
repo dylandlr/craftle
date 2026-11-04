@@ -4,7 +4,7 @@
 import {createMutableTerrain} from '../src/mutable-terrain-env.js';
 import {searchMutableTerrain} from '../src/mutable-terrain-search-control.js';
 import {createMotorQPolicy,encodeMotorCandidate} from '../src/motor-q-policy.js';
-import {compareCandidateMenus} from '../src/motor-counterfactual-audit.js';
+import {compareCandidateMenus,revalidateMotorCandidates} from '../src/motor-counterfactual-audit.js';
 const demonstrationCount=Number(process.argv[2]??12);
 const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
@@ -197,6 +197,14 @@ function counterfactualTrial(policy,{seed,chasmDirection}){
  const preferred=rows=>rows.reduce((best,row)=>!best||row.q>best.q?row:best,null);
  const originalTop=preferred(fixedBlocked);
  const maskedTop=preferred(fixedClearPerception);
+ const validAfterIntervention=revalidateMotorCandidates(maskedObservation,fixedCandidates);
+ const freshGroundedScores=policy.scoreCandidates(maskedObservation,validAfterIntervention);
+ const groundedTop=preferred(freshGroundedScores);
+ const staleTopCandidate=fixedCandidates.find(c=>c.id===maskedTop?.id);
+ const staleTopWasValid=validAfterIntervention.some(c=>c.id===maskedTop?.id);
+ const staleTopReason=staleTopCandidate?.operation==='dig'?
+  'no_longer_observed_solid':staleTopCandidate?.operation==='place'?
+  'changed_reference_or_destination':'other';
  const forwardMove=fixedPairs.find(row=>row.id===advance()?.id);
  // Avoid evaluating the source environment by calling advance() here: the
  // world is a predecessor of both forks and remains unchanged.
@@ -207,7 +215,12 @@ function counterfactualTrial(policy,{seed,chasmDirection}){
   preferredSwitch:originalTop?.id!==maskedTop?.id,
   forwardMoveDeltaQ:forwardMove?.deltaQ??null,
   maxAbsoluteDeltaQ:Math.max(0,...fixedPairs.map(row=>Math.abs(row.deltaQ))),
-  changedCandidateScores:fixedPairs.filter(row=>Math.abs(row.deltaQ)>1e-10).length
+  changedCandidateScores:fixedPairs.filter(row=>Math.abs(row.deltaQ)>1e-10).length,
+  staleTopWasValid,staleTopReason:staleTopWasValid?null:staleTopReason,
+  groundedPreferred:groundedTop?.operation??null,
+  groundedCandidateCount:validAfterIntervention.length,
+  removedCandidateCount:fixedCandidates.length-validAfterIntervention.length,
+  regainedMove:maskedTop?.operation!=='move'&&groundedTop?.operation==='move'
  };
  const {scores:blockedScores,...blockedSummary}=a;
  const {scores:clearScores,...clearSummary}=b;
@@ -235,7 +248,10 @@ const counterfactualSummary=['east_only','mixed_search'].map(arm=>{
   meanOnlyClear:pairs.reduce((s,x)=>s+x.comparison.onlyClearCount,0)/pairs.length,
   fixedMenuPreferenceSwitches:pairs.filter(x=>x.perceptionIntervention.preferredSwitch).length,
   meanForwardPerceptionDeltaQ:pairs.reduce((s,x)=>s+(x.perceptionIntervention.forwardMoveDeltaQ??0),0)/pairs.length,
-  meanFixedMenuChangedScores:pairs.reduce((s,x)=>s+x.perceptionIntervention.changedCandidateScores,0)/pairs.length};
+  meanFixedMenuChangedScores:pairs.reduce((s,x)=>s+x.perceptionIntervention.changedCandidateScores,0)/pairs.length,
+  staleTopDecisions:pairs.filter(x=>!x.perceptionIntervention.staleTopWasValid).length,
+  revalidationRecoversMove:pairs.filter(x=>x.perceptionIntervention.regainedMove).length,
+  meanRemovedStaleCandidates:pairs.reduce((s,x)=>s+x.perceptionIntervention.removedCandidateCount,0)/pairs.length};
 });
 console.log(JSON.stringify({
  schema:'craftle.compositional-planning-assisted.v1',
@@ -260,6 +276,7 @@ console.log(JSON.stringify({
   'Counterfactual pairs intervene on exactly one solid cell at matched states in the synthetic world.',
   'Shared candidate menu and Q changes are audited separately; new/disappearing actions may explain decision switches.',
   'Fixed-menu perceptual interventions retain identical blocked-world candidate objects and change only the observed next cell.',
+  'Observation-grounded revalidation is reported separately and is not a learned preference or runtime policy modification.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
