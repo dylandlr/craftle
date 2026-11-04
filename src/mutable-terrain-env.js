@@ -15,22 +15,28 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
  const set=(x,y,z,name)=>{const k=key(x,y,z);if(name===AIR)world.delete(k);else world.set(k,name);};
  // Flat immutable bedrock level, a reachable ground surface outside a gap,
  // and a starting platform with no hand-authored escape arrangement.
- for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++)set(x,0,z,STONE);
+ for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++)
+  if(layout!=='chasm'||x<=1||x>=span)set(x,0,z,STONE);
  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)set(x,platformHeight-1,z,DIRT);
  if(layout==='terraces'){
   for(let x=2;x<span;x++)for(let z=-1;z<=1;z++)set(x,Math.max(1,platformHeight-1-Math.floor(x/2)),z,STONE);
+ }else if(layout==='chasm'){
+  // The goal is on a separated platform at the starting elevation. The gap has
+  // no supporting floor; a direct fall is fatal. No action sequence is supplied.
+  for(let x=span;x<=span+2;x++)for(let z=-1;z<=1;z++)set(x,platformHeight-1,z,STONE);
  }else if(layout!=='isolated')throw Error('Unknown world layout');
  let position={x:0,y:platformHeight,z:0},health=20,inventory=initialBlocks,
   steps=0,done=false;
  const blockAt=(x,y,z)=>block(world.get(key(x,y,z))??AIR);
  const falling=()=>{
   let d=0;
-  while(position.y>1&&!solid(blockAt(position.x,position.y-1,position.z))){
+  while(position.y>0&&!solid(blockAt(position.x,position.y-1,position.z))){
    position={...position,y:position.y-1};d++;
   }
-  const damage=Math.max(0,d-3);
+  const voidDeath=layout==='chasm'&&position.y<=0&&!solid(blockAt(position.x,0,position.z));
+  const damage=voidDeath?health:Math.max(0,d-3);
   health=Math.max(0,health-damage);
-  return {fall:d,damage};
+  return {fall:d,damage,voidDeath};
  };
  const snapshot=()=>({position:{...position},health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
@@ -91,7 +97,9 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    }else reason='invalid_placement';
   }else if(candidate.operation==='wait'){ok=true;reason='waited';}
   const physics=falling();
-  const reachedLowerGround=position.y<=1&&Math.abs(position.x)>=span;
+  const reachedLowerGround=layout==='chasm'?
+   position.x>=span&&position.y===platformHeight&&health>0:
+   position.y<=1&&Math.abs(position.x)>=span;
   done=health<=0||reachedLowerGround||steps>=maxSteps;
   // Outcome reward only: progress is measured vertically and terminal goal.
   // No reward for dig/place or a specific construction geometry.
