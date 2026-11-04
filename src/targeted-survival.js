@@ -242,12 +242,17 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    // The connected canopy-waypoint fallback can otherwise keep stalls at zero indefinitely.
    const canopyUnderfoot=bot.blockAt(p.offset(0,-0.3,0),false)?.name??null;
    const onLeafCanopy=canopyUnderfoot?.includes('leaves')??false;
-   if(shouldInspectCanopyStepdown({enabled:canopyStepdown,connected:connectedExplore,stalls,onLeafCanopy,elapsedMs:clock()-lastStepdown})){
+   const onTreeFooting=onLeafCanopy||Boolean(canopyUnderfoot?.endsWith('_log')||canopyUnderfoot?.endsWith('_stem'));
+   if(connectedExplore&&onTreeFooting&&bot.health<=2&&stalls>=12&&(stalls===12||stalls%60===0))
+    log({type:'critical_tree_footing_observed',stalls,health:bot.health,food:bot.food,
+      position:{x:p.x,y:p.y,z:p.z},underfoot:canopyUnderfoot,
+      canopyGroundRoute,canopyStepdown,learned:false});
+   if(shouldInspectCanopyStepdown({enabled:canopyStepdown,connected:connectedExplore,stalls,onLeafCanopy:onTreeFooting,elapsedMs:clock()-lastStepdown})){
     lastStepdown=clock();
     const candidate=findCanopyStepdown({position:p,health:bot.health,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false)});
     log({type:'canopy_stepdown_plan',reason:candidate.reason,selected:candidate.selected,
-     decisionId:activeDecision?.decisionId??null,onLeafCanopy,underfoot:canopyUnderfoot,health:bot.health,stalls,learned:false});
+     decisionId:activeDecision?.decisionId??null,onLeafCanopy,onTreeFooting,underfoot:canopyUnderfoot,health:bot.health,stalls,learned:false});
     if(candidate.selected&&bot.waitForTicks){
      clearGoal();
      const start={x:p.x,y:p.y,z:p.z},q=candidate.selected;
@@ -275,7 +280,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    // Emergency locomotion primitive: do not let alternating explore/retreat
    // objectives replace a verified canopy escape before reaching the ground.
    // This is SCRIPTED assistance, not a DQN choice or a learned skill.
-   if(canopyGroundRoute&&connectedExplore&&onLeafCanopy){
+   if(canopyGroundRoute&&connectedExplore&&onTreeFooting){
     const escape=planCanopyGroundRoute({
      origin:p,health:bot.health,maxWaypoints:2,
      blockAt:(x,y,z)=>bot.blockAt(p.offset(x-p.x,y-p.y,z-p.z),false),
@@ -352,7 +357,7 @@ export function startTargetedSurvival(bot,{decisionController,log=()=>{},navigat
    }
    if(goal?.key==='canopy_egress'){
     const old={...goal};clearGoal();
-    log({type:'canopy_egress_released',reason:onLeafCanopy?'no_verified_route':'nonleaf_footing',
+    log({type:'canopy_egress_released',reason:onTreeFooting?'no_verified_route':'non_tree_footing',
      previous:old,learned:false});
    }
    settleRecovery(p);
