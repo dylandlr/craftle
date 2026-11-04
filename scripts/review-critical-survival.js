@@ -14,7 +14,7 @@ try {
 const events=lines.flatMap(line=>{if(!line.trim().startsWith('{'))return [];
  try {const e=JSON.parse(line);return e&&e.type?[e]:[];}catch{return [];}});
 const types=['target_decision','target_transition','target_action','target_navigation_stall',
- 'navigation_immobility_audit','navigation_footing_diagnostic','canopy_geometry_snapshot',
+ 'navigation_immobility_audit','navigation_footing_diagnostic','critical_survival_deadlock_audit','canopy_geometry_snapshot',
  'canopy_egress_execution_audit','canopy_egress_no_route','canopy_egress_released',
  'canopy_stepdown_plan','canopy_stepdown_execution','canopy_risk_decision',
  'canopy_risk_candidate','canopy_risk_execution','canopy_risk_no_verified_adjacent_fall',
@@ -45,6 +45,10 @@ const result={schema:'craftle.critical-survival-review.v1',readOnly:true,
   snapshotOrigin:lastGeometry.snapshot?.origin??null}:null,
  recentNavigationStalls:recent('target_navigation_stall').map(projection),
  recentImmobility:recent('navigation_immobility_audit',3).map(projection),
+ recentCriticalDeadlocks:recent('critical_survival_deadlock_audit',5).map(e=>({
+  ...projection(e),underfoot:e.underfoot,feet:e.feet,head:e.head,onLeafCanopy:e.onLeafCanopy,
+  pathfinderMoving:e.pathfinderMoving,riskEnabled:e.riskEnabled,
+  riskPending:e.riskPending,canopyStepdown:e.canopyStepdown,canopyGroundRoute:e.canopyGroundRoute})),
  recentCanopy:canopyEvents.slice(-12).map(projection),
  recentNavigationFailures:recent('target_navigation_result').map(projection),
  recentErrors:recent('target_runtime_error').map(projection),
