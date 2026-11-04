@@ -60,13 +60,13 @@ const training=[];
 for(let i=0;i<episodes;i++)for(const offset of [0,1,2,3])
  training.push(episode({policy:learner,train:true,seed:41+i*4+offset,intrinsic:0.15}));
 const frozen=createMotorQPolicy({snapshot:learner.snapshot(),training:false,epsilon:0});
-const controls={random:[],randomNoPlace:[],frozen:[],frozenNoPlace:[],easyReference:[]};
+const controls={random:[],randomNoPlace:[],frozen:[],frozenNoPlace:[],easyTransfer:[]};
 for(let seed=10001;seed<10021;seed++){
  controls.random.push(episode({seed}));
  controls.randomNoPlace.push(episode({seed,allowPlace:false}));
  controls.frozen.push(episode({seed,policy:frozen}));
  controls.frozenNoPlace.push(episode({seed,policy:frozen,allowPlace:false}));
- controls.easyReference.push(episode({seed,policy:frozen,layout:'isolated'}));
+ controls.easyTransfer.push(episode({seed,policy:frozen,layout:'isolated'}));
 }
 console.log(JSON.stringify({
  schema:'craftle.constructive-navigation-benchmark.v1',synthetic:true,
