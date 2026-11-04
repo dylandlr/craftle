@@ -4,6 +4,7 @@
 import {createMutableTerrain} from '../src/mutable-terrain-env.js';
 import {searchMutableTerrain} from '../src/mutable-terrain-search-control.js';
 import {createMotorQPolicy,encodeMotorCandidate} from '../src/motor-q-policy.js';
+import {compareCandidateMenus} from '../src/motor-counterfactual-audit.js';
 const demonstrationCount=Number(process.argv[2]??12);
 const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
@@ -166,7 +167,7 @@ function counterfactualTrial(policy,{seed,chasmDirection}){
   return {chosenOperation:chosen.operation,chosenArguments:chosen.arguments,
    bestMoveQ:Math.max(-Infinity,...scores.filter(s=>s.operation==='move').map(s=>s.q)),
    bestDigQ:Math.max(-Infinity,...scores.filter(s=>s.operation==='dig').map(s=>s.q)),
-   candidateCount:scores.length,
+   candidateCount:scores.length,scores,
    nextCell:w.blockAt(goal.x,goal.y,goal.z).name,
    position:obs.position,goal:obs.goal};
  };
@@ -175,7 +176,12 @@ function counterfactualTrial(policy,{seed,chasmDirection}){
   JSON.stringify(a.goal)!==JSON.stringify(b.goal)||
   JSON.stringify(blocked.snapshot().inventory)!==JSON.stringify(clear.snapshot().inventory))
   throw Error('Counterfactual pair was not matched');
- return {seed,chasmDirection,blocked:a,clear:b,
+ const comparison=compareCandidateMenus(a.scores,b.scores);
+ const {scores:blockedScores,...blockedSummary}=a;
+ const {scores:clearScores,...clearSummary}=b;
+ return {seed,chasmDirection,blocked:blockedSummary,clear:clearSummary,
+  comparison:{...comparison,sharedDeltas:comparison.sharedDeltas
+   .filter(d=>Math.abs(d.deltaQ)>1e-10).slice(0,8)},
   responsive:a.chosenOperation==='dig'&&b.chosenOperation==='move'};
 }
 const counterfactualPairs=[];
@@ -188,7 +194,12 @@ const counterfactualSummary=['east_only','mixed_search'].map(arm=>{
  const pairs=counterfactualPairs.filter(x=>x.arm===arm);
  return {arm,pairs:pairs.length,responsive:pairs.filter(x=>x.responsive).length,
   blockedDig:pairs.filter(x=>x.blocked.chosenOperation==='dig').length,
-  clearMove:pairs.filter(x=>x.clear.chosenOperation==='move').length};
+  clearMove:pairs.filter(x=>x.clear.chosenOperation==='move').length,
+  sharedMenuSwitches:pairs.filter(x=>x.comparison.sharedMenuSwitch).length,
+  anySharedScoreChange:pairs.filter(x=>x.comparison.changedSharedScores>0).length,
+  meanSharedActions:pairs.reduce((s,x)=>s+x.comparison.sharedCount,0)/pairs.length,
+  meanOnlyBlocked:pairs.reduce((s,x)=>s+x.comparison.onlyBlockedCount,0)/pairs.length,
+  meanOnlyClear:pairs.reduce((s,x)=>s+x.comparison.onlyClearCount,0)/pairs.length};
 });
 console.log(JSON.stringify({
  schema:'craftle.compositional-planning-assisted.v1',
@@ -211,6 +222,7 @@ console.log(JSON.stringify({
   'Multi-layer barrier depths 2 and 3 are completely excluded from teacher examples.',
   'Delayed barrier offsets 1 and 2 are also excluded from teacher examples.',
   'Counterfactual pairs intervene on exactly one solid cell at matched states in the synthetic world.',
+  'Shared candidate menu and Q changes are audited separately; new/disappearing actions may explain decision switches.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
