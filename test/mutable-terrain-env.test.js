@@ -144,3 +144,37 @@ test('rotated worlds never offer placements with out-of-reach reference blocks',
   }
  }
 });
+
+test('obstructed rotated chasm exposes a real solid barrier but no dig macro',()=>{
+ for(const direction of ['east','west','north','south']){
+  const w=createMutableTerrain({layout:'chasm',chasmDirection:direction,
+   goalObstructed:true,span:3,platformHeight:5,initialBlocks:5});
+  const goal=w.observe().goal;
+  assert.equal(w.blockAt(goal.x,goal.y,goal.z).name,'stone',direction);
+  assert.equal(w.affordances().some(a=>a.operation==='clear_goal'),false);
+  assert.deepEqual(w.fork().observe().goal,goal);
+ }
+});
+test('generic dig removes obstruction after an observed supported approach',()=>{
+ const w=createMutableTerrain({layout:'chasm',goalObstructed:true,
+  span:3,platformHeight:5,initialBlocks:5,maxSteps:20});
+ const east=()=>choose(w,'move',c=>c.arguments.dx===1);
+ assert.equal(w.act(east()).ok,true);
+ const place=choose(w,'place',c=>c.evidence.destination.x===2&&
+  c.evidence.destination.y===4&&c.evidence.destination.z===0);
+ assert.ok(place);
+ assert.equal(w.act(place).ok,true);
+ assert.equal(w.act(east()).ok,true);
+ const blocked=w.act(east());
+ assert.equal(blocked.ok,false);
+ const dig=choose(w,'dig',c=>c.arguments.position.x===3&&
+  c.arguments.position.y===5&&c.arguments.position.z===0);
+ assert.ok(dig);
+ assert.equal(w.act(dig).ok,true);
+ assert.equal(w.act(east()).reachedLowerGround,true);
+});
+test('fork rejects obstacle-state mismatch',()=>{
+ const w=createMutableTerrain({layout:'chasm',goalObstructed:true,span:3});
+ assert.throws(()=>createMutableTerrain({layout:'chasm',span:3,
+  goalObstructed:false,restore:w.exportState()}),/Incompatible/);
+});
