@@ -7,29 +7,41 @@ const key=(x,y,z)=>[x,y,z].join(',');
 const solid=b=>b&&b.name!==AIR;
 const block=name=>({name,boundingBox:name===AIR?'empty':'block'});
 export function createMutableTerrain({seed=1,platformHeight=5,span=6,
- initialBlocks=5,maxSteps=120,layout='isolated',restore=null}={}){
+ initialBlocks=5,maxSteps=120,layout='isolated',restore=null,
+ chasmDirection='east'}={}){
+ if(!['east','west','north','south'].includes(chasmDirection))throw Error('Invalid chasm direction');
  if(!Number.isInteger(platformHeight)||platformHeight<2||platformHeight>16||
   !Number.isInteger(span)||span<3||span>16||!Number.isInteger(initialBlocks)||
   initialBlocks<0||initialBlocks>64)throw Error('Invalid terrain setup');
  const world=new Map();
+ const axis=chasmDirection==='east'?{x:1,z:0}:chasmDirection==='west'?{x:-1,z:0}:
+  chasmDirection==='north'?{x:0,z:-1}:{x:0,z:1};
+ const toWorld=(along,across)=>({x:along*axis.x-across*axis.z,
+  z:along*axis.z+across*axis.x});
+ const goalPosition=()=>({...toWorld(span,0),y:layout==='chasm'?platformHeight:1});
  const set=(x,y,z,name)=>{const k=key(x,y,z);if(name===AIR)world.delete(k);else world.set(k,name);};
  // Flat immutable bedrock level, a reachable ground surface outside a gap,
  // and a starting platform with no hand-authored escape arrangement.
- for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++)
-  if(layout!=='chasm'||x<=1||x>=span)set(x,0,z,STONE);
+ for(let x=-span*2;x<=span*2;x++)for(let z=-2;z<=2;z++){
+  const cell=layout==='chasm'?toWorld(x,z):{x,z};
+  if(layout!=='chasm'||x<=1||x>=span)set(cell.x,0,cell.z,STONE);
+ }
  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)set(x,platformHeight-1,z,DIRT);
  if(layout==='terraces'){
   for(let x=2;x<span;x++)for(let z=-1;z<=1;z++)set(x,Math.max(1,platformHeight-1-Math.floor(x/2)),z,STONE);
  }else if(layout==='chasm'){
   // The goal is on a separated platform at the starting elevation. The gap has
   // no supporting floor; a direct fall is fatal. No action sequence is supplied.
-  for(let x=span;x<=span+2;x++)for(let z=-1;z<=1;z++)set(x,platformHeight-1,z,STONE);
+  for(let x=span;x<=span+2;x++)for(let z=-1;z<=1;z++){
+   const cell=toWorld(x,z);set(cell.x,platformHeight-1,cell.z,STONE);
+  }
  }else if(layout!=='isolated')throw Error('Unknown world layout');
  let position={x:0,y:platformHeight,z:0},health=20,inventory=initialBlocks,
   steps=0,done=false;
  if(restore){
   if(restore.schema!=='craftle.mutable-terrain-state.v1'||restore.layout!==layout||
    restore.span!==span||restore.platformHeight!==platformHeight||
+   (restore.chasmDirection??'east')!==chasmDirection||
    !Array.isArray(restore.blocks))throw Error('Incompatible terrain snapshot');
   world.clear();for(const [cell,name] of restore.blocks)world.set(cell,name);
   position={...restore.position};health=restore.health;inventory=restore.inventory;
@@ -47,11 +59,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   return {fall:d,damage,voidDeath};
  };
  const exportState=()=>({schema:'craftle.mutable-terrain-state.v1',layout,span,
-  platformHeight,initialBlocks,maxSteps,seed,position:{...position},health,
+  platformHeight,initialBlocks,maxSteps,seed,chasmDirection,position:{...position},health,
   inventory,steps,done,blocks:[...world.entries()]});
  const fork=()=>createMutableTerrain({seed,platformHeight,span,initialBlocks,
-  maxSteps,layout,restore:exportState()});
- const snapshot=()=>({position:{...position},goal:{x:span,y:layout==='chasm'?platformHeight:1,z:0},health,food:20,
+  maxSteps,layout,chasmDirection,restore:exportState()});
+ const snapshot=()=>({position:{...position},goal:goalPosition(),health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
   worldBlocks:world.size,steps,done});
  const possible=(id)=>position.x===id.x&&position.y===id.y&&position.z===id.z;
@@ -110,14 +122,17 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    }else reason='invalid_placement';
   }else if(candidate.operation==='wait'){ok=true;reason='waited';}
   const physics=falling();
+  const goal=goalPosition();
+  const along=position.x*axis.x+position.z*axis.z;
+  const across=-position.x*axis.z+position.z*axis.x;
   const reachedLowerGround=layout==='chasm'?
-   position.x>=span&&position.y===platformHeight&&health>0:
+   along>=span&&Math.abs(across)<=1&&position.y===platformHeight&&health>0:
    position.y<=1&&Math.abs(position.x)>=span;
   done=health<=0||reachedLowerGround||steps>=maxSteps;
   // Outcome reward only: progress is measured vertically and terminal goal.
   // No reward for dig/place or a specific construction geometry.
-  const oldDistance=Math.abs(span-before.x)+Math.abs(before.z);
-  const newDistance=Math.abs(span-position.x)+Math.abs(position.z);
+  const oldDistance=Math.abs(goal.x-before.x)+Math.abs(goal.z-before.z);
+  const newDistance=Math.abs(goal.x-position.x)+Math.abs(goal.z-position.z);
   const progress=oldDistance-newDistance;
   // Geometry-independent navigation progress, not rewards for edit verbs.
   // Damage dominates progress; standing still incurs an opportunity cost.
@@ -127,7 +142,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    ...physics,reachedLowerGround,done,reward};
  };
  return {schema:'craftle.mutable-terrain.v1',observe,affordances,act,snapshot,
-  blockAt,world,layout,seed,exportState,fork,
+  blockAt,world,layout,seed,chasmDirection,exportState,fork,
   limits:['Discrete block positions, no Mineflayer movement or Minecraft physics.',
    'No entity, hunger, fluid simulation, crafting or tool durability.',
    'A successful benchmark does not establish live Minecraft mastery.']};
