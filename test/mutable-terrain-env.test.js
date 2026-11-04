@@ -178,3 +178,37 @@ test('fork rejects obstacle-state mismatch',()=>{
  assert.throws(()=>createMutableTerrain({layout:'chasm',span:3,
   goalObstructed:false,restore:w.exportState()}),/Incompatible/);
 });
+
+test('unseen multi-layer barriers require more than one actual excavation',()=>{
+ for(const depth of [2,3]){
+  const w=createMutableTerrain({layout:'chasm',goalObstructed:true,
+   obstacleDepth:depth,span:3,platformHeight:5,initialBlocks:5,maxSteps:30});
+  assert.deepEqual(w.observe().goal,{x:3+depth-1,y:5,z:0});
+  const east=()=>choose(w,'move',a=>a.arguments.dx===1);
+  assert.equal(w.act(east()).ok,true);
+  const support=choose(w,'place',a=>a.evidence.destination.x===2&&
+   a.evidence.destination.y===4&&a.evidence.destination.z===0);
+  assert.ok(support);
+  assert.equal(w.act(support).ok,true);
+  assert.equal(w.act(east()).ok,true);
+  for(let x=3;x<3+depth;x++){
+   const dig=choose(w,'dig',a=>a.arguments.position.x===x&&
+    a.arguments.position.y===5&&a.arguments.position.z===0);
+   assert.ok(dig,'generic dig available at layer '+x);
+   const mutation=w.act(dig);
+   assert.equal(mutation.change.before,'stone');
+   assert.equal(mutation.change.after,'air');
+   const advance=w.act(east());
+   assert.equal(advance.ok,true);
+   assert.equal(advance.reachedLowerGround,x===2+depth);
+  }
+  assert.equal(w.snapshot().health,20);
+ }
+});
+test('obstacle depth is validated and preserved across exact forks',()=>{
+ assert.throws(()=>createMutableTerrain({obstacleDepth:4}),/Invalid obstacle depth/);
+ const w=createMutableTerrain({layout:'chasm',goalObstructed:true,obstacleDepth:3});
+ assert.equal(w.fork().obstacleDepth,3);
+ assert.throws(()=>createMutableTerrain({layout:'chasm',goalObstructed:true,
+  obstacleDepth:1,restore:w.exportState()}),/Incompatible/);
+});
