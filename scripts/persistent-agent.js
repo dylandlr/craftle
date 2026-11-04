@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {preparePersistentSession,promotePersistentSession} from '../src/persistent-session.js';
+import {createOptionDQN} from '../src/option-dqn.js';
+import {TARGET_INPUTS,TARGET_ACTIONS,TARGET_SCHEMA} from '../src/target-opportunities.js';
+import {seededOptionRandom} from '../src/learning-options.js';
 import {startSpectatorMonitor} from '../src/spectator-monitor.js';
 import {provisionCitizenRoster} from '../src/citizen-registry.js';
 import {makeSkin} from './generate-citizen-skins.js';
@@ -39,13 +42,48 @@ if(continuous){
  fs.mkdirSync(root,{recursive:true});
  const source=path.join(root,'accepted-policy.json');
  const rewardVersion=process.env.CRAFTLE_TARGET_REWARD_VERSION??'v1';
- if(!['v1','v2'].includes(rewardVersion))throw Error('Unknown targeted reward version');
- const target=path.join(root,rewardVersion==='v2'?'continuous-policy-reward-v2.json':'continuous-policy.json');
- if(!fs.existsSync(target)&&fs.existsSync(source))fs.copyFileSync(source,target);
- if(!fs.existsSync(target))throw Error('Continuous mode requires an existing accepted or continuous checkpoint');
+ if(!['v1','v2','v3'].includes(rewardVersion))throw Error('Unknown targeted reward version');
+ const plantMask=process.env.CRAFTLE_MASK_REDUNDANT_PLANT_APPROACH==='1';
+ const targetName=plantMask?'continuous-policy-reward-'+rewardVersion+'-plant-mask-candidate.json':
+  rewardVersion==='v3'?'continuous-policy-reward-v3-candidate.json':
+  rewardVersion==='v2'?'continuous-policy-reward-v2.json':'continuous-policy.json';
+ const target=path.join(root,targetName);
+ if(!fs.existsSync(target)){
+  if(plantMask||rewardVersion==='v3'){
+   // Prefer the accepted checkpoint; filming often only has a continuous v1
+   // checkpoint because no session promotion has taken place in that world.
+   // Never transfer replay/target weights across an action-mask or reward change.
+   const sources=[source,path.join(root,'continuous-policy.json')];
+   let initial=null,initialSource=null;
+   for(const candidate of sources){
+    if(!fs.existsSync(candidate))continue;
+    const p=JSON.parse(fs.readFileSync(candidate,'utf8'));
+    if(p.schema!==TARGET_SCHEMA||JSON.stringify(p.options)!==JSON.stringify(TARGET_ACTIONS))
+     throw Error('Existing baseline checkpoint incompatible: '+candidate);
+    createOptionDQN({inputs:TARGET_INPUTS,options:TARGET_ACTIONS,schema:TARGET_SCHEMA,
+     training:false,snapshot:p,random:()=>0.5});
+    initial=p;initialSource=candidate;break;
+   }
+   if(!initial){
+    // Fresh deterministic candidate is safer than a restart loop and does not
+    // fabricate accepted baseline weights when none exist.
+    initial=createOptionDQN({inputs:TARGET_INPUTS,options:TARGET_ACTIONS,
+     schema:TARGET_SCHEMA,random:seededOptionRandom(17)}).snapshot();
+   }
+   delete initial.trainingState;
+   initial.updates=0;
+   fs.writeFileSync(target+'.tmp',JSON.stringify(initial));
+   fs.renameSync(target+'.tmp',target);
+   console.log(JSON.stringify({type:'isolated_policy_candidate_initialized',
+    checkpoint:target,source:initialSource,rewardVersion,plantMask,
+    weightsWarmStarted:Boolean(initialSource),freshInitialization:!initialSource,
+    priorReplayDiscarded:true}));
+  }else if(fs.existsSync(source))fs.copyFileSync(source,target);
+ }
+ if(!fs.existsSync(target))throw Error('Continuous mode requires existing baseline checkpoint: '+target);
  const continuousDir=path.join(root,'continuous');
  fs.mkdirSync(continuousDir,{recursive:true});
- console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,rewardVersion,validatedBaselineUntouched:true,referenceVideo:false}));
+ console.log(JSON.stringify({type:'continuous_agent_enabled',checkpoint:target,rewardVersion,plantMask,validatedBaselineUntouched:true,referenceVideo:false}));
  let errors=0;
  const logFile=path.join(continuousDir,'agent.log');
  const serverHost=process.env.CRAFTLE_SERVER_HOST??'minecraft';

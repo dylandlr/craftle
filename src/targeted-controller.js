@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createOptionDQN} from './option-dqn.js';
 import {seededOptionRandom} from './learning-options.js';
+import {rewardV3,REWARD_V3_WEIGHTS} from './target-reward-v3.js';
 import {TARGET_ACTIONS,TARGET_INPUTS,TARGET_SCHEMA,encodeTargets,decodeTargetAction} from './target-opportunities.js';
-export function createTargetedController({checkpoint,mode='training',seed=1,epsilon=0.3,rewardVersion='v1',log=()=>{}}={}){
+export function createTargetedController({checkpoint,mode='training',seed=1,epsilon=0.3,rewardVersion='v1',maskRedundantPlantApproach=false,log=()=>{}}={}){
  if(!['training','frozen','random','scripted','auto_eat'].includes(mode))throw Error('Invalid targeted policy mode');
  if(!Number.isFinite(epsilon)||epsilon<0||epsilon>1)throw Error('Invalid targeted epsilon');
- if(!['v1','v2'].includes(rewardVersion))throw Error('Invalid targeted reward version');
+ if(!['v1','v2','v3'].includes(rewardVersion))throw Error('Invalid targeted reward version');
  if(mode==='frozen'&&(!checkpoint||!fs.existsSync(checkpoint)))throw Error('Frozen targeted policy requires checkpoint');
  const random=seededOptionRandom(seed),neural=['training','frozen'].includes(mode);
  const learner=neural?createOptionDQN({inputs:TARGET_INPUTS,options:TARGET_ACTIONS,schema:TARGET_SCHEMA,training:mode==='training',random,epsilon,snapshot:checkpoint&&fs.existsSync(checkpoint)?JSON.parse(fs.readFileSync(checkpoint,'utf8')):null}):null;
@@ -17,15 +18,23 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
  const save=()=>{if(mode!=='training'||!checkpoint)return;fs.mkdirSync(path.dirname(checkpoint),{recursive:true});fs.writeFileSync(checkpoint+'.tmp',JSON.stringify(learner.snapshot()));fs.renameSync(checkpoint+'.tmp',checkpoint);};
  return {
   choose(o){
-   const {features,mask,requiresRecovery}=encodeTargets(o);
+   const {features,mask,requiresRecovery}=encodeTargets(o,{maskRedundantPlantApproach});
    if(requiresRecovery){
     log({type:'target_no_executable_action',reason:'planner_declared_exploration_unavailable',exploreFeasible:o.exploreFeasible??null,policyChanged:false});
     throw new Error('No executable targeted action: executive recovery required');
    }
-   if(rewardVersion==='v2'&&!pending){const key=cell(o.position);if(key)visited.add(key);}
+   if(['v2','v3'].includes(rewardVersion)&&!pending){const key=cell(o.position);if(key)visited.add(key);}
    if(pending){
     if(Number.isFinite(o.foodUnits)&&Number.isFinite(pending.foodUnits))log({type:'target_inventory_observed',decisionId:pending.decisionId,action:pending.action,previousFoodUnits:pending.foodUnits,currentFoodUnits:o.foodUnits,deltaFoodUnits:o.foodUnits-pending.foodUnits,evidence:'subsequent_observation_not_causal_proof'});
     let reward=pending.credit+Math.min(0,o.health-pending.health)*0.7-0.03;
+    if(rewardVersion==='v3'){
+      const key=cell(o.position);
+      const candidate=rewardV3({previous:pending,next:o,firstVisit:Boolean(key&&!visited.has(key)),verifiedEat:pending.credit>0});
+      if(key)visited.add(key);
+      reward=candidate.total;
+      log({type:'target_reward_components',decisionId:pending.decisionId,rewardVersion,
+       ...candidate.components,reward,evidence:candidate.evidence,contract:candidate.schema});
+    }
     if(rewardVersion==='v2'){
       // Intrinsic spatial novelty is awarded at most once per coarse cell.
       // Inventory gain is evidence of progress, not causal proof of a skill succeeding.
@@ -51,16 +60,16 @@ export function createTargetedController({checkpoint,mode='training',seed=1,epsi
     index=TARGET_ACTIONS.indexOf(action??'explore');
     if(mode==='auto_eat'&&index===0)throw Error('Auto-eat control cannot choose neural eat action');
    }else {const selected=learner.choose(features,mask);index=selected.index;neuralTrace=selected.trace;}
-   const choice=decodeTargetAction(index,o),decisionId=++serial;
-   pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,credit:0,decisionId};
-   log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,capabilityTier:'scripted_targeted_skills'});
-   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actionAvailability:{exploreFeasible:o.exploreFeasible??null,requiresRecovery:false},actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,source:'assisted_semantic_mineflayer_no_pixels'});
+   const choice=decodeTargetAction(index,o,{maskRedundantPlantApproach}),decisionId=++serial;
+   pending={state:features,index,action:TARGET_ACTIONS[index],health:o.health,foodUnits:o.foodUnits,food:o.food,credit:0,decisionId};
+   log({type:'target_decision',decisionId,...choice,action:pending.action,features,mask,targets:o.targets,mode,seed,contract:'targeted44-actions15-v1',rewardVersion,maskRedundantPlantApproach,capabilityTier:'scripted_targeted_skills'});
+   if(process.env.CRAFTLE_DECISION_TRACE==='1')log({type:'decision_trace_v1',decisionId,agentObservation:o,featureNames:['health','hunger','foodAvailable','foodUnits','foodPoints','hostileDistance','blocked','displacement',...Array.from({length:4},(_,i)=>['drop','plant','animal','distance','dx','dy','dz','visible','reachable'].map(n=>'target'+i+'.'+n)).flat()],features,mask,actionAvailability:{exploreFeasible:o.exploreFeasible??null,requiresRecovery:false},actions:TARGET_ACTIONS,neuralTrace,selection:pending.action,mode,stats:stats(),rewardVersion,maskRedundantPlantApproach,source:'assisted_semantic_mineflayer_no_pixels'});
    if(mode==='training'&&stats().updates%40===0)save();
    return {...choice,decisionId};
   },
   consumed(decisionId,before,after){
    if(!pending||pending.decisionId!==decisionId||pending.action!=='eat'||pending.credit||!Number.isFinite(before)||!Number.isFinite(after)||after<=before)return false;
-   pending.credit=1;log({type:'target_verified_recovery',decisionId,beforeFood:before,afterFood:after,reward:1});return true;
+   pending.credit=rewardVersion==='v3'?REWARD_V3_WEIGHTS.verifiedEat:1;log({type:'target_verified_recovery',decisionId,beforeFood:before,afterFood:after,reward:pending.credit});return true;
   },
   terminal(){if(pending){const reward=pending.credit-5;if(mode==='training')learner.observe({...pending,reward,terminal:true});log({type:'target_terminal',decisionId:pending.decisionId,reward,...stats()});}pending=null;save();},
   truncate(){pending=null;},stop(){pending=null;save();},stats

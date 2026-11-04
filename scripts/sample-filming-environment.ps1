@@ -12,7 +12,13 @@ try {
  $out=[IO.Path]::GetFullPath($OutputDirectory)
  New-Item -ItemType Directory -Force -Path $out | Out-Null
  $file=Join-Path $out "$Phase.jsonl"
- if(Test-Path $file){throw "Refusing to overwrite an existing phase: $file"}
+ $sampleDir=Join-Path $out "$Phase.samples"
+ if((Test-Path $file) -or (Test-Path $sampleDir)){
+  throw "Refusing to overwrite previous phase artifacts in $out. Select a fresh OutputDirectory."
+ }
+ New-Item -ItemType Directory -Path $sampleDir -ErrorAction Stop | Out-Null
+ $lines=New-Object 'System.Collections.Generic.List[string]'
+ $utf8=New-Object System.Text.UTF8Encoding($false)
  function Query([string]$text) {
   $response=& docker compose -f deploy/filming/compose.yml exec -T minecraft rcon-cli $text 2>&1
   if($LASTEXITCODE -ne 0){throw "RCON command failed: $text : $response"}
@@ -33,10 +39,33 @@ try {
   $entry=[ordered]@{schema='craftle.spectator-environment-sample.v1';phase=$Phase;
     sample=$i;atUtc=[DateTimeOffset]::UtcNow.ToString('o');responses=[ordered]@{}}
   foreach($q in $queries){$entry.responses[$q]=Query $q}
-  ($entry|ConvertTo-Json -Depth 6 -Compress)|Add-Content -LiteralPath $file -Encoding UTF8
+  $line=$entry|ConvertTo-Json -Depth 6 -Compress
+  # Unique per-sample files avoid a long-lived shared append target that
+  # Windows search, sync, antivirus or IDE watchers can repeatedly lock.
+  # Preserve these individual files even if the final JSONL cannot be assembled.
+  $sampleFile=Join-Path $sampleDir ('{0:D4}.json' -f $i)
+  [System.IO.File]::WriteAllText($sampleFile,$line,$utf8)
+  $lines.Add($line)
   Write-Host "$Phase $($i+1)/$Samples"
   if($i -lt $Samples-1){Start-Sleep -Seconds $IntervalSeconds}
  }
- Write-Host "Saved: $file"
+ # Assemble exactly once after capture. Any sharing violation here does not
+ # invalidate or discard the already saved one-file-per-sample dataset.
+ $assembled=$false
+ for($attempt=1;$attempt -le 5;$attempt++){
+  try{
+   [System.IO.File]::WriteAllLines($file,[string[]]$lines,$utf8)
+   $assembled=$true
+   break
+  }catch [System.IO.IOException]{
+   if($attempt -lt 5){Start-Sleep -Milliseconds (500*$attempt)}
+  }
+ }
+ if($assembled){Write-Host "Saved: $file"}
+ else{
+  Write-Warning "Cannot assemble JSONL due to file lock. All $Samples samples remain in $sampleDir."
+  Write-Host 'Reconstruct later with:'
+  Write-Host ('  Get-ChildItem -LiteralPath "{0}" -Filter *.json | Sort-Object Name | Get-Content | Set-Content -LiteralPath "{1}" -Encoding utf8' -f $sampleDir,$file)
+ }
  Write-Host 'These are qualitative RCON responses, not counts of loaded chunks or server performance.'
 }finally{Pop-Location}

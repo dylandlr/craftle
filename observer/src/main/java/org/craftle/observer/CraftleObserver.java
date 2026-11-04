@@ -9,6 +9,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
@@ -120,11 +121,41 @@ public final class CraftleObserver extends JavaPlugin implements Listener {
     Player p=event.getPlayer();
     write("player_join",p,",\"foodLevel\":" + p.getFoodLevel() + ",\"inventory\":" + inventory(p));
   }
+  // These samples are scheduled after the event handler returns, on the main
+  // server thread. They are observations, NOT proof that this player caused the
+  // state change (another actor or server mechanic could have intervened).
+  private void sampleBlockNextTick(Block block, Player actor, String sourceEvent) {
+    Location location = block.getLocation().clone();
+    Bukkit.getScheduler().runTask(this, () -> {
+      if (!location.getWorld().isChunkLoaded(location.getBlockX() >> 4,
+          location.getBlockZ() >> 4)) {
+        write("block_state_sample_skipped", actor, pos(location) +
+          ",\"sourceEvent\":" + quote(sourceEvent) +
+          ",\"reason\":\"chunk_unloaded\"");
+        return;
+      }
+      Block observed = location.getWorld().getBlockAt(location);
+      write("block_state_post_tick", actor, pos(location) +
+        ",\"block\":" + quote(observed.getBlockData().getAsString()) +
+        ",\"sourceEvent\":" + quote(sourceEvent) +
+        ",\"phase\":\"scheduled_next_tick_read_only\"");
+    });
+  }
+
   @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
   public void onBreak(BlockBreakEvent e) {
     Block b=e.getBlock();
     write("block_break_event",e.getPlayer(),pos(b.getLocation()) +
       ",\"block\":" + quote(b.getBlockData().getAsString()) + ",\"phase\":\"event_before_world_mutation\"");
+    sampleBlockNextTick(b,e.getPlayer(),"block_break_event");
+  }
+  @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
+  public void onPlace(BlockPlaceEvent e) {
+    Block b=e.getBlockPlaced();
+    write("block_place_event",e.getPlayer(),pos(b.getLocation()) +
+      ",\"block\":" + quote(b.getBlockData().getAsString()) +
+      ",\"phase\":\"event_before_world_mutation\"");
+    sampleBlockNextTick(b,e.getPlayer(),"block_place_event");
   }
   @EventHandler(priority=EventPriority.MONITOR, ignoreCancelled=true)
   public void onDrop(BlockDropItemEvent e) {
