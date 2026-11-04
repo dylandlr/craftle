@@ -97,3 +97,31 @@ test('observation provides task destination but no construction recipe',()=>{
  assert.deepEqual(obs.goal,{x:3,y:5,z:0});
  assert.equal(obs.bridgePlan,undefined);
 });
+
+test('rotated chasm is a physical rotation, not a positive-X shortcut',()=>{
+ const dirs={east:{x:3,z:0,dx:1,dz:0},west:{x:-3,z:0,dx:-1,dz:0},
+  north:{x:0,z:-3,dx:0,dz:-1},south:{x:0,z:3,dx:0,dz:1}};
+ for(const [direction,g] of Object.entries(dirs)){
+  const w=createMutableTerrain({layout:'chasm',chasmDirection:direction,
+   span:3,platformHeight:5,initialBlocks:5});
+  assert.deepEqual(w.observe().goal,{x:g.x,y:5,z:g.z});
+  assert.equal(w.blockAt(g.x,4,g.z).name,'stone');
+  const advance=()=>choose(w,'move',a=>a.arguments.dx===g.dx&&a.arguments.dz===g.dz);
+  assert.equal(w.act(advance()).ok,true);
+  const gap={x:g.dx*2,y:4,z:g.dz*2};
+  const target=choose(w,'place',a=>Object.entries(gap).every(([k,v])=>
+   a.evidence.destination[k]===v));
+  assert.ok(target,'generic placement must exist for '+direction);
+  assert.equal(w.act(target).ok,true);
+  assert.equal(w.act(advance()).ok,true);
+  const outcome=w.act(advance());
+  assert.equal(outcome.reachedLowerGround,true,direction);
+  assert.equal(w.snapshot().health,20,direction);
+ }
+});
+test('fork preserves rotated direction and rejects incompatible snapshots',()=>{
+ const w=createMutableTerrain({layout:'chasm',chasmDirection:'north',span:3});
+ assert.deepEqual(w.fork().observe().goal,w.observe().goal);
+ assert.throws(()=>createMutableTerrain({layout:'chasm',chasmDirection:'south',
+  span:3,restore:w.exportState()}),/Incompatible/);
+});
