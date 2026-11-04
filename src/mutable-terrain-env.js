@@ -36,10 +36,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   for(let x=span;x<=span+2;x++)for(let z=-1;z<=1;z++){
    const cell=toWorld(x,z);set(cell.x,platformHeight-1,cell.z,STONE);
   }
-  // Environmental variation: a single solid obstacle at the entry to the
-  // far platform. It can be removed with the same generic dig actuator;
-  // no new task-specific construction or excavation operation is provided.
-  if(goalObstructed){const entry=toWorld(span,0);
+  // A solid entry barrier across the width of the far platform. A physically
+  // valid path through it requires changing the environment. This is world
+  // generation only, not a policy-specific dig/bridge action or solution.
+  if(goalObstructed)for(let across=-1;across<=1;across++){
+   const entry=toWorld(span,across);
    set(entry.x,platformHeight,entry.z,STONE);
   }
  }else if(layout!=='isolated')throw Error('Unknown world layout');
