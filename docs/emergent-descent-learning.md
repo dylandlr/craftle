@@ -159,3 +159,29 @@ offset zero. It also combines offset two and depth two in a rotated world.
 This rules out some fixed-position action sequences and records failure traces,
 but the entire task is still a deliberately simplified artificial world.
 Do not claim the new offset results until they have been executed.
+
+## Perception versus affordance — verified counterfactual attribution
+
+User-run synthetic counterfactual evaluation of 24 matched pairs found mixed
+planner-assisted frozen model:
+- 24/24 correct dig (blocked) vs move (clear) when the affordance menu
+  is recomputed.
+- 0/24 action switches when the stale blocked-world candidate menu is held
+  fixed despite changing only block perception.
+- Mean forward-movement Q increase of ~0.4059 when obstruction is made
+  perceptually absent, compared to ~0.000233 for east-only baseline.
+- All 24 stale dig preferences are removed by revalidating candidates against
+  the changed observation, recovering move in 24/24 pairs.
+
+Thus *learned value sensitivity and affordance grounding both matter*; a
+raw Q-network alone has **not** demonstrated reliable fixed-menu selection.
+
+A new, **synthetic-only** `motor-freshness-guard.js` prototype checks a
+proposed candidate's identity against a freshly enumerated menu and observed
+preconditions immediately before simulated execution. It returns executor
+outcomes rather than treating a proposal as an achieved action, never chooses
+a substitute for a rejected stale candidate, and does not touch the live
+Turesla controller. Newly committed tests await user execution. This is a
+research fixture: the actual Mineflayer/authoritative-server integration
+still requires server-issued ticks and observational receipts, source-of-truth
+block changes, safe reach checks, and tested race-condition handling.
