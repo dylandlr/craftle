@@ -125,3 +125,22 @@ test('fork preserves rotated direction and rejects incompatible snapshots',()=>{
  assert.throws(()=>createMutableTerrain({layout:'chasm',chasmDirection:'south',
   span:3,restore:w.exportState()}),/Incompatible/);
 });
+
+test('rotated worlds never offer placements with out-of-reach reference blocks',()=>{
+ for(const direction of ['east','west','north','south']){
+  const w=createMutableTerrain({layout:'chasm',chasmDirection:direction,
+   span:3,platformHeight:5,initialBlocks:5});
+  const g=w.observe().goal,dx=Math.sign(g.x),dz=Math.sign(g.z);
+  const move=w.affordances().find(a=>a.operation==='move'&&
+   a.arguments.dx===dx&&a.arguments.dz===dz);
+  assert.equal(w.act(move).ok,true);
+  const p=w.snapshot().position;
+  for(const candidate of w.affordances().filter(a=>a.operation==='place')){
+   const ref=candidate.arguments.reference,dest=candidate.evidence.destination;
+   for(const q of [ref,dest])
+    assert.ok(Math.max(Math.abs(q.x-p.x),Math.abs(q.y-p.y),
+      Math.abs(q.z-p.z))<=1,
+     JSON.stringify({direction,position:p,invalid:candidate.arguments}));
+  }
+ }
+});
