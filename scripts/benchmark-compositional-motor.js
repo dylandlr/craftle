@@ -9,8 +9,9 @@ const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
  !Number.isInteger(imitationPasses)||imitationPasses<1||imitationPasses>500)
  throw Error('Invalid benchmark parameters');
-const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east',goalObstructed=false,obstacleDepth=1,initialBlocks=null})=>
- createMutableTerrain({seed,span,layout,chasmDirection,goalObstructed,obstacleDepth,platformHeight:4+seed%3,
+const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east',goalObstructed=false,obstacleDepth=1,obstacleOffset=0,initialBlocks=null})=>
+ createMutableTerrain({seed,span,layout,chasmDirection,goalObstructed,obstacleDepth,
+  obstacleOffset,platformHeight:4+seed%3,
   initialBlocks:initialBlocks??span+3,maxSteps:limit});
 function collectDemo(seed,goalObstructed=false){
  const world=construct({seed,goalObstructed});
@@ -54,8 +55,10 @@ function train(records){
 const baseline=train(openRecords);
 const mixed=train([...openRecords,...obstacleRecords]);
 function evaluate(policy,{seed,span=3,allowPlace=true,allowDig=true,
- chasmDirection='east',goalObstructed=false,obstacleDepth=1,initialBlocks=null}={}){
- const w=construct({seed,span,chasmDirection,goalObstructed,obstacleDepth,initialBlocks});
+ chasmDirection='east',goalObstructed=false,obstacleDepth=1,obstacleOffset=0,
+ initialBlocks=null}={}){
+ const w=construct({seed,span,chasmDirection,goalObstructed,obstacleDepth,
+  obstacleOffset,initialBlocks});
  const operations={};const trace=[];let placed=0,dug=0;
  while(!w.snapshot().done){
   const state=w.observe(),candidates=w.affordances()
@@ -75,7 +78,9 @@ function evaluate(policy,{seed,span=3,allowPlace=true,allowDig=true,
   chasmDirection==='north'?-s.position.z:s.position.z;
  const across=chasmDirection==='east'||chasmDirection==='west'?s.position.z:s.position.x;
  return {seed,span,allowPlace,allowDig,chasmDirection,goalObstructed,obstacleDepth,
-  success:s.done&&s.health>0&&along>=span+(goalObstructed?obstacleDepth-1:0)&&
+  obstacleOffset,
+  success:s.done&&s.health>0&&
+  along>=span+(goalObstructed?obstacleOffset+obstacleDepth-1:0)&&
   Math.abs(across)<=1&&s.position.y===s.goal.y,
   health:s.health,steps:s.steps,placed,dug,operations,trace};
 }
@@ -95,7 +100,13 @@ const configs=[
  {label:'twoLayerBarrierEast',args:{goalObstructed:true,obstacleDepth:2}},
  {label:'twoLayerBarrierWest',args:{goalObstructed:true,obstacleDepth:2,chasmDirection:'west'}},
  {label:'threeLayerBarrierNorth',args:{goalObstructed:true,obstacleDepth:3,chasmDirection:'north'}},
- {label:'threeLayerBarrierNoDig',args:{goalObstructed:true,obstacleDepth:3,allowDig:false}}
+ {label:'threeLayerBarrierNoDig',args:{goalObstructed:true,obstacleDepth:3,allowDig:false}},
+ {label:'delayedBarrierEast',args:{goalObstructed:true,obstacleOffset:1}},
+ {label:'delayedBarrierWest',args:{goalObstructed:true,obstacleOffset:2,chasmDirection:'west'}},
+ {label:'delayedBarrierNorth',args:{goalObstructed:true,obstacleOffset:2,chasmDirection:'north'}},
+ {label:'delayedBarrierNoDig',args:{goalObstructed:true,obstacleOffset:2,allowDig:false}},
+ {label:'delayedTwoLayerSouth',args:{goalObstructed:true,obstacleDepth:2,
+  obstacleOffset:2,chasmDirection:'south'}}
 ];
 const summary=(label,records)=>({
  label,runs:records.length,
@@ -115,7 +126,8 @@ for(const [arm,trained] of [['east_only',baseline],['mixed_search',mixed]]){
  for(const {label,args} of configs){
   const records=heldoutSeeds.map(seed=>evaluate(trained.policy,{seed,...args}));
   evaluations.push({arm,...summary(label,records)});
-  if(['obstructedEast','obstructedWest','openEast','twoLayerBarrierEast','threeLayerBarrierNorth'].includes(label))
+  if(['obstructedEast','obstructedWest','openEast','twoLayerBarrierEast',
+   'threeLayerBarrierNorth','delayedBarrierWest','delayedTwoLayerSouth'].includes(label))
    examples[arm+'_'+label]={
     success:records.find(r=>r.success)?.trace??null,
     failure:records.find(r=>!r.success)?.trace?.slice(0,12)??null
@@ -140,6 +152,7 @@ console.log(JSON.stringify({
   'Mixed model sees obstacle worlds during teaching; success is not independent discovery.',
   'No changes to live Turesla or its original DQN checkpoint.',
   'Multi-layer barrier depths 2 and 3 are completely excluded from teacher examples.',
+  'Delayed barrier offsets 1 and 2 are also excluded from teacher examples.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
