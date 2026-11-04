@@ -72,8 +72,9 @@ test('position drift invalidates an earlier decision',()=>{
 test('freshness guard never invents a new action when stale selection fails',()=>{
  const w=nearBarrier(),goal=w.snapshot().goal;
  const old=w.affordances().find(c=>c.operation==='dig'&&
-  c.arguments.position.x===goal.x&&c.arguments.position.y===goal.y);
- assert.ok(old);
+  c.arguments.position.x===goal.x&&c.arguments.position.y===goal.y&&
+  c.arguments.position.z===goal.z);
+ assert.ok(old,'the stale candidate must target exactly the removed block');
  w.world.delete([goal.x,goal.y,goal.z].join(','));
  const result=executeFreshMotorDecision(w,old);
  assert.equal(result.candidate,null);
