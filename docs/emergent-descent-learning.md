@@ -101,3 +101,27 @@ Current implementation state:
 - `src/unified-descent.js`: geometric reference candidate planner.
 - `src/descent-executor.js`: one-block embodied attempt with outcome checks.
 - Other Minecraft actions remain partially wired or unverified in a live server.
+
+## November 2026: negative results and planning-assisted control
+
+The initial candidate-policy trials found 0/240 training and 0/20 frozen chasm
+successes, even after balancing exploration and adding generic local-state
+novelty. The frozen policy disproportionately selected `wait` and exhausted
+its horizon without reaching a goal. A generic bounded search independently
+found and successfully replayed a sequence of four atomic actions in the
+small span-3 chasm. This establishes feasibility in the *toy physics*, not
+Minecraft or independent learned construction.
+
+The next experimental arm uses search-generated examples to train the
+same candidate-value network through pairwise imitation. It is explicitly
+`planning_assisted`, **not** a legitimate claim of emergent unassisted
+reinforcement learning. Comparing held-out frozen results with placement
+removed is mandatory. The standalone RL result remains the unassisted
+baseline and must not be overwritten.
+
+A general planner is not itself a hand-authored bridge recipe, but privileged
+full simulator forks give this arm an informational advantage not available to
+a real Mineflayer agent. Future work must restrict a learned world model to
+agent-generated observation/action histories before testing model-based
+planning in Minecraft. Report planner teacher provenance and separate
+simulation performance from real Minecraft block-change receipts.
