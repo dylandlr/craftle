@@ -134,6 +134,62 @@ for(const [arm,trained] of [['east_only',baseline],['mixed_search',mixed]]){
    };
  }
 }
+// Matched-state counterfactual: identical state, action horizon, inventory,
+// goal and coordinates; only the obstructing cell at the next step changes.
+// The intervention is evaluation-only and is NOT included in policy training.
+function counterfactualTrial(policy,{seed,chasmDirection}){
+ const world=construct({seed,chasmDirection,goalObstructed:true});
+ const goal=world.snapshot().goal;
+ const dx=Math.sign(goal.x),dz=Math.sign(goal.z);
+ const advance=()=>world.affordances().find(c=>c.operation==='move'&&
+  c.arguments.dx===dx&&c.arguments.dz===dz);
+ const first=world.act(advance());
+ if(!first.ok)throw Error('Counterfactual setup failed: initial move');
+ const q={x:2*dx,y:world.snapshot().position.y-1,z:2*dz};
+ const support=world.affordances().find(c=>c.operation==='place'&&
+  c.evidence.destination.x===q.x&&
+  c.evidence.destination.y===q.y&&c.evidence.destination.z===q.z);
+ if(!support||!world.act(support).ok)throw Error('Counterfactual setup failed: support');
+ if(!world.act(advance()).ok)throw Error('Counterfactual setup failed: second move');
+ const blocked=world.fork(),clear=world.fork();
+ const blocker=goal.x+','+goal.y+','+goal.z;
+ if(blocked.blockAt(goal.x,goal.y,goal.z).name!=='stone')
+  throw Error('Counterfactual setup missing obstruction');
+ clear.world.delete(blocker);
+ if(clear.blockAt(goal.x,goal.y,goal.z).name!=='air')
+  throw Error('Counterfactual intervention did not clear obstacle');
+ const assess=w=>{
+  const obs=w.observe(),candidates=w.affordances();
+  const scores=policy.scoreCandidates(obs,candidates);
+  const chosen=policy.choose(obs,candidates).candidate;
+  if(!chosen)throw Error('No executable counterfactual candidate');
+  return {chosenOperation:chosen.operation,chosenArguments:chosen.arguments,
+   bestMoveQ:Math.max(-Infinity,...scores.filter(s=>s.operation==='move').map(s=>s.q)),
+   bestDigQ:Math.max(-Infinity,...scores.filter(s=>s.operation==='dig').map(s=>s.q)),
+   candidateCount:scores.length,
+   nextCell:w.blockAt(goal.x,goal.y,goal.z).name,
+   position:obs.position,goal:obs.goal};
+ };
+ const a=assess(blocked),b=assess(clear);
+ if(JSON.stringify(a.position)!==JSON.stringify(b.position)||
+  JSON.stringify(a.goal)!==JSON.stringify(b.goal)||
+  JSON.stringify(blocked.snapshot().inventory)!==JSON.stringify(clear.snapshot().inventory))
+  throw Error('Counterfactual pair was not matched');
+ return {seed,chasmDirection,blocked:a,clear:b,
+  responsive:a.chosenOperation==='dig'&&b.chosenOperation==='move'};
+}
+const counterfactualPairs=[];
+for(const [arm,trained] of [['east_only',baseline],['mixed_search',mixed]])
+ for(const direction of ['east','west','north','south'])
+  for(const seed of heldoutSeeds.slice(0,6))
+   counterfactualPairs.push({arm,...counterfactualTrial(trained.policy,{
+    seed,chasmDirection:direction})});
+const counterfactualSummary=['east_only','mixed_search'].map(arm=>{
+ const pairs=counterfactualPairs.filter(x=>x.arm===arm);
+ return {arm,pairs:pairs.length,responsive:pairs.filter(x=>x.responsive).length,
+  blockedDig:pairs.filter(x=>x.blocked.chosenOperation==='dig').length,
+  clearMove:pairs.filter(x=>x.clear.chosenOperation==='move').length};
+});
 console.log(JSON.stringify({
  schema:'craftle.compositional-planning-assisted.v1',
  synthetic:true,realMinecraft:false,plannerAssisted:true,
@@ -146,6 +202,7 @@ console.log(JSON.stringify({
  },
  policyUpdates:{east_only:baseline.updates,mixed_search:mixed.updates},
  evaluations,examples,
+ counterfactualSummary,counterfactualExamples:counterfactualPairs.filter(x=>x.seed===5001),
  caveats:[
   'Both models train from privileged simulator search-generated examples.',
   'Only eastward worlds are demonstrated; rotated outcomes are held out.',
@@ -153,6 +210,7 @@ console.log(JSON.stringify({
   'No changes to live Turesla or its original DQN checkpoint.',
   'Multi-layer barrier depths 2 and 3 are completely excluded from teacher examples.',
   'Delayed barrier offsets 1 and 2 are also excluded from teacher examples.',
+  'Counterfactual pairs intervene on exactly one solid cell at matched states in the synthetic world.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
