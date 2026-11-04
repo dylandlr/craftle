@@ -8,8 +8,9 @@ const solid=b=>b&&b.name!==AIR;
 const block=name=>({name,boundingBox:name===AIR?'empty':'block'});
 export function createMutableTerrain({seed=1,platformHeight=5,span=6,
  initialBlocks=5,maxSteps=120,layout='isolated',restore=null,
- chasmDirection='east'}={}){
+ chasmDirection='east',goalObstructed=false}={}){
  if(!['east','west','north','south'].includes(chasmDirection))throw Error('Invalid chasm direction');
+ if(typeof goalObstructed!=='boolean')throw Error('Invalid obstacle flag');
  if(!Number.isInteger(platformHeight)||platformHeight<2||platformHeight>16||
   !Number.isInteger(span)||span<3||span>16||!Number.isInteger(initialBlocks)||
   initialBlocks<0||initialBlocks>64)throw Error('Invalid terrain setup');
@@ -35,6 +36,12 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   for(let x=span;x<=span+2;x++)for(let z=-1;z<=1;z++){
    const cell=toWorld(x,z);set(cell.x,platformHeight-1,cell.z,STONE);
   }
+  // Environmental variation: a single solid obstacle at the entry to the
+  // far platform. It can be removed with the same generic dig actuator;
+  // no new task-specific construction or excavation operation is provided.
+  if(goalObstructed){const entry=toWorld(span,0);
+   set(entry.x,platformHeight,entry.z,STONE);
+  }
  }else if(layout!=='isolated')throw Error('Unknown world layout');
  let position={x:0,y:platformHeight,z:0},health=20,inventory=initialBlocks,
   steps=0,done=false;
@@ -42,6 +49,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   if(restore.schema!=='craftle.mutable-terrain-state.v1'||restore.layout!==layout||
    restore.span!==span||restore.platformHeight!==platformHeight||
    (restore.chasmDirection??'east')!==chasmDirection||
+   Boolean(restore.goalObstructed)!==goalObstructed||
    !Array.isArray(restore.blocks))throw Error('Incompatible terrain snapshot');
   world.clear();for(const [cell,name] of restore.blocks)world.set(cell,name);
   position={...restore.position};health=restore.health;inventory=restore.inventory;
@@ -59,10 +67,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   return {fall:d,damage,voidDeath};
  };
  const exportState=()=>({schema:'craftle.mutable-terrain-state.v1',layout,span,
-  platformHeight,initialBlocks,maxSteps,seed,chasmDirection,position:{...position},health,
+  platformHeight,initialBlocks,maxSteps,seed,chasmDirection,goalObstructed,
+  position:{...position},health,
   inventory,steps,done,blocks:[...world.entries()]});
  const fork=()=>createMutableTerrain({seed,platformHeight,span,initialBlocks,
-  maxSteps,layout,chasmDirection,restore:exportState()});
+  maxSteps,layout,chasmDirection,goalObstructed,restore:exportState()});
  const snapshot=()=>({position:{...position},goal:goalPosition(),health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
   worldBlocks:world.size,steps,done});
@@ -142,7 +151,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    ...physics,reachedLowerGround,done,reward};
  };
  return {schema:'craftle.mutable-terrain.v1',observe,affordances,act,snapshot,
-  blockAt,world,layout,seed,chasmDirection,exportState,fork,
+  blockAt,world,layout,seed,chasmDirection,goalObstructed,exportState,fork,
   limits:['Discrete block positions, no Mineflayer movement or Minecraft physics.',
    'No entity, hunger, fluid simulation, crafting or tool durability.',
    'A successful benchmark does not establish live Minecraft mastery.']};
