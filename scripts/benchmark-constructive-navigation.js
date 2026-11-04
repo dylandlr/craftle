@@ -12,6 +12,7 @@ function episode({policy=null,seed,train=false,allowPlace=true,layout='chasm'}){
  let rng=(seed*5923+11)>>>0;
  const random=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
  let placed=0,dug=0,fallDamage=0,invalid=0,success=false;
+ const trace=[];
  while(!world.snapshot().done){
   const state=world.observe();
   const candidates=world.affordances().filter(a=>allowPlace||a.operation!=='place');
@@ -19,6 +20,10 @@ function episode({policy=null,seed,train=false,allowPlace=true,layout='chasm'}){
    {candidate:candidates[Math.floor(random()*candidates.length)]};
   if(!chosen.candidate)break;
   const result=world.act(chosen.candidate);
+  if(trace.length<limit)trace.push({op:chosen.candidate.operation,
+   args:chosen.candidate.arguments,change:result.change,
+   position:result.after,damage:result.damage,ok:result.ok,
+   success:result.reachedLowerGround});
   const next=world.observe();
   const nextCandidates=world.affordances().filter(a=>allowPlace||a.operation!=='place');
   if(policy&&train)policy.observe({features:chosen.features,reward:result.reward,
@@ -28,7 +33,7 @@ function episode({policy=null,seed,train=false,allowPlace=true,layout='chasm'}){
   fallDamage+=result.damage;invalid+=Number(!result.ok);
   success ||=result.reachedLowerGround;
  }
- return {seed,success,steps:world.snapshot().steps,placed,dug,fallDamage,invalid};
+ return {seed,success,steps:world.snapshot().steps,placed,dug,fallDamage,invalid,trace};
 }
 function summary(label,records){
  const avg=k=>Number((records.reduce((s,r)=>s+r[k],0)/records.length).toFixed(3));
