@@ -32,3 +32,19 @@ test('generic legal-action search can find successful chasm actions without a ma
  }
  assert.equal(reached,true);
 });
+
+test('generic control is not hard-coded to search east',()=>{
+ const west=createMutableTerrain({layout:'chasm',chasmDirection:'west',
+  span:3,platformHeight:5,initialBlocks:5,maxSteps:20});
+ const p=searchMutableTerrain(west,{depth:8,beamWidth:36,maxCandidates:150});
+ assert.equal(p.solved,true,JSON.stringify({expanded:p.expanded,reason:p.reason}));
+ const replay=west.fork();let success=false;
+ for(const step of p.trace){
+  const legal=replay.affordances().find(c=>c.operation===step.operation&&
+   JSON.stringify(c.arguments)===JSON.stringify(step.args));
+  assert.ok(legal);
+  const out=replay.act(legal);assert.equal(out.ok,true);
+  success||=out.reachedLowerGround;
+ }
+ assert.equal(success,true);
+});
