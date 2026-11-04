@@ -38,7 +38,8 @@ export function encodeMotorCandidate(observation={},candidate={}){
  return vec;
 }
 export function createMotorQPolicy({seed=17,epsilon=0.3,gamma=0.95,alpha=0.001,
- hidden=24,snapshot=null,training=true}={}){
+ hidden=24,snapshot=null,training=true,explorationMode='candidate_uniform'}={}){
+ if(!['candidate_uniform','operation_balanced'].includes(explorationMode))throw Error('Invalid exploration mode');
  if(!Number.isFinite(epsilon)||epsilon<0||epsilon>1||!Number.isInteger(hidden)||hidden<1)
   throw Error('Invalid policy parameters');
  let rng=seed>>>0;
@@ -69,11 +70,17 @@ export function createMotorQPolicy({seed=17,epsilon=0.3,gamma=0.95,alpha=0.001,
    const scores=rank(obs,candidates);
    if(!scores.length)return {candidate:null,reason:'no_executable_candidate'};
    const exploratory=training&&random()<epsilon;
-   const selected=exploratory?scores[Math.floor(random()*scores.length)]:
+   let selected;
+   if(exploratory&&explorationMode==='operation_balanced'){
+    const operations=[...new Set(scores.map(s=>s.candidate.operation))];
+    const operation=operations[Math.floor(random()*operations.length)];
+    const same=scores.filter(s=>s.candidate.operation===operation);
+    selected=same[Math.floor(random()*same.length)];
+   }else selected=exploratory?scores[Math.floor(random()*scores.length)]:
     scores.reduce((best,c)=>!best||c.q>best.q?c:best,null);
    return {candidate:selected.candidate,features:selected.features,
     estimatedQ:selected.q,exploratory,eligibleCount:scores.length,
-    reason:exploratory?'exploration':'estimated_value'};
+    reason:exploratory?explorationMode:'estimated_value'};
   },
   observe({features,reward,nextObservation,nextCandidates=[],terminal=false,steps=1}={}){
    if(!training)throw Error('Cannot train frozen policy');
