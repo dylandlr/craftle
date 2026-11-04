@@ -177,9 +177,42 @@ function counterfactualTrial(policy,{seed,chasmDirection}){
   JSON.stringify(blocked.snapshot().inventory)!==JSON.stringify(clear.snapshot().inventory))
   throw Error('Counterfactual pair was not matched');
  const comparison=compareCandidateMenus(a.scores,b.scores);
+ // Controlled perception intervention: do not regenerate the action menu.
+ // Both scores use the *same executable candidate objects* from the blocked
+ // world; only the returned block at the targeted cell is counterfactually air.
+ const fixedCandidates=blocked.affordances();
+ const originalObservation=blocked.observe();
+ const originalBlockAt=originalObservation.blockAt;
+ const maskedObservation={...originalObservation,
+  blockAt:(x,y,z)=>x===goal.x&&y===goal.y&&z===goal.z?
+   {name:'air',boundingBox:'empty'}:originalBlockAt(x,y,z)};
+ const fixedBlocked=policy.scoreCandidates(originalObservation,fixedCandidates);
+ const fixedClearPerception=policy.scoreCandidates(maskedObservation,fixedCandidates);
+ if(fixedBlocked.length!==fixedClearPerception.length)
+  throw Error('Fixed-menu perception intervention changed candidate set');
+ const fixedPairs=fixedBlocked.map((row,i)=>({
+  id:row.id,operation:row.operation,
+  blockedQ:row.q,clearPerceptionQ:fixedClearPerception[i].q,
+  deltaQ:fixedClearPerception[i].q-row.q}));
+ const preferred=rows=>rows.reduce((best,row)=>!best||row.q>best.q?row:best,null);
+ const originalTop=preferred(fixedBlocked);
+ const maskedTop=preferred(fixedClearPerception);
+ const forwardMove=fixedPairs.find(row=>row.id===advance()?.id);
+ // Avoid evaluating the source environment by calling advance() here: the
+ // world is a predecessor of both forks and remains unchanged.
+ const perceptionIntervention={
+  candidateCount:fixedCandidates.length,
+  originalPreferred:originalTop?.operation??null,
+  maskedPreferred:maskedTop?.operation??null,
+  preferredSwitch:originalTop?.id!==maskedTop?.id,
+  forwardMoveDeltaQ:forwardMove?.deltaQ??null,
+  maxAbsoluteDeltaQ:Math.max(0,...fixedPairs.map(row=>Math.abs(row.deltaQ))),
+  changedCandidateScores:fixedPairs.filter(row=>Math.abs(row.deltaQ)>1e-10).length
+ };
  const {scores:blockedScores,...blockedSummary}=a;
  const {scores:clearScores,...clearSummary}=b;
  return {seed,chasmDirection,blocked:blockedSummary,clear:clearSummary,
+  perceptionIntervention,
   comparison:{...comparison,sharedDeltas:comparison.sharedDeltas
    .filter(d=>Math.abs(d.deltaQ)>1e-10).slice(0,8)},
   responsive:a.chosenOperation==='dig'&&b.chosenOperation==='move'};
@@ -199,7 +232,10 @@ const counterfactualSummary=['east_only','mixed_search'].map(arm=>{
   anySharedScoreChange:pairs.filter(x=>x.comparison.changedSharedScores>0).length,
   meanSharedActions:pairs.reduce((s,x)=>s+x.comparison.sharedCount,0)/pairs.length,
   meanOnlyBlocked:pairs.reduce((s,x)=>s+x.comparison.onlyBlockedCount,0)/pairs.length,
-  meanOnlyClear:pairs.reduce((s,x)=>s+x.comparison.onlyClearCount,0)/pairs.length};
+  meanOnlyClear:pairs.reduce((s,x)=>s+x.comparison.onlyClearCount,0)/pairs.length,
+  fixedMenuPreferenceSwitches:pairs.filter(x=>x.perceptionIntervention.preferredSwitch).length,
+  meanForwardPerceptionDeltaQ:pairs.reduce((s,x)=>s+(x.perceptionIntervention.forwardMoveDeltaQ??0),0)/pairs.length,
+  meanFixedMenuChangedScores:pairs.reduce((s,x)=>s+x.perceptionIntervention.changedCandidateScores,0)/pairs.length};
 });
 console.log(JSON.stringify({
  schema:'craftle.compositional-planning-assisted.v1',
@@ -223,6 +259,7 @@ console.log(JSON.stringify({
   'Delayed barrier offsets 1 and 2 are also excluded from teacher examples.',
   'Counterfactual pairs intervene on exactly one solid cell at matched states in the synthetic world.',
   'Shared candidate menu and Q changes are audited separately; new/disappearing actions may explain decision switches.',
+  'Fixed-menu perceptual interventions retain identical blocked-world candidate objects and change only the observed next cell.',
   'Synthetic toy terrain does not establish real Minecraft feasibility.'
  ]
 },null,2));
