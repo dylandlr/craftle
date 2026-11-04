@@ -20,14 +20,22 @@ test('critical HP refuses multi-block descent',()=>{
  assert.equal(p.selected,null);
  assert.equal(p.reason,'no_verified_safe_stepdown');
 });
-test('nonleaf footing is distinguished from low-health prohibition',()=>{
+test('log footing is considered but rejects unavailable verified stepdown',()=>{
  const blockAt=(x,y,z)=>x===0&&y===74&&z===0?{name:'oak_log',boundingBox:'block'}:air;
  const p=findCanopyStepdown({position:origin,health:1,blockAt});
- assert.equal(p.reason,'not_on_canopy');
+ assert.equal(p.reason,'no_verified_safe_stepdown');
  assert.equal(p.underfoot,'oak_log');
 });
 test('unknown local geometry cannot count as safe descent',()=>{
  const blockAt=(x,y,z)=>x===0&&y===74&&z===0?leaf:null;
  const p=findCanopyStepdown({position:origin,health:1,blockAt});
  assert.equal(p.selected,null);
+});
+
+test('one-HP log footing can use a verified short descent',()=>{
+ const blockAt=(x,y,z)=>x===0&&y===74&&z===0?{name:'oak_log',boundingBox:'block'}:
+   x===1&&y===73&&z===0?stone:air;
+ const p=findCanopyStepdown({position:origin,health:1,blockAt});
+ assert.equal(p.selected?.drop,1);
+ assert.equal(p.reason,'verified_short_stepdown');
 });
