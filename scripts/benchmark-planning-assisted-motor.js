@@ -9,9 +9,9 @@ const imitationPasses=Number(process.argv[3]??100);
 if(!Number.isInteger(demonstrationCount)||demonstrationCount<3||demonstrationCount>90||
  !Number.isInteger(imitationPasses)||imitationPasses<1||imitationPasses>500)
  throw Error('Invalid benchmark parameters');
-const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east'})=>
- createMutableTerrain({seed,span,layout,chasmDirection,platformHeight:4+seed%3,
-  initialBlocks:span+3,maxSteps:limit});
+const construct=({seed,span=3,layout='chasm',limit=30,chasmDirection='east',goalObstructed=false,initialBlocks=null})=>
+ createMutableTerrain({seed,span,layout,chasmDirection,goalObstructed,platformHeight:4+seed%3,
+  initialBlocks:initialBlocks??span+3,maxSteps:limit});
 function collectDemo(seed){
  const world=construct({seed});
  const control=searchMutableTerrain(world,{depth:8,beamWidth:36,maxCandidates:150});
@@ -48,12 +48,14 @@ for(let epoch=0;epoch<imitationPasses;epoch++){
 }
 const frozen=createMotorQPolicy({seed:71,epsilon:0,training:false,
  snapshot:assisted.snapshot()});
-function evaluate(policy,{seed,span=3,allowPlace=true,chasmDirection='east'}={}){
- const w=construct({seed,span,chasmDirection});
+function evaluate(policy,{seed,span=3,allowPlace=true,allowDig=true,
+ chasmDirection='east',goalObstructed=false,initialBlocks=null}={}){
+ const w=construct({seed,span,chasmDirection,goalObstructed,initialBlocks});
  const operations={};const trace=[];let placed=0,dug=0;
  while(!w.snapshot().done){
   const state=w.observe(),candidates=w.affordances()
-   .filter(c=>allowPlace||c.operation!=='place');
+   .filter(c=>(allowPlace||c.operation!=='place')&&
+    (allowDig||c.operation!=='dig'));
   const chosen=policy.choose(state,candidates).candidate;
   if(!chosen)break;
   const out=w.act(chosen);
@@ -67,13 +69,14 @@ function evaluate(policy,{seed,span=3,allowPlace=true,chasmDirection='east'}={})
  const along=chasmDirection==='east'?s.position.x:chasmDirection==='west'?-s.position.x:
   chasmDirection==='north'?-s.position.z:s.position.z;
  const across=chasmDirection==='east'||chasmDirection==='west'?s.position.z:s.position.x;
- return {seed,span,allowPlace,chasmDirection,success:s.done&&s.health>0&&
+ return {seed,span,allowPlace,allowDig,chasmDirection,goalObstructed,success:s.done&&s.health>0&&
   along>=span&&Math.abs(across)<=1&&s.position.y===s.goal.y,
   health:s.health,steps:s.steps,placed,dug,operations,trace};
 }
 const heldoutSeeds=Array.from({length:18},(_,i)=>5001+i);
 const results={assisted:[],withoutPlace:[],untrained:[],outOfDistribution:[],
- rotatedWest:[],rotatedNorth:[],rotatedSouth:[],rotatedWithoutPlace:[]};
+ rotatedWest:[],rotatedNorth:[],rotatedSouth:[],rotatedWithoutPlace:[],
+ obstructedEast:[],obstructedWest:[],obstructedNoDig:[],lowInventory:[]};
 const untrained=createMotorQPolicy({seed:17,epsilon:0,training:false});
 for(const seed of heldoutSeeds){
  results.assisted.push(evaluate(frozen,{seed}));
@@ -84,6 +87,10 @@ for(const seed of heldoutSeeds){
  results.rotatedNorth.push(evaluate(frozen,{seed,chasmDirection:'north'}));
  results.rotatedSouth.push(evaluate(frozen,{seed,chasmDirection:'south'}));
  results.rotatedWithoutPlace.push(evaluate(frozen,{seed,chasmDirection:'west',allowPlace:false}));
+ results.obstructedEast.push(evaluate(frozen,{seed,goalObstructed:true}));
+ results.obstructedWest.push(evaluate(frozen,{seed,chasmDirection:'west',goalObstructed:true}));
+ results.obstructedNoDig.push(evaluate(frozen,{seed,goalObstructed:true,allowDig:false}));
+ results.lowInventory.push(evaluate(frozen,{seed,initialBlocks:1}));
 }
 const summary=(label,rows)=>({label,n:rows.length,
  successes:rows.filter(x=>x.success).length,
@@ -104,7 +111,8 @@ console.log(JSON.stringify({
   .map(r=>({seed:r.seed,trace:r.trace})),
  failedExamples:results.assisted.filter(r=>!r.success).slice(0,1)
   .map(r=>({seed:r.seed,trace:r.trace})),
- rotatedExamples:Object.fromEntries(['rotatedWest','rotatedNorth','rotatedSouth']
+ rotatedExamples:Object.fromEntries(['rotatedWest','rotatedNorth','rotatedSouth',
+  'obstructedEast','obstructedWest','lowInventory']
   .map(label=>[label,{
    successful:results[label].find(r=>r.success)?.trace??null,
    failed:results[label].find(r=>!r.success)?.trace?.slice(0,12)??null
@@ -114,5 +122,6 @@ console.log(JSON.stringify({
  'The generic search planner is not wired to the Minecraft agent.',
  'Held-out seeds use the same small chasm family; span 4 is a limited shift.',
  'Rotated evaluation changes direction but does not alter training examples.',
+ 'Obstructed, no-dig and low-inventory arms reuse the original east-trained frozen policy.',
  'Successful motor controls do not establish physical Minecraft competence.']
 },null,2));
