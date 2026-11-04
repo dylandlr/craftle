@@ -110,3 +110,35 @@ test('rotated generic placement candidates share goal-relative features',()=>{
   for(let i=0;i<row.length;i++)assert.ok(Math.abs(row[i]-rows[0][i])<1e-9,
    'rotated placement feature '+i+' differs');
 });
+
+test('candidate Q audit is read-only and matches frozen greedy decision',()=>{
+ const world=createMutableTerrain({layout:'chasm',span:3,platformHeight:5});
+ const policy=createMotorQPolicy({epsilon:0,training:false});
+ const candidates=world.affordances(),before=policy.snapshot();
+ const scores=policy.scoreCandidates(world.observe(),candidates);
+ assert.equal(scores.length,candidates.length);
+ assert.ok(scores.every(s=>Number.isFinite(s.q)));
+ const max=scores.reduce((best,row)=>!best||row.q>best.q?row:best,null);
+ const chosen=policy.choose(world.observe(),candidates);
+ assert.equal(chosen.candidate.id,max.id);
+ assert.deepEqual(policy.snapshot(),before);
+});
+test('a one-cell obstruction intervention preserves agent state and goal',()=>{
+ const world=createMutableTerrain({layout:'chasm',span:3,platformHeight:5,
+  goalObstructed:true});
+ const move=()=>world.affordances().find(c=>c.operation==='move'&&c.arguments.dx===1);
+ assert.equal(world.act(move()).ok,true);
+ const place=world.affordances().find(c=>c.operation==='place'&&
+  c.evidence.destination.x===2&&c.evidence.destination.y===4&&
+  c.evidence.destination.z===0);
+ assert.equal(world.act(place).ok,true);
+ assert.equal(world.act(move()).ok,true);
+ const blocked=world.fork(),clear=world.fork(),goal=blocked.snapshot().goal;
+ clear.world.delete([goal.x,goal.y,goal.z].join(','));
+ assert.equal(blocked.blockAt(goal.x,goal.y,goal.z).name,'stone');
+ assert.equal(clear.blockAt(goal.x,goal.y,goal.z).name,'air');
+ assert.deepEqual(blocked.snapshot(),clear.snapshot());
+ const policy=createMotorQPolicy({training:false});
+ assert.ok(policy.scoreCandidates(blocked.observe(),blocked.affordances()).length);
+ assert.ok(policy.scoreCandidates(clear.observe(),clear.affordances()).length);
+});
