@@ -1,3 +1,4 @@
+import {createMutableTerrain} from '../src/mutable-terrain-env.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMotorQPolicy,encodeMotorCandidate,MOTOR_FEATURE_COUNT} from '../src/motor-q-policy.js';
