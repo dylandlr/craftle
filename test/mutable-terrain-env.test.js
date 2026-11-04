@@ -76,3 +76,24 @@ test('atomic placements can modify an otherwise lethal chasm without a bridge ac
  assert.equal(move.fall,0);
  assert.equal(move.after.x,2);
 });
+
+test('feasibility witness reaches held-out goal using generic legal actions',()=>{
+ const w=createMutableTerrain({layout:'chasm',span:3,platformHeight:5,initialBlocks:5,maxSteps:20});
+ const east=()=>choose(w,'move',c=>c.arguments.dx===1);
+ assert.equal(w.act(east()).ok,true);
+ const placement=choose(w,'place',c=>c.evidence.destination.x===2&&
+  c.evidence.destination.y===4&&c.evidence.destination.z===0);
+ assert.ok(placement);
+ assert.equal(w.act(placement).ok,true);
+ assert.equal(w.act(east()).ok,true);
+ const finish=w.act(east());
+ assert.equal(finish.reachedLowerGround,true);
+ assert.equal(finish.done,true);
+ assert.equal(w.snapshot().health,20);
+});
+test('observation provides task destination but no construction recipe',()=>{
+ const w=createMutableTerrain({layout:'chasm',span:3,platformHeight:5});
+ const obs=w.observe();
+ assert.deepEqual(obs.goal,{x:3,y:5,z:0});
+ assert.equal(obs.bridgePlan,undefined);
+});
