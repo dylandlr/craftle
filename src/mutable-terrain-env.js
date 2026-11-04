@@ -8,9 +8,11 @@ const solid=b=>b&&b.name!==AIR;
 const block=name=>({name,boundingBox:name===AIR?'empty':'block'});
 export function createMutableTerrain({seed=1,platformHeight=5,span=6,
  initialBlocks=5,maxSteps=120,layout='isolated',restore=null,
- chasmDirection='east',goalObstructed=false}={}){
+ chasmDirection='east',goalObstructed=false,obstacleDepth=1}={}){
  if(!['east','west','north','south'].includes(chasmDirection))throw Error('Invalid chasm direction');
  if(typeof goalObstructed!=='boolean')throw Error('Invalid obstacle flag');
+ if(!Number.isInteger(obstacleDepth)||obstacleDepth<1||obstacleDepth>3)
+  throw Error('Invalid obstacle depth');
  if(!Number.isInteger(platformHeight)||platformHeight<2||platformHeight>16||
   !Number.isInteger(span)||span<3||span>16||!Number.isInteger(initialBlocks)||
   initialBlocks<0||initialBlocks>64)throw Error('Invalid terrain setup');
@@ -19,7 +21,8 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   chasmDirection==='north'?{x:0,z:-1}:{x:0,z:1};
  const toWorld=(along,across)=>({x:along*axis.x-across*axis.z,
   z:along*axis.z+across*axis.x});
- const goalPosition=()=>({...toWorld(span,0),y:layout==='chasm'?platformHeight:1});
+ const targetAlong=layout==='chasm'&&goalObstructed?span+obstacleDepth-1:span;
+ const goalPosition=()=>({...toWorld(targetAlong,0),y:layout==='chasm'?platformHeight:1});
  const set=(x,y,z,name)=>{const k=key(x,y,z);if(name===AIR)world.delete(k);else world.set(k,name);};
  // Flat immutable bedrock level, a reachable ground surface outside a gap,
  // and a starting platform with no hand-authored escape arrangement.
@@ -39,10 +42,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   // A solid entry barrier across the width of the far platform. A physically
   // valid path through it requires changing the environment. This is world
   // generation only, not a policy-specific dig/bridge action or solution.
-  if(goalObstructed)for(let across=-1;across<=1;across++){
-   const entry=toWorld(span,across);
-   set(entry.x,platformHeight,entry.z,STONE);
-  }
+  if(goalObstructed)for(let distance=0;distance<obstacleDepth;distance++)
+   for(let across=-1;across<=1;across++){
+    const entry=toWorld(span+distance,across);
+    set(entry.x,platformHeight,entry.z,STONE);
+   }
  }else if(layout!=='isolated')throw Error('Unknown world layout');
  let position={x:0,y:platformHeight,z:0},health=20,inventory=initialBlocks,
   steps=0,done=false;
@@ -51,6 +55,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    restore.span!==span||restore.platformHeight!==platformHeight||
    (restore.chasmDirection??'east')!==chasmDirection||
    Boolean(restore.goalObstructed)!==goalObstructed||
+   (restore.obstacleDepth??1)!==obstacleDepth||
    !Array.isArray(restore.blocks))throw Error('Incompatible terrain snapshot');
   world.clear();for(const [cell,name] of restore.blocks)world.set(cell,name);
   position={...restore.position};health=restore.health;inventory=restore.inventory;
@@ -68,11 +73,11 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   return {fall:d,damage,voidDeath};
  };
  const exportState=()=>({schema:'craftle.mutable-terrain-state.v1',layout,span,
-  platformHeight,initialBlocks,maxSteps,seed,chasmDirection,goalObstructed,
+  platformHeight,initialBlocks,maxSteps,seed,chasmDirection,goalObstructed,obstacleDepth,
   position:{...position},health,
   inventory,steps,done,blocks:[...world.entries()]});
  const fork=()=>createMutableTerrain({seed,platformHeight,span,initialBlocks,
-  maxSteps,layout,chasmDirection,goalObstructed,restore:exportState()});
+  maxSteps,layout,chasmDirection,goalObstructed,obstacleDepth,restore:exportState()});
  const snapshot=()=>({position:{...position},goal:goalPosition(),health,food:20,
   inventory:[{name:DIRT,count:inventory,placeable:true}].filter(i=>i.count),
   worldBlocks:world.size,steps,done});
@@ -136,7 +141,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
   const along=position.x*axis.x+position.z*axis.z;
   const across=-position.x*axis.z+position.z*axis.x;
   const reachedLowerGround=layout==='chasm'?
-   along>=span&&Math.abs(across)<=1&&position.y===platformHeight&&health>0:
+   along>=targetAlong&&Math.abs(across)<=1&&position.y===platformHeight&&health>0:
    position.y<=1&&Math.abs(position.x)>=span;
   done=health<=0||reachedLowerGround||steps>=maxSteps;
   // Outcome reward only: progress is measured vertically and terminal goal.
@@ -152,7 +157,7 @@ export function createMutableTerrain({seed=1,platformHeight=5,span=6,
    ...physics,reachedLowerGround,done,reward};
  };
  return {schema:'craftle.mutable-terrain.v1',observe,affordances,act,snapshot,
-  blockAt,world,layout,seed,chasmDirection,goalObstructed,exportState,fork,
+  blockAt,world,layout,seed,chasmDirection,goalObstructed,obstacleDepth,exportState,fork,
   limits:['Discrete block positions, no Mineflayer movement or Minecraft physics.',
    'No entity, hunger, fluid simulation, crafting or tool durability.',
    'A successful benchmark does not establish live Minecraft mastery.']};
