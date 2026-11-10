@@ -239,8 +239,8 @@ async function episode({arm,number,objective,modelSnapshot,mode,manifest,checkpo
   const {observation,candidates}=taskCandidates(bot,objective);
   let selection;
   if(mode==='random') {
-    const randomSeed=(Math.imul(seed+number,1664525)+arm.length*31)>>>0;
-    const index=randomSeed%2;
+    // Independent reproducible Bernoulli draw, not an alternating pattern.
+    const index=createHash('sha256').update(runId+':random:'+number).digest()[0]&1;
     const candidate=candidates[index];
     const scorer=modelFrom(modelSnapshot,false,number);
     selection={candidate,features:scorer.choose(observation,[candidate]).features,
@@ -438,8 +438,10 @@ try {
     eval:armStats,
     advantageOverRandom:armStats.trained.successRate-armStats.random.successRate,
     advantageOverUntrained:armStats.trained.successRate-armStats.untrained.successRate,
-    demonstratedImprovement:armStats.trained.successRate>armStats.random.successRate &&
+    observedImprovement:armStats.trained.successRate>armStats.random.successRate &&
       armStats.trained.successRate>armStats.untrained.successRate,
+    learningEstablished:false,
+    note:'The smoke run measures wiring and observed performance; it is too small to establish statistically reliable improvement.',
     limitation:'Controlled independent one-step dig/place tasks with admin initial-state resets; not autonomous Minecraft survival or exclusive packet-level causality.'};
 } catch(error){
   summary={schema:'craftle.live-motor-learning-result.v1',
