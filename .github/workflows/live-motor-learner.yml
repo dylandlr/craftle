@@ -16,3 +16,4 @@ jobs:
         with:
           node-version: '20'
       - run: node --check scripts/run-live-motor-learning.js
+      - run: node scripts/diagnose-motor-q-learning.js
