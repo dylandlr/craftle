@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import mineflayer from 'mineflayer';
 import { createMotorQPolicy, MOTOR_FEATURE_COUNT } from '../src/motor-q-policy.js';
-import { executeMotorPrimitive, waitPhysicsTicks } from '../src/motor-acceptance.js';
+import { executeMotorPrimitive } from '../src/motor-acceptance.js';
 import { verifyMotorRewardEvidence } from '../src/verified-motor-reward-gate.js';
 import { paper1211ProtocolOverride } from '../src/paper-1211-protocol.js';
 import { guardProtocolIntegrity } from '../src/motor-protocol-integrity.js';
@@ -203,7 +203,37 @@ async function probe(id,target) {
   if(matches.length!==1) throw Error('Ambiguous server probe');
   return matches[0];
 }
-async function settle(n=6) { await waitPhysicsTicks(bot,n); await delay(120); }
+// Use Mineflayer's actual physics-tick events. The acceptance helper uses a
+// cancellation-aware API; calling it without its signal fails before training.
+async function settle(n=6) {
+  if (!bot || !Number.isSafeInteger(n) || n < 1 || n > 100)
+    throw Error('Invalid live physics-settle request');
+  await new Promise((resolve, reject) => {
+    let ticks = 0, complete = false;
+    const cleanup = () => {
+      bot.removeListener('physicsTick', onTick);
+      bot.removeListener('end', onEnd);
+      clearTimeout(timer);
+    };
+    const finish = error => {
+      if (complete) return;
+      complete = true;
+      cleanup();
+      if (error) reject(error); else resolve();
+    };
+    const onTick = () => {
+      ticks++;
+      if (ticks >= n) finish();
+    };
+    const onEnd = () => finish(Error('Bot disconnected during settle'));
+    const timer = setTimeout(() =>
+      finish(Error('Physics ticks did not arrive before deadline')),
+      Math.max(8000, n * 500));
+    bot.on('physicsTick', onTick);
+    bot.once('end', onEnd);
+  });
+  await delay(120);
+}
 async function resetFixture() {
   // Every intervention occurs before the decision's initial probe.
   const commands=[
