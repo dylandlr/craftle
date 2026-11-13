@@ -3,9 +3,13 @@ on:
   push:
     branches:
       - feat/live-motor-learning-first-run-20261109
+      - feat/motor-transfer-heldout-20261113
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
+      - 'scripts/run-live-motor-transfer.js'
+      - 'src/motor-transfer-tasks.js'
+      - 'test/motor-transfer-tasks.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
   syntax:
@@ -16,5 +20,8 @@ jobs:
         with:
           node-version: '20'
       - run: node --check scripts/run-live-motor-learning.js
+      - run: node --check scripts/run-live-motor-transfer.js
+      - run: node --test test/motor-transfer-tasks.test.js
+      - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
