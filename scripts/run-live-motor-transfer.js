@@ -481,6 +481,19 @@ try {
     return [arm,{successes:rows.filter(r=>r.success).length,trials:rows.length,
       successRate:rows.filter(r=>r.success).length/rows.length}];
   }));
+  const evaluationBreakdown=Object.fromEntries(['trained','untrained','random'].map(arm=>{
+    const records=results.filter(r=>r.arm===arm);
+    const rateFor=(field,value)=>{
+      const rows=records.filter(r=>r[field]===value);
+      return {correct:rows.filter(r=>r.success).length,total:rows.length,
+        accuracy:rows.length?rows.filter(r=>r.success).length/rows.length:null};
+    };
+    return [arm,{
+      byObjective:Object.fromEntries(['dig','place'].map(v=>[v,rateFor('objective',v)])),
+      byRotation:Object.fromEntries(MOTOR_TRANSFER_SPLITS.heldout.map(v=>[v,rateFor('rotation',v)])),
+      byDistance:Object.fromEntries([2,3].map(v=>[v,rateFor('distance',v)]))
+    }];
+  }));
   summary={schema:'craftle.live-motor-transfer-result.v1',runId,
     complete:true,trainingUpdates:trainCount,learningRate:alpha,
     serverVerifiedTrainDecisions:trainCount,
@@ -489,6 +502,7 @@ try {
     evaluatedRotations:MOTOR_TRANSFER_SPLITS.heldout,
     evaluationDistances:[2,3],
     eval:armStats,
+    evaluationBreakdown,
     advantageOverRandom:armStats.trained.successRate-armStats.random.successRate,
     advantageOverUntrained:armStats.trained.successRate-armStats.untrained.successRate,
     observedImprovement:armStats.trained.successRate>armStats.random.successRate &&
