@@ -40,15 +40,17 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const trainCount = Number(args.train ?? 24), evalCount = Number(args.eval ?? 8);
 const port = Number(args.port ?? 25619);
 const seed = Number(args.seed ?? 17);
+const alpha = Number(args.alpha ?? 0.015);
 const paperJar = path.resolve(args['paper-jar'] ??
   'C:/Users/delar/Downloads/craftle-main/craftle-observer-verify/observer-test/paper-1.21.1-133.jar');
 const runId = args['run-id'] ?? ('live-dqn-' + new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14));
 const selfTest = Object.hasOwn(args, 'self-test');
-if (!Object.keys(args).every(k => ['train','eval','port','seed','paper-jar','run-id','self-test'].includes(k)))
+if (!Object.keys(args).every(k => ['train','eval','port','seed','alpha','paper-jar','run-id','self-test'].includes(k)))
   throw Error('Unknown option');
 if (![trainCount, evalCount, port, seed].every(Number.isSafeInteger) ||
     trainCount < 1 || trainCount > 1000 || evalCount < 2 || evalCount > 500 ||
     port < 1024 || port > 65535 || seed < 0 ||
+    !Number.isFinite(alpha) || alpha <= 0 || alpha > 0.2 ||
     !/^[A-Za-z0-9_-]{1,54}$/.test(runId) || port === 25565 || port === 25567 || port === 25575)
   throw Error('Invalid run configuration or live-server port');
 if (port === 25617) throw Error('Port 25617 is reserved for prior calibration runs');
@@ -249,7 +251,7 @@ async function resetFixture() {
 }
 function modelFrom(snapshot, training, iteration) {
   return createMotorQPolicy({seed:seed+iteration*7919,
-    epsilon:training?0.35:0,hidden:24,alpha:0.015,
+    epsilon:training?0.35:0,hidden:24,alpha,
     gamma:0.95,training,snapshot});
 }
 function validateServerProof(manifest, decision, events) {
@@ -267,6 +269,8 @@ async function episode({arm,number,objective,modelSnapshot,mode,manifest,checkpo
      beforeDig.block!=='minecraft:dirt' || beforePlace.block!=='minecraft:air')
     throw Error('Server predecision fixture mismatch');
   const {observation,candidates}=taskCandidates(bot,objective);
+  const modelScores=modelFrom(modelSnapshot,false,number)
+    .scoreCandidates(observation,candidates);
   let selection;
   if(mode==='random') {
     // Independent reproducible Bernoulli draw, not an alternating pattern.
@@ -292,7 +296,7 @@ async function episode({arm,number,objective,modelSnapshot,mode,manifest,checkpo
     placedBlock:'minecraft:dirt',features:selection.features};
   journal({type:'policy_choice',arm,id,objective,operation,
     candidates:candidates.map(c=>({id:c.id,operation:c.operation})),
-    features:selection.features,estimatedQ:selection.estimatedQ,
+    features:selection.features,modelScores,estimatedQ:selection.estimatedQ,
     exploratory:selection.exploratory,reason:selection.reason,
     preProbeSequence:pre.sequence});
   const reply=await rcon('craftlebind '+id+' '+botName+' '+operation+
@@ -370,9 +374,10 @@ try {
     learningEnabled:true,trainingEligible:true,isolated:true,assistance:'none',
     initialStateSource:'controlled_administrative_reset_before_decision',
     task:'goal_conditioned_dig_or_place',reward:'verified_action:+1_if_goal_else_-1'};
-  writeJson('manifest.json',{...manifest,trainCount,evalCount,port,seed,
+  writeJson('manifest.json',{...manifest,trainCount,evalCount,port,seed,alpha,
     modelSchema:'craftle.motor-q.v3.goal-frame',
     fixedCandidateSet:['dig','place'],
+    noteOnEvaluation:'Frozen policy comparison on randomized goal order but identical two initial states; NOT held-out terrain generalization.',
     note:'Controlled one-step task learning, not general survival; fixture provisioning occurs before every decision.',
     sourceHashes:Object.fromEntries([
       'scripts/run-live-motor-learning.js',
@@ -462,7 +467,7 @@ try {
       successRate:rows.filter(r=>r.success).length/rows.length}];
   }));
   summary={schema:'craftle.live-motor-learning-result.v1',runId,
-    complete:true,trainingUpdates:trainCount,
+    complete:true,trainingUpdates:trainCount,learningRate:alpha,
     serverVerifiedTrainDecisions:trainCount,
     heldOutTasks:heldOut,
     eval:armStats,
