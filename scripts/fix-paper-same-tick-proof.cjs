@@ -83,9 +83,9 @@ const newTests=[
 const nextTest=oldTest+newTests;
 let modified=false;
 try {
+  modified=true;
   fs.writeFileSync(gatePath,nextGate.replace(/\n/g,eol(origGate)));
   fs.writeFileSync(testPath,nextTest.replace(/\n/g,eol(origTest)));
-  modified=true;
   console.log('BACKUP '+backup);
   execFileSync(process.execPath,['--check',gatePath],{stdio:'inherit'});
   execFileSync(process.execPath,['--check',testPath],{stdio:'inherit'});
