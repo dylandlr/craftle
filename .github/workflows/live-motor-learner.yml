@@ -22,5 +22,6 @@ jobs:
       - run: node --check scripts/run-live-motor-learning.js
       - run: node --check scripts/run-live-motor-transfer.js
       - run: node --test test/motor-transfer-tasks.test.js
+      - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
