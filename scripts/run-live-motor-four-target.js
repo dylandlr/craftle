@@ -368,19 +368,19 @@ try {
   const manifest={schema:'craftle.motor-learning-manifest.v1',runId,
     learningEnabled:true,trainingEligible:true,isolated:true,assistance:'none',
     initialStateSource:'controlled_administrative_reset_before_decision',
-    task:'goal_conditioned_dig_or_place_with_unseen_orientations',
+    task:'goal_conditioned_exact_four_target_with_unseen_orientations',
     reward:'verified_action:+1_if_goal_else_-1'};
   writeJson('manifest.json',{...manifest,trainCount,evalCount,port,seed,alpha,
     modelSchema:'craftle.motor-q.v3.goal-frame',
-    fixedCandidateOperations:['dig','place'],
-    trainRotations:MOTOR_TRANSFER_SPLITS.train,
-    heldoutRotations:MOTOR_TRANSFER_SPLITS.heldout,
-    distances:[2,3],
-    noteOnEvaluation:'Frozen policy tested on orientations never used in training; fixed superflat floor and dirt blocks; NOT material/biome generalization.',
-    note:'Controlled one-step task learning, not general survival; fixture provisioning occurs before every decision.',
+    candidateKeys:FOUR_TARGET_KEYS,
+    trainRotations:FOUR_TARGET_SPLITS.train,
+    heldoutRotations:FOUR_TARGET_SPLITS.heldout,
+    distances:FOUR_TARGET_DISTANCES,
+    noteOnEvaluation:'Four executable candidates, exact-target reward, physically disjoint training and evaluation rotations; still fixed dirt/stone world.',
+    note:'One-step controlled four-choice task. Goal is supplied and administrative world reset occurs before every decision.',
     sourceHashes:Object.fromEntries([
-      'scripts/run-live-motor-transfer.js',
-      'src/motor-transfer-tasks.js',
+      'scripts/run-live-motor-four-target.js',
+      'src/motor-four-target-tasks.js',
       'src/motor-q-policy.js',
       'src/motor-acceptance.js',
       'src/verified-motor-reward-gate.js',
@@ -440,7 +440,7 @@ try {
     bot.once('error',err=>{clearTimeout(timer);reject(err);});
   });
   await settle(10);
-  const trainTasks=scheduleTransferTasks(trainCount,{seed,salt:0x51f0,split:'train'});
+  const trainTasks=fourTargetTasks(trainCount,{seed,salt:0x51f0,split:'train'});
   for(let i=0;i<trainCount;i++){
     const snapshot=loadCheckpoint(checkpointFile).model;
     results.push(await episode({arm:'train',number:i+1,task:trainTasks[i],
@@ -449,7 +449,7 @@ try {
   }
   const finalState=loadCheckpoint(checkpointFile);
   const trainedModel=finalState.model;
-  const heldOut=scheduleTransferTasks(evalCount,{seed,salt:0x2b71,split:'heldout'});
+  const heldOut=fourTargetTasks(evalCount,{seed,salt:0x2b71,split:'heldout'});
   for(const arm of ['trained','untrained','random']){
     for(let i=0;i<evalCount;i++){
       results.push(await episode({arm,number:i+1,task:heldOut[i],
@@ -475,17 +475,18 @@ try {
     };
     return [arm,{
       byObjective:Object.fromEntries(['dig','place'].map(v=>[v,rateFor('objective',v)])),
-      byRotation:Object.fromEntries(MOTOR_TRANSFER_SPLITS.heldout.map(v=>[v,rateFor('rotation',v)])),
-      byDistance:Object.fromEntries([2,3].map(v=>[v,rateFor('distance',v)]))
+      byExactTarget:Object.fromEntries(FOUR_TARGET_KEYS.map(v=>[v,rateFor('goalKey',v)])),
+      byRotation:Object.fromEntries(FOUR_TARGET_SPLITS.heldout.map(v=>[v,rateFor('rotation',v)])),
+      byDistance:Object.fromEntries(FOUR_TARGET_DISTANCES.map(v=>[v,rateFor('distance',v)]))
     }];
   }));
-  summary={schema:'craftle.live-motor-transfer-result.v1',runId,
+  summary={schema:'craftle.live-four-target-result.v1',runId,
     complete:true,trainingUpdates:trainCount,learningRate:alpha,
     serverVerifiedTrainDecisions:trainCount,
     heldOutTasks:heldOut,
-    trainRotations:MOTOR_TRANSFER_SPLITS.train,
-    evaluatedRotations:MOTOR_TRANSFER_SPLITS.heldout,
-    evaluationDistances:[2,3],
+    trainRotations:FOUR_TARGET_SPLITS.train,
+    evaluatedRotations:FOUR_TARGET_SPLITS.heldout,
+    evaluationDistances:FOUR_TARGET_DISTANCES,
     eval:armStats,
     evaluationBreakdown,
     advantageOverRandom:armStats.trained.successRate-armStats.random.successRate,
@@ -493,10 +494,10 @@ try {
     observedImprovement:armStats.trained.successRate>armStats.random.successRate &&
       armStats.trained.successRate>armStats.untrained.successRate,
     learningEstablished:false,
-    note:'Orientation holdout with paired objectives and layout assignments across all three arms; one seed/one map family is not broad environmental generalization.',
-    limitation:'Held-out cardinal orientations and fixed two-action one-step task with admin resets. Not new biomes/materials, natural discovery, multi-step survival, or exclusive packet-level causality.'};
+    note:'Exact-target four-choice held-out orientation test. Paired stratified blocks across three policies; one seed and map family.',
+    limitation:'Four-choice one-step task in fixed dirt/stone superflat world with admin resets. Not biome/material generalization, autonomous survival or exclusive packet-level causality.'};
 } catch(error){
-  summary={schema:'craftle.live-motor-transfer-result.v1',
+  summary={schema:'craftle.live-four-target-result.v1',
     runId,complete:false,trainingUpdates:fs.existsSync(checkpointFile??'')?
       loadCheckpoint(checkpointFile).model.updates:0,
     error:error.stack??String(error)};
