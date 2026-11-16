@@ -241,86 +241,96 @@ function validateServerProof(manifest, decision, events) {
   if(!result.eligible) throw Error('Server proof rejected: '+result.reason);
   return result;
 }
-async function episode({arm,number,task,modelSnapshot,mode,manifest,checkpoint}) {
-  if(interrupted) throw Error('Interrupted');
-  const {objective}=task;
-  const {targets}=layoutForTask(task);
+async function episode({arm,number,task,modelSnapshot,mode,manifest,checkpoint}){
+  if(interrupted)throw Error('Interrupted');
+  const {goalKey}=task, objective=goalKey.startsWith('dig')?'dig':'place';
+  const {targets}=fourTargetLayout(task);
   await resetFixture(task);
-  const beforeDig=await probe(arm+'-'+String(number).padStart(4,'0')+'-dig-before',targets.dig);
-  const beforePlace=await probe(arm+'-'+String(number).padStart(4,'0')+'-place-before',targets.place);
-  if(beforeDig.onlinePlayers!==1 || beforePlace.onlinePlayers!==1 ||
-     beforeDig.serverBootId!==beforePlace.serverBootId ||
-     beforeDig.block!=='minecraft:dirt' || beforePlace.block!=='minecraft:air')
-    throw Error('Server predecision fixture mismatch');
+  const id=arm+'-'+String(number).padStart(4,'0');
+  const before={};
+  for(const key of FOUR_TARGET_KEYS){
+    before[key]=await probe(id+'-'+key+'-before',targets[key]);
+    const e=before[key];
+    if(e.onlinePlayers!==1 ||
+       e.block!==(key.startsWith('dig')?'minecraft:dirt':'minecraft:air'))
+      throw Error('Server predecision fixture mismatch for '+key);
+  }
+  if(new Set(FOUR_TARGET_KEYS.map(k=>before[k].serverBootId)).size!==1||
+     new Set(FOUR_TARGET_KEYS.map(k=>before[k].playerUuid)).size!==1)
+    throw Error('Server player identity or boot changed during probes');
   const {observation,candidates}=taskCandidates(bot,task);
   const modelScores=modelFrom(modelSnapshot,false,number)
     .scoreCandidates(observation,candidates);
   let selection;
-  if(mode==='random') {
-    // Independent reproducible Bernoulli draw, not an alternating pattern.
-    const index=createHash('sha256').update(runId+':random:'+number).digest()[0]&1;
-    const candidate=candidates[index];
+  if(mode==='random'){
+    const digest=createHash('sha256').update(runId+':four-random:'+number).digest();
+    const candidate=candidates[digest.readUInt32BE(0)%candidates.length];
     const scorer=modelFrom(modelSnapshot,false,number);
     selection={candidate,features:scorer.choose(observation,[candidate]).features,
-      estimatedQ:null,exploratory:true,reason:'uniform_random_baseline'};
-  } else {
+      estimatedQ:null,exploratory:true,reason:'uniform_four_target_baseline'};
+  }else{
     selection=modelFrom(modelSnapshot,mode==='train',number)
       .choose(observation,candidates);
   }
-  if(!selection.candidate || !selection.candidate.executable ||
-     !['dig','place'].includes(selection.candidate.operation))
-    throw Error('Policy selected nonexecutable action');
-  const operation=selection.candidate.operation;
-  const target=targets[operation];
-  const id=arm+'-'+String(number).padStart(4,'0');
-  const pre=operation==='dig'?beforeDig:beforePlace;
+  const candidate=selection.candidate;
+  if(!candidate||!candidate.executable||!FOUR_TARGET_KEYS.includes(candidate.id))
+    throw Error('Policy selected invalid or unobserved candidate');
+  const chosenKey=candidate.id;
+  const operation=candidate.operation, target=targets[chosenKey];
+  const pre=before[chosenKey];
+  if(operation!==(chosenKey.startsWith('dig')?'dig':'place'))
+    throw Error('Candidate operation identity mismatch');
   const decision={id,runId,operation,
     serverBootId:pre.serverBootId,playerUuid:pre.playerUuid,
     world:pre.world,x:target.x,y:target.y,z:target.z,
     placedBlock:'minecraft:dirt',features:selection.features};
-  journal({type:'policy_choice',arm,id,task,objective,operation,targets,
-    candidates:candidates.map(c=>({id:c.id,operation:c.operation})),
-    features:selection.features,modelScores,estimatedQ:selection.estimatedQ,
-    exploratory:selection.exploratory,reason:selection.reason,
-    preProbeSequence:pre.sequence});
+  journal({type:'policy_choice',arm,id,task,objective,goalKey,
+    chosenKey,operation,targets,
+    candidates:candidates.map(c=>({id:c.id,operation:c.operation,
+      arguments:c.arguments})),
+    features:selection.features,modelScores,
+    estimatedQ:selection.estimatedQ,exploratory:selection.exploratory,
+    reason:selection.reason,preProbeSequence:pre.sequence});
   const reply=await rcon('craftlebind '+id+' '+botName+' '+operation+
     ' '+target.x+' '+target.y+' '+target.z);
-  if(!reply.includes('CRAFTLE_BIND '+id+' ')) throw Error('Binding rejected: '+reply);
+  if(!reply.includes('CRAFTLE_BIND '+id+' '))
+    throw Error('Binding rejected: '+reply);
   const trial={id,runId,operation,target,maxWindowTicks:400,
-    expectedClientBlock:operation==='dig'?'dirt':'air',playerUuid:pre.playerUuid};
+    expectedClientBlock:operation==='dig'?'dirt':'air',
+    playerUuid:pre.playerUuid};
   let execution;
-  try {
+  try{
     execution=await executeMotorPrimitive(bot,trial,{timeoutMs:12000});
-  } catch(error) {
+  }catch(error){
     execution={status:'failed',reason:String(error)};
   }
   journal({type:'motor_execution',id,execution});
-  if(execution.status!=='completed') {
+  if(execution.status!=='completed'){
     const cancellation=await rcon('craftlecancel '+id);
     journal({type:'motor_cancel',id,reply:cancellation});
     if(!cancellation.includes('CRAFTLE_CANCELLED '+id))
-      throw Error('Failed motor action could not be revoked: '+cancellation);
-    throw Error('Live actuator failed or rejected '+id+': '+execution.status);
+      throw Error('Failed motor action could not be revoked');
+    throw Error('Live actuator failed '+id+': '+execution.status);
   }
   await settle(5);
   const post=await probe(id+'-after',target);
   const allEvents=readEvents();
-  if(post.serverBootId!==pre.serverBootId || post.playerUuid!==pre.playerUuid)
-    throw Error('Server reboot or actor identity changed');
+  if(post.serverBootId!==pre.serverBootId||post.playerUuid!==pre.playerUuid)
+    throw Error('Server reboot or actor changed after action');
   const proof=validateServerProof(manifest,decision,allEvents);
-  const reward=taskReward(objective,operation);
+  const reward=fourTargetReward(goalKey,chosenKey);
   const success=reward>0;
-  if(mode==='train') {
+  if(mode==='train'){
     const state=loadCheckpoint(checkpoint);
-    const decisionKey=proof.decisionKey, evidenceKey=proof.evidenceKey;
-    if(state.entries.some(e=>e.decisionKey===decisionKey ||
-       e.evidenceKey===evidenceKey)) throw Error('Duplicate reward proof');
+    const {decisionKey,evidenceKey}=proof;
+    if(state.entries.some(e=>e.decisionKey===decisionKey||
+       e.evidenceKey===evidenceKey))throw Error('Duplicate reward evidence');
     const policy=modelFrom(state.model,true,number);
     const update=policy.observe({features:selection.features,reward,
       nextObservation:{},nextCandidates:[],terminal:true,steps:proof.steps});
     const nextState={model:policy.snapshot(),entries:[...state.entries,{
-      decisionKey,evidenceKey,objective,operation,reward,
-      serverBootId:decision.serverBootId,
+      decisionKey,evidenceKey,goalKey,chosenKey,operation,reward,
+      task,serverBootId:decision.serverBootId,
       proofDigest:jsonHash(allEvents.filter(e=>
         e.decisionId===id||e.boundDecisionId===id||
         e.sourceEventSequence===Number(evidenceKey.split(':').pop()))),
@@ -328,13 +338,14 @@ async function episode({arm,number,task,modelSnapshot,mode,manifest,checkpoint})
     }]};
     atomicCheckpoint(checkpoint,nextState);
   }
-  journal({type:'episode_result',id,arm,task,objective,operation,
-    reward,success,serverEvidenceKey:proof.evidenceKey,
+  journal({type:'episode_result',id,arm,task,objective,goalKey,chosenKey,
+    operation,reward,success,serverEvidenceKey:proof.evidenceKey,
     updates:mode==='train'?loadCheckpoint(checkpoint).model.updates:0});
-  console.log(JSON.stringify({arm,number,objective,rotation:task.rotation,distance:task.distance,chosen:operation,
+  console.log(JSON.stringify({arm,number,goalKey,chosenKey,
+    rotation:task.rotation,distance:task.distance,
     success,verified:true,updated:mode==='train'}));
-  return {arm,number,...task,chosen:operation,success,
-    evidenceKey:proof.evidenceKey};
+  return {arm,number,...task,objective,chosenKey,operation,
+    success,evidenceKey:proof.evidenceKey};
 }
 const abort=()=>{interrupted=true;};
 process.on('SIGINT',abort);
