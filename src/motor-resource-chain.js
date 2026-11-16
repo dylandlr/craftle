@@ -1,12 +1,15 @@
 // Controlled delayed-outcome benchmark: mine two dirt blocks and use the
-// actual inventory to place two dirt blocks. World state, inventory and
+// actual inventory to place two dirt blocks, ignoring legal distractors. World state, inventory and
 // executable operations must come from observations; this module NEVER
 // creates server evidence, changes Minecraft or updates Q weights.
 // The final reward contract is intentionally distinct from action matching.
 export const CHAIN_SCHEMA='craftle.resource-chain-task.v1';
 export const CHAIN_SOURCES=['source0','source1'];
 export const CHAIN_DESTINATIONS=['site0','site1'];
-export const CHAIN_KEYS=[...CHAIN_SOURCES,...CHAIN_DESTINATIONS];
+export const CHAIN_DECOYS=['decoySource','decoySite'];
+export const CHAIN_ALL_SOURCES=[...CHAIN_SOURCES,'decoySource'];
+export const CHAIN_ALL_DESTINATIONS=[...CHAIN_DESTINATIONS,'decoySite'];
+export const CHAIN_KEYS=[...CHAIN_SOURCES,...CHAIN_DESTINATIONS,...CHAIN_DECOYS];
 export const CHAIN_MAX_STEPS=4;
 export const CHAIN_SPLITS=Object.freeze({train:Object.freeze([0,1]),
   heldout:Object.freeze([2,3])});
@@ -29,9 +32,11 @@ export function chainLayout(rotation) {
     source0:rotate(1,0,rotation),
     source1:rotate(0,1,rotation),
     site0:rotate(-2,0,rotation),
-    site1:rotate(0,-2,rotation)
+    site1:rotate(0,-2,rotation),
+    decoySource:rotate(1,1,rotation),
+    decoySite:rotate(-1,-1,rotation)
   };
-  if(new Set(Object.values(sites).map(keyOf)).size!==4)
+  if(new Set(Object.values(sites).map(keyOf)).size!==6)
     throw Error('Overlapping resource-chain sites');
   return {schema:CHAIN_SCHEMA,rotation,sites};
 }
@@ -61,11 +66,11 @@ export function chainTasks(count,{seed=17,split='train'}={}) {
 }
 
 // Probe samples are independent server read-only events. Require consistent
-// identity and inventory across the four probes, or fail closed; a future live
+// identity and inventory across all six site probes, or fail closed; a future live
 // runner must also guard against unrelated world mutations during the readout.
 export function chainSnapshotFromProbes(layout,probes) {
-  if(layout?.schema!==CHAIN_SCHEMA||!Array.isArray(probes)||probes.length!==4)
-    throw Error('Four authoritative server probes required');
+  if(layout?.schema!==CHAIN_SCHEMA||!Array.isArray(probes)||probes.length!==CHAIN_KEYS.length)
+    throw Error('Six authoritative server probes required');
   const mapping={};
   const ids=new Set(), boots=new Set(), actors=new Set(), worlds=new Set();
   let inventoryFingerprint=null;
@@ -95,10 +100,10 @@ export function chainSnapshotFromProbes(layout,probes) {
     mapping[key]={block:e.block,sequence:e.sequence,serverTick:e.serverTick,
       probeId:e.probeId};
   }
-  if(ids.size!==4||boots.size!==1||actors.size!==1||worlds.size!==1)
+  if(ids.size!==6||boots.size!==1||actors.size!==1||worlds.size!==1)
     throw Error('Chain probes do not have one consistent server/player');
   const sequences=CHAIN_KEYS.map(k=>mapping[k].sequence);
-  if(new Set(sequences).size!==4)throw Error('Duplicated event sequence in probes');
+  if(new Set(sequences).size!==CHAIN_KEYS.length)throw Error('Duplicated event sequence in probes');
   return {
     schema:'craftle.resource-chain-snapshot.v1',
     layoutRotation:layout.rotation,
@@ -117,9 +122,9 @@ export function validateInitialChainSnapshot(snapshot) {
   if(snapshot?.schema!=='craftle.resource-chain-snapshot.v1'||
      !Array.isArray(snapshot.inventory)||
      itemCount(snapshot.inventory,'dirt')!==0||
-     !CHAIN_SOURCES.every(k=>snapshot.blocks?.[k]==='minecraft:dirt')||
-     !CHAIN_DESTINATIONS.every(k=>snapshot.blocks?.[k]==='minecraft:air'))
-    throw Error('Chain must begin without carried dirt, with two sources and empty sites');
+     !CHAIN_ALL_SOURCES.every(k=>snapshot.blocks?.[k]==='minecraft:dirt')||
+     !CHAIN_ALL_DESTINATIONS.every(k=>snapshot.blocks?.[k]==='minecraft:air'))
+    throw Error('Chain must start without carried dirt, with three sources and three empty sites');
   return true;
 }
 export function chainCandidateMenu({layout,position,blockAt,inventory=[],
@@ -133,14 +138,14 @@ export function chainCandidateMenu({layout,position,blockAt,inventory=[],
   const dirt=itemCount(inventory,'dirt');
   const options=[];
   const hasSupport=p=>blockAt(p.x,p.y-1,p.z)?.boundingBox==='block';
-  for(const key of CHAIN_SOURCES){
+  for(const key of CHAIN_ALL_SOURCES){
     const p=layout.sites[key],b=blockAt(p.x,p.y,p.z);
     if(b?.name==='dirt'&&b.boundingBox==='block')
       options.push({id:key,operation:'dig',executable:true,
         arguments:{position:{...p}},
         evidence:{source:'observed_block',block:'dirt'}});
   }
-  for(const key of CHAIN_DESTINATIONS){
+  for(const key of CHAIN_ALL_DESTINATIONS){
     const p=layout.sites[key],b=blockAt(p.x,p.y,p.z);
     if(dirt>0&&b?.boundingBox==='empty'&&hasSupport(p))
       options.push({id:key,operation:'place',executable:true,
@@ -167,7 +172,9 @@ export function scriptedResourcePlanner(snapshot,options) {
   if(!snapshot||!Array.isArray(options))
     throw Error('Planner requires observed state and executable options');
   const dirt=itemCount(snapshot.inventory??[],'dirt');
-  const matching=options.filter(c=>c?.executable);
+  // The planner receives the public build blueprint and avoids distractors.
+  const matching=options.filter(c=>c?.executable &&
+    (CHAIN_SOURCES.includes(c.id)||CHAIN_DESTINATIONS.includes(c.id)));
   const operation=dirt>0?'place':'dig';
   const selected=matching.find(c=>c.operation===operation);
   if(selected)return selected;
@@ -188,7 +195,7 @@ export function chainFinalOutcome({initial,final,proofs,maxSteps=CHAIN_MAX_STEPS
   for(const entry of proofs){
     if(!entry||!['dig','place'].includes(entry.operation)||
       typeof entry.targetKey!=='string'||!CHAIN_KEYS.includes(entry.targetKey)||
-      entry.operation!==(entry.targetKey.startsWith('source')?'dig':'place')||
+      entry.operation!== (CHAIN_ALL_SOURCES.includes(entry.targetKey)?'dig':'place')||
       typeof entry.decisionKey!=='string'||!entry.decisionKey||
       typeof entry.evidenceKey!=='string'||!entry.evidenceKey||
       !Number.isSafeInteger(entry.eventSequence)||entry.eventSequence<=lastSequence||
@@ -203,6 +210,8 @@ export function chainFinalOutcome({initial,final,proofs,maxSteps=CHAIN_MAX_STEPS
     throw Error('Duplicate proof or stale final-world observation');
   const complete=CHAIN_SOURCES.every(k=>final.blocks?.[k]==='minecraft:air')&&
     CHAIN_DESTINATIONS.every(k=>final.blocks?.[k]==='minecraft:dirt')&&
+    final.blocks?.decoySource==='minecraft:dirt'&&
+    final.blocks?.decoySite==='minecraft:air'&&
     itemCount(final.inventory??[],'dirt')===0&&proofs.length===4;
   if(complete)return {terminal:true,reward:1,success:true,
     reason:'final_blocks_and_proofs_verified'};
