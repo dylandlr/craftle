@@ -128,3 +128,9 @@ export function fourTargetCandidates({task,position,blockAt,inventory=[],
   };
   return {targets,candidates,observation};
 }
+
+export function fourTargetReward(goalKey,chosenKey){
+  if(!FOUR_TARGET_KEYS.includes(goalKey)||!FOUR_TARGET_KEYS.includes(chosenKey))
+    throw Error('Invalid four-target reward identity');
+  return goalKey===chosenKey?1:-1;
+}
