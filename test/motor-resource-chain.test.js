@@ -81,7 +81,7 @@ test('starts empty-handed and exposes ONLY the three observed digs (including di
   assert.ok(menu.candidates.every(c=>c.operation==='dig'));
   assert.equal(scriptedResourcePlanner(init,menu.candidates).id,'source0');
   const policy=createMotorQPolicy({seed:17,training:false});
-  assert.equal(policy.scoreCandidates(menu.observation,menu.candidates).length,2);
+  assert.equal(policy.scoreCandidates(menu.observation,menu.candidates).length,3);
 });
 
 test('inventory and post-dig observations gate the PLACE affordances',()=>{
