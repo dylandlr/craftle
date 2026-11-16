@@ -1,7 +1,6 @@
-// Craftle: held-out orientation generalization with verified Minecraft rewards.
-// Distinct from the original two-position live experiment: train on 0/90-degree
-// rotations, evaluate on 180/270-degree rotations. No autonomous survival claim.
-// Every task resets the world BEFORE the agent's decision (explicitly assisted).
+// Four-target exact-target Minecraft benchmark: two dig, two place actions.
+// Physically different orientation holdouts, fixed dirt/stone superflat fixtures.
+// Every task is administratively reset BEFORE decision; not autonomous survival.
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
@@ -13,7 +12,9 @@ import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import mineflayer from 'mineflayer';
 import { createMotorQPolicy, MOTOR_FEATURE_COUNT } from '../src/motor-q-policy.js';
-import { layoutForTask, scheduleTransferTasks, assertTransferDisjoint, MOTOR_TRANSFER_SPLITS } from '../src/motor-transfer-tasks.js';
+import {fourTargetLayout,fourTargetTasks,fourTargetCandidates,fourTargetReward,
+  assertFourTargetSplit,FOUR_TARGET_KEYS,FOUR_TARGET_SPLITS,
+  FOUR_TARGET_DISTANCES} from '../src/motor-four-target-tasks.js';
 import { executeMotorPrimitive } from '../src/motor-acceptance.js';
 import { verifyMotorRewardEvidence } from '../src/verified-motor-reward-gate.js';
 import { paper1211ProtocolOverride } from '../src/paper-1211-protocol.js';
@@ -35,25 +36,26 @@ for (let i = 2; i < process.argv.length; i += 2) {
   if (Object.hasOwn(args, name.slice(2))) throw Error('Duplicate option: ' + name);
   args[name.slice(2)] = value;
 }
-const trainCount = Number(args.train ?? 24), evalCount = Number(args.eval ?? 8);
-const port = Number(args.port ?? 25621);
+const trainCount = Number(args.train ?? 16), evalCount = Number(args.eval ?? 16);
+const port = Number(args.port ?? 25623);
 const seed = Number(args.seed ?? 17);
 const alpha = Number(args.alpha ?? 0.015);
 const paperJar = path.resolve(args['paper-jar'] ??
   'C:/Users/delar/Downloads/craftle-main/craftle-observer-verify/observer-test/paper-1.21.1-133.jar');
-const runId = args['run-id'] ?? ('transfer-dqn-' + new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14));
+const runId = args['run-id'] ?? ('four-target-' + new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14));
 const selfTest = Object.hasOwn(args, 'self-test');
 if (!Object.keys(args).every(k => ['train','eval','port','seed','alpha','paper-jar','run-id','self-test'].includes(k)))
   throw Error('Unknown option');
 if (![trainCount, evalCount, port, seed].every(Number.isSafeInteger) ||
-    trainCount < 1 || trainCount > 1000 || evalCount < 2 || evalCount > 500 ||
+    trainCount < 16 || trainCount > 1024 || trainCount % 16 !== 0 ||
+    evalCount < 16 || evalCount > 512 || evalCount % 16 !== 0 ||
     port < 1024 || port > 65535 || seed < 0 ||
     !Number.isFinite(alpha) || alpha <= 0 || alpha > 0.2 ||
     !/^[A-Za-z0-9_-]{1,54}$/.test(runId) || port === 25565 || port === 25567 || port === 25575)
   throw Error('Invalid run configuration or live-server port');
 if (port === 25617) throw Error('Port 25617 is reserved for prior calibration runs');
 const plugin = path.join(root, 'observer/target/craftle-observer-0.1.0.jar');
-const base = path.join(root, 'recordings/live-motor-transfer');
+const base = path.join(root, 'recordings/live-motor-four-target');
 const runDir = path.join(base, runId);
 const containerName = 'craftle-live-' + runId;
 const botName = 'CraftleProbe';
@@ -96,84 +98,54 @@ function taskReward(objective, actual) {
   return objective === actual ? 1 : -1;
 }
 function taskCandidates(bot, task) {
-  const {objective}=task;
-  const {targets}=layoutForTask(task);
-  const playerPos = bot.entity?.position;
-  if (!playerPos) throw Error('Missing bot position');
-  const lookup = (x, y, z) => bot.blockAt(new Vec3(x,y,z));
-  const digBlock = lookup(targets.dig.x,targets.dig.y,targets.dig.z);
-  const emptyCell = lookup(targets.place.x,targets.place.y,targets.place.z);
-  const floor = lookup(targets.place.x,80,targets.place.z);
-  const dirt = bot.inventory.items().find(i => i.name === 'dirt' && i.count > 0);
-  if (digBlock?.name !== 'dirt' ||
-      emptyCell?.boundingBox !== 'empty' ||
-      floor?.boundingBox !== 'block' || !dirt)
-    throw Error('Both candidates must be observed as executable in the chosen layout');
-  for (const target of Object.values(targets))
-    if (Math.hypot(target.x+0.5-playerPos.x,
-                   target.y+0.5-playerPos.y,
-                   target.z+0.5-playerPos.z)>4.5)
-      throw Error('Candidate outside legal interaction reach');
-  const inventory = bot.inventory.items().map(i => ({
-    name:i.name,count:i.count,placeable:i.name==='dirt'
-  }));
-  // Quantize to the observed player block frame so cardinally rotated
-  // worlds use the same goal-relative coordinate system.
-  const observation = {
-    position:{x:Math.floor(playerPos.x),y:Math.floor(playerPos.y),z:Math.floor(playerPos.z)},
-    goal:{...targets[objective]},
-    health:bot.health,food:bot.food,inventory,stalls:0,blockAt:lookup
-  };
-  const candidates=[
-    {id:'dig:'+targets.dig.x+':'+targets.dig.z,
-      operation:'dig',executable:true,
-      arguments:{position:{...targets.dig}},
-      evidence:{source:'observed_block',block:'dirt'}},
-    {id:'place:'+targets.place.x+':'+targets.place.z,
-      operation:'place',executable:true,
-      arguments:{reference:{x:targets.place.x,y:80,z:targets.place.z},
-        face:{x:0,y:1,z:0},itemName:'dirt'},
-      evidence:{source:'observed_empty_destination_and_inventory',
-        destination:{...targets.place}}}
-  ];
-  return {observation,candidates};
+  if(!bot.entity?.position) throw Error('No observed player position');
+  return fourTargetCandidates({
+    task,position:bot.entity.position,
+    blockAt:(x,y,z)=>bot.blockAt(new Vec3(x,y,z)),
+    inventory:bot.inventory.items().map(i=>({
+      name:i.name,count:i.count,placeable:i.name==='dirt'
+    })),
+    health:bot.health,food:bot.food
+  });
 }
-function selfCheck() {
-  const split=assertTransferDisjoint();
-  const task={rotation:0,distance:2,objective:'dig'};
-  const {targets}=layoutForTask(task);
-  const sample={
-    entity:{position:{x:0.5,y:81,z:0.5}},
-    health:20,food:20,
-    inventory:{items:()=>[{name:'dirt',count:1}]},
-    blockAt:pos=>({
-      name:pos.x===targets.dig.x&&pos.y===81&&pos.z===targets.dig.z?'dirt':
-        pos.y===80?'stone':'air',
-      boundingBox:pos.y===80||pos.x===targets.dig.x&&pos.y===81&&
-        pos.z===targets.dig.z?'block':'empty'
-    })
+function selfCheck(){
+  const split=assertFourTargetSplit();
+  const task={rotation:0,distance:2,goalKey:'dig0'};
+  const {targets}=fourTargetLayout(task);
+  const blockAt=(x,y,z)=>{
+    const isDig=['dig0','dig1'].some(key=>{
+      const t=targets[key];return t.x===x&&t.y===y&&t.z===z;
+    });
+    const solid=y===80||isDig;
+    return {name:isDig?'dirt':solid?'stone':'air',
+      boundingBox:solid?'block':'empty'};
   };
-  const {observation,candidates}=taskCandidates(sample,task);
-  const policy=createMotorQPolicy({seed,epsilon:0.35,alpha,hidden:24});
+  const {observation,candidates}=fourTargetCandidates({
+    task,position:{x:.5,y:81,z:.5},blockAt,
+    inventory:[{name:'dirt',count:2,placeable:true}]
+  });
+  const policy=createMotorQPolicy({seed,epsilon:0.35,hidden:24,alpha});
   const selected=policy.choose(observation,candidates);
-  if (split.trainLayouts!==4 || split.heldoutLayouts!==4 ||
-      selected.features.length!==MOTOR_FEATURE_COUNT ||
-      !selected.features.every(Number.isFinite) ||
-      !candidates.every(c=>c.executable) ||
-      taskReward('dig','dig')!==1 || taskReward('dig','place')!==-1)
-    throw Error('Motor transfer model preflight failed');
-  const initial=policy.snapshot().updates;
+  if(split.trainLayouts!==4||split.heldoutLayouts!==4||
+     candidates.length!==4||selected.features.length!==MOTOR_FEATURE_COUNT||
+     !selected.features.every(Number.isFinite)||
+     fourTargetReward('dig0','dig0')!==1||
+     fourTargetReward('dig0','dig1')!==-1||
+     fourTargetReward('place0','place1')!==-1)
+    throw Error('Four-target preflight failed');
+  const before=policy.snapshot().updates;
   policy.observe({features:selected.features,reward:1,terminal:true});
-  if (policy.snapshot().updates!==initial+1)
-    throw Error('Model synthetic preflight update failed');
-  const a=scheduleTransferTasks(8,{seed,salt:100,split:'train'});
-  const b=scheduleTransferTasks(8,{seed,salt:100,split:'heldout'});
-  if (a.some(x=>!MOTOR_TRANSFER_SPLITS.train.includes(x.rotation)) ||
-      b.some(x=>!MOTOR_TRANSFER_SPLITS.heldout.includes(x.rotation)))
-    throw Error('Held-out environment leakage');
-  console.log(JSON.stringify({selfTest:'passed',trainLayouts:4,
-    heldoutLayouts:4,candidates:2,features:MOTOR_FEATURE_COUNT,
-    syntheticUpdates:1,liveUpdates:0}));
+  if(policy.snapshot().updates!==before+1)
+    throw Error('Four-target policy preflight update failed');
+  const train=fourTargetTasks(16,{seed,salt:0x51f0,split:'train'});
+  const heldout=fourTargetTasks(16,{seed,salt:0x2b71,split:'heldout'});
+  if(train.some(t=>!FOUR_TARGET_SPLITS.train.includes(t.rotation))||
+     heldout.some(t=>!FOUR_TARGET_SPLITS.heldout.includes(t.rotation)))
+    throw Error('Physical environment split leakage');
+  console.log(JSON.stringify({selfTest:'passed',
+    trainLayouts:split.trainLayouts,heldoutLayouts:split.heldoutLayouts,
+    candidates:4,featureCount:MOTOR_FEATURE_COUNT,
+    exactTargetReward:true,syntheticUpdates:1,liveUpdates:0}));
 }
 selfCheck();
 if (selfTest) process.exit(0);
@@ -243,18 +215,20 @@ async function settle(n=6) {
   });
   await delay(120);
 }
-async function resetFixture(task) {
-  const {targets}=layoutForTask(task);
-  // All world interventions happen before the first server predecision probe.
+async function resetFixture(task){
+  const {targets}=fourTargetLayout(task);
   const commands=[
     'tp '+botName+' 0.5 81 0.5 0 0','clear '+botName,
     'fill -4 81 -4 4 83 4 air',
-    'kill @e[type=minecraft:item]',
-    'setblock '+targets.dig.x+' 81 '+targets.dig.z+' dirt',
-    'setblock '+targets.place.x+' 81 '+targets.place.z+' air',
-    'give '+botName+' dirt 1'
+    'kill @e[type=minecraft:item]'
   ];
-  for(const cmd of commands) await rcon(cmd);
+  for(const k of FOUR_TARGET_KEYS){
+    const target=targets[k];
+    commands.push('setblock '+target.x+' 81 '+target.z+' '+
+      (k.startsWith('dig')?'dirt':'air'));
+  }
+  commands.push('give '+botName+' dirt 2');
+  for(const command of commands)await rcon(command);
   await settle(8);
 }
 function modelFrom(snapshot, training, iteration) {
