@@ -8,9 +8,11 @@ import {chainLayout,chainTasks,assertChainSplitDisjoint,chainSnapshotFromProbes,
 const layout=chainLayout(0);
 const identity={serverBootId:'boot1',playerUuid:'user1',world:'minecraft:overworld'};
 const initialBlocks={source0:'minecraft:dirt',source1:'minecraft:dirt',
-  site0:'minecraft:air',site1:'minecraft:air'};
+  site0:'minecraft:air',site1:'minecraft:air',
+  decoySource:'minecraft:dirt',decoySite:'minecraft:air'};
 const completedBlocks={source0:'minecraft:air',source1:'minecraft:air',
-  site0:'minecraft:dirt',site1:'minecraft:dirt'};
+  site0:'minecraft:dirt',site1:'minecraft:dirt',
+  decoySource:'minecraft:dirt',decoySite:'minecraft:air'};
 
 function probeSet(blocks,inventory,sequenceStart,override={}){
   return CHAIN_KEYS.map((key,i)=>({
@@ -29,13 +31,13 @@ function snapshot(blocks,inventory=[],sequenceStart=1,overrides={}){
 }
 function proofs(){
   return [
-    {decisionKey:'d1',evidenceKey:'b:6',eventSequence:6,
+    {decisionKey:'d1',evidenceKey:'b:6',eventSequence:8,
       operation:'dig',targetKey:'source0',gateEligible:true},
-    {decisionKey:'d2',evidenceKey:'b:12',eventSequence:12,
+    {decisionKey:'d2',evidenceKey:'b:12',eventSequence:16,
       operation:'dig',targetKey:'source1',gateEligible:true},
-    {decisionKey:'d3',evidenceKey:'b:18',eventSequence:18,
+    {decisionKey:'d3',evidenceKey:'b:18',eventSequence:24,
       operation:'place',targetKey:'site0',gateEligible:true},
-    {decisionKey:'d4',evidenceKey:'b:24',eventSequence:24,
+    {decisionKey:'d4',evidenceKey:'b:24',eventSequence:32,
       operation:'place',targetKey:'site1',gateEligible:true}
   ];
 }
@@ -61,7 +63,7 @@ test('task geometry and train/test worlds are disjoint and deterministic',()=>{
   assert.deepEqual(assertChainSplitDisjoint(),{train:2,heldout:2});
   const keys=new Set(CHAIN_KEYS.map(k=>
     JSON.stringify(layout.sites[k])));
-  assert.equal(keys.size,4);
+  assert.equal(keys.size,6);
   assert.deepEqual(chainTasks(8,{seed:17,split:'train'}),
     chainTasks(8,{seed:17,split:'train'}));
   assert.equal(chainTasks(8,{seed:17,split:'heldout'})
@@ -71,11 +73,11 @@ test('task geometry and train/test worlds are disjoint and deterministic',()=>{
   assert.throws(()=>chainLayout(4));
 });
 
-test('starts empty-handed and exposes ONLY the observed two digs',()=>{
+test('starts empty-handed and exposes ONLY the three observed digs (including distractor)',()=>{
   const init=snapshot(initialBlocks,[],1);
   assert.equal(validateInitialChainSnapshot(init),true);
   const menu=chainCandidateMenu(observedContext());
-  assert.deepEqual(menu.candidates.map(c=>c.id),['source0','source1']);
+  assert.deepEqual(menu.candidates.map(c=>c.id),['source0','source1','decoySource']);
   assert.ok(menu.candidates.every(c=>c.operation==='dig'));
   assert.equal(scriptedResourcePlanner(init,menu.candidates).id,'source0');
   const policy=createMotorQPolicy({seed:17,training:false});
@@ -86,19 +88,19 @@ test('inventory and post-dig observations gate the PLACE affordances',()=>{
   const blocks={...initialBlocks,source0:'minecraft:air'};
   const menu=chainCandidateMenu(observedContext(0,blocks,[{name:'dirt',count:1}]));
   assert.deepEqual(menu.candidates.map(c=>c.id),
-    ['source1','site0','site1']);
+    ['source1','decoySource','site0','site1','decoySite']);
   const partial=snapshot(blocks,[{name:'dirt',count:1}],8);
   assert.equal(scriptedResourcePlanner(partial,menu.candidates).id,'site0');
   const consumed={...blocks,site0:'minecraft:dirt'};
   const empty=chainCandidateMenu(observedContext(0,consumed,[]));
-  assert.deepEqual(empty.candidates.map(c=>c.id),['source1']);
+  assert.deepEqual(empty.candidates.map(c=>c.id),['source1','decoySource']);
   assert.ok(!empty.candidates.some(c=>c.operation==='place'));
 });
 
 test('delayed final-state reward is zero after verified partial progress',()=>{
   const start=snapshot(initialBlocks,[],1);
   const afterDig=snapshot({...initialBlocks,source0:'minecraft:air'},
-    [{name:'dirt',count:1}],8);
+    [{name:'dirt',count:1}],10);
   const partial=chainFinalOutcome({
     initial:start,final:afterDig,proofs:proofs().slice(0,1)
   });
@@ -109,7 +111,7 @@ test('delayed final-state reward is zero after verified partial progress',()=>{
 test('final verified world state credits full four-action trajectory',()=>{
   const result=chainFinalOutcome({
     initial:snapshot(initialBlocks,[],1),
-    final:snapshot(completedBlocks,[],25),
+    final:snapshot(completedBlocks,[],33),
     proofs:proofs()
   });
   assert.deepEqual(result,{terminal:true,reward:1,success:true,
@@ -118,7 +120,7 @@ test('final verified world state credits full four-action trajectory',()=>{
 
 test('correct final world alone cannot reward missing or unverified action proof',()=>{
   const initial=snapshot(initialBlocks,[],1);
-  const completed=snapshot(completedBlocks,[],25);
+  const completed=snapshot(completedBlocks,[],33);
   assert.equal(chainFinalOutcome({initial,final:completed,
     proofs:proofs().slice(0,3)}).reward,0);
   const p=proofs();
@@ -134,9 +136,9 @@ test('correct final world alone cannot reward missing or unverified action proof
 
 test('wrong final construction or item conservation fails terminal success',()=>{
   const initial=snapshot(initialBlocks,[],1);
-  const wrong=snapshot({...completedBlocks,site1:'minecraft:air'},[],25);
+  const wrong=snapshot({...completedBlocks,site1:'minecraft:air'},[],33);
   assert.equal(chainFinalOutcome({initial,final:wrong,proofs:proofs()}).reward,-1);
-  const inventory=snapshot(completedBlocks,[{name:'dirt',count:1}],25);
+  const inventory=snapshot(completedBlocks,[{name:'dirt',count:1}],33);
   assert.equal(chainFinalOutcome({initial,final:inventory,proofs:proofs()}).reward,-1);
 });
 
@@ -148,9 +150,9 @@ test('fail closed on non-atomic probes, stale samples or actor changes',()=>{
   fake[0].phase='client_reported_post_state';
   assert.throws(()=>chainSnapshotFromProbes(layout,fake));
   const init=snapshot(initialBlocks,[],1);
-  const wrongActor=snapshot(completedBlocks,[],25,{playerUuid:'other'});
+  const wrongActor=snapshot(completedBlocks,[],33,{playerUuid:'other'});
   assert.throws(()=>chainFinalOutcome({initial:init,final:wrongActor,proofs:proofs()}));
-  const stale=snapshot(completedBlocks,[],22);
+  const stale=snapshot(completedBlocks,[],31);
   assert.throws(()=>chainFinalOutcome({initial:init,final:stale,proofs:proofs()}));
 });
 
@@ -171,4 +173,39 @@ test('Q policy can bootstrap a ZERO-reward intermediate action',()=>{
   const frozen=createMotorQPolicy({snapshot:learner.snapshot(),
     hidden:24,training:false});
   assert.equal(frozen.stats().updates,2);
+});
+
+test('four legal actions that include a distractor FAIL the terminal task',()=>{
+  const start=snapshot(initialBlocks,[],1);
+  // One distractor was mined and the required source1 is still present.
+  const wrongWorld={...initialBlocks,source0:'minecraft:air',
+    decoySource:'minecraft:air',site0:'minecraft:dirt',
+    site1:'minecraft:dirt'};
+  const p=proofs();
+  p[1].targetKey='decoySource';
+  assert.deepEqual(chainFinalOutcome({
+    initial:start,final:snapshot(wrongWorld,[],33),proofs:p
+  }),{terminal:true,reward:-1,success:false,
+    reason:'budget_exhausted_without_final_state'});
+  // Or both required sources were mined but the wrong placement site was filled.
+  const misplaced={...completedBlocks,site1:'minecraft:air',
+    decoySite:'minecraft:dirt'};
+  const q=proofs();
+  q[3].targetKey='decoySite';
+  assert.equal(chainFinalOutcome({
+    initial:start,final:snapshot(misplaced,[],33),proofs:q
+  }).reward,-1);
+});
+
+test('scripted planner avoids valid distractors with public construction blueprint',()=>{
+  const start=snapshot(initialBlocks,[],1);
+  const first=chainCandidateMenu(observedContext());
+  assert.equal(first.candidates.length,3);
+  assert.equal(scriptedResourcePlanner(start,first.candidates).id,'source0');
+  const postDig={...initialBlocks,source0:'minecraft:air'};
+  const next=chainCandidateMenu(observedContext(0,postDig,
+    [{name:'dirt',count:1}]));
+  assert.equal(next.candidates.length,5);
+  assert.equal(scriptedResourcePlanner(
+    snapshot(postDig,[{name:'dirt',count:1}],10),next.candidates).id,'site0');
 });
