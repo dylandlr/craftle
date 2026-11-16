@@ -5,6 +5,7 @@ on:
       - feat/live-motor-learning-first-run-20261109
       - feat/motor-transfer-heldout-20261113
       - feat/motor-four-target-20261116
+      - feat/four-target-oracle-audit-20261116
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -14,6 +15,9 @@ on:
       - 'scripts/run-live-motor-four-target.js'
       - 'src/motor-four-target-tasks.js'
       - 'test/motor-four-target-tasks.test.js'
+      - 'src/motor-four-target-baselines.js'
+      - 'test/motor-four-target-baselines.test.js'
+      - 'scripts/audit-four-target-oracle.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
   syntax:
@@ -29,6 +33,8 @@ jobs:
       - run: node --check scripts/run-live-motor-four-target.js
       - run: node --test test/motor-four-target-tasks.test.js
       - run: node scripts/diagnose-motor-four-target.js
+      - run: node --check scripts/audit-four-target-oracle.js
+      - run: node --test test/motor-four-target-baselines.test.js
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
