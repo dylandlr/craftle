@@ -73,6 +73,10 @@ jobs:
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy trained --checkpoint recordings/resource-chain-offline-checkpoints/chain-trained-seed17-600.json --rotation 2 --variant skewed
       - run: node scripts/build-resource-chain-frozen-policy.js --mode untrained --seed 17 --episodes 600
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy untrained --checkpoint recordings/resource-chain-offline-checkpoints/chain-untrained-seed17-0.json --rotation 3 --variant base
+      - run: node scripts/build-resource-chain-frozen-policy.js --mode trained --seed 23 --episodes 600
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy trained --checkpoint recordings/resource-chain-offline-checkpoints/chain-trained-seed23-600.json --rotation 2 --variant base
+      - run: node scripts/build-resource-chain-frozen-policy.js --mode untrained --seed 23 --episodes 600
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy untrained --checkpoint recordings/resource-chain-offline-checkpoints/chain-untrained-seed23-0.json --rotation 2 --variant base
       - run: node --check scripts/audit-resource-chain-first-action.js
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true
       - run: node scripts/diagnose-motor-transfer.js
