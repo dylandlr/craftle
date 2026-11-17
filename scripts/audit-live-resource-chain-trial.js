@@ -6,7 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {chainLayout,chainSnapshotFromProbes,chainFinalOutcome,
-  CHAIN_KEYS,CHAIN_MAX_STEPS}
+  chainCandidateMenu,CHAIN_KEYS,CHAIN_MAX_STEPS}
   from '../src/motor-resource-chain.js';
 import {verifyMotorBaselineActionEvidence}
   from '../src/verified-motor-baseline-action.js';
@@ -191,15 +191,50 @@ export function auditFrozenBenchmarkRun(runId,expectedMode){
       requireTrue(countDirt(post)===countDirt(pre)-1,
         'placement did not consume dirt at '+decisionId);
     }
+    // Rebuild the executable menu and value estimates independently from
+    // authoritative pre-action block/inventory probes and frozen weights.
+    // Merely trusting the runner's logged Q scores would not prove it used
+    // the frozen checkpoint to select the action.
+    const blockAt=(x,y,z)=>{
+      if(y===80)return {name:'stone',boundingBox:'block'};
+      const site=CHAIN_KEYS.find(k=>{
+        const p=layout.sites[k];
+        return p.x===x&&p.y===y&&p.z===z;
+      });
+      if(site){
+        const block=pre.blocks[site];
+        return {name:block.replace(/^minecraft:/,''),
+          boundingBox:block==='minecraft:air'?'empty':'block'};
+      }
+      return {name:'air',boundingBox:'empty'};
+    };
+    const rebuilt=chainCandidateMenu({
+      layout,position:{x:.5,y:81,z:.5},
+      blockAt,inventory:pre.inventory
+    });
+    const claimed=choice.candidates;
+    const observedMenu=rebuilt.candidates.map(c=>({
+      id:c.id,operation:c.operation,args:c.arguments
+    }));
+    requireTrue(JSON.stringify(claimed)===JSON.stringify(observedMenu),
+      'Client candidate menu diverges from server state at '+decisionId);
+    const recomputed=checkpoint.policy.scoreCandidates(
+      rebuilt.observation,rebuilt.candidates);
     const scores=choice.candidateScores;
-    requireTrue(Array.isArray(scores)&&scores.length>0&&
-      scores.every(c=>typeof c.id==='string'&&
-        Number.isFinite(c.q))&&
-      scores.some(c=>c.id===key&&
-        Math.abs(c.q-choice.chosenEstimatedQ)<1e-10)&&
-      choice.chosenEstimatedQ>=Math.max(...scores.map(c=>c.q))-1e-10&&
+    requireTrue(Array.isArray(scores)&&scores.length===recomputed.length&&
+      scores.every((claimed,i)=>{
+        const fresh=recomputed[i];
+        return claimed.id===fresh.id&&
+          claimed.operation===fresh.operation&&
+          Number.isFinite(claimed.q)&&
+          Math.abs(claimed.q-fresh.q)<1e-9;
+      })&&
+      recomputed.some(c=>c.id===key&&
+        Math.abs(c.q-choice.chosenEstimatedQ)<1e-9)&&
+      choice.chosenEstimatedQ>=Math.max(
+        ...recomputed.map(c=>c.q))-1e-9&&
       choice.chosenReason==='learned_value',
-      'chosen neural action was not greedy Q maximum '+decisionId);
+      'Frozen checkpoint fails to independently reproduce Q/action '+decisionId);
     chosen.push(key);
     priorPost=post;
   }
