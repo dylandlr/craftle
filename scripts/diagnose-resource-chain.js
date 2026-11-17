@@ -1,15 +1,17 @@
 // Entirely SYNTHETIC task calibration. Do not cite these simulated block
 // changes or rewards as Minecraft execution, observer proof or real learning.
 import {createMotorQPolicy} from '../src/motor-q-policy.js';
+import {createResourceChainQ} from '../src/resource-chain-q.js';
 import {chainLayout,chainCandidateMenu,scriptedResourcePlanner,
   CHAIN_KEYS,CHAIN_SPLITS,chainTasks} from '../src/motor-resource-chain.js';
 
-function syntheticEpisode(rotation,choose,{update=null}={}){
+function syntheticEpisode(rotation,choose,{update=null,afterEpisode=null}={}){
   const layout=chainLayout(rotation);
   const blocks={source0:'dirt',source1:'dirt',decoySource:'dirt',
     site0:'air',site1:'air',decoySite:'air'};
   let inventory=0;
   const choices=[];
+  const transitions=[];
   const blockAt=(x,y,z)=>{
     const key=CHAIN_KEYS.find(k=>{
       const p=layout.sites[k];
@@ -51,16 +53,19 @@ function syntheticEpisode(rotation,choose,{update=null}={}){
       inventory:inventory?[{name:'dirt',count:inventory}]:[],
       health:20,food:20
     });
-    if(update)update({
+    const transition={
       ...stateBefore,candidate,terminal,
       reward:terminal?(complete?1:-1):0,
       nextObservation:next?.observation??{},
       nextCandidates:next?.candidates??[]
-    });
+    };
+    if(update)update(transition);
+    if(afterEpisode)transitions.push(transition);
   }
   const success=blocks.source0==='air'&&blocks.source1==='air'&&
     blocks.site0==='dirt'&&blocks.site1==='dirt'&&
     blocks.decoySource==='dirt'&&blocks.decoySite==='air'&&inventory===0;
+  if(afterEpisode&&transitions.length===4)afterEpisode(transitions);
   return {success,choices};
 }
 function randomGenerator(seed) {
@@ -113,6 +118,29 @@ for(const seed of seeds){
     heldoutSyntheticWins:won,heldoutSyntheticTrials:100,
     accuracy:won/100});
 }
+const episodicNeuralQ=[];
+for(const seed of seeds){
+  const model=createResourceChainQ({seed,alpha:0.02,epsilon:0.4,
+    gamma:0.95,replayPasses:6,replayCapacity:256});
+  let trainWins=0;
+  for(const task of chainTasks(1000,{seed,split:'train'})){
+    const outcome=syntheticEpisode(task.rotation,menu=>model.choose(
+      menu.observation,menu.candidates),{afterEpisode:episode=>
+      model.learnEpisode(episode)});
+    trainWins+=Number(outcome.success);
+  }
+  const frozen=createResourceChainQ({seed,training:false,
+    snapshot:model.snapshot(),epsilon:0});
+  let heldoutWins=0;
+  for(let i=0;i<100;i++){
+    const outcome=syntheticEpisode(evalRotations[i%2],menu=>
+      frozen.choose(menu.observation,menu.candidates));
+    heldoutWins+=Number(outcome.success);
+  }
+  episodicNeuralQ.push({seed,trainWins,trainTrials:1000,
+    heldoutSyntheticWins:heldoutWins,heldoutSyntheticTrials:100,
+    trainedEpisodes:model.stats().episodes,gradientUpdates:model.stats().updates});
+}
 console.log(JSON.stringify({
   type:'SYNTHETIC_ONLY_NOT_MINECRAFT',
   task:'four required mutations with two executable distractors',
@@ -120,7 +148,9 @@ console.log(JSON.stringify({
   random:{wins:randomWins,trials,rate:randomWins/trials},
   symbolicPlanner:{wins:plannerWins,trials,rate:plannerWins/trials},
   onlineNeuralQ:results,
+  blueprintConditionedMonteCarloNeuralQ:episodicNeuralQ,
   notes:['Simulated inventory pickup is instantaneous; real drops may require movement.',
     'No server proof, no live weights, no claim of autonomous planning.',
-    'The scripted planner sees public construction blueprint targets and is a non-learning control.']
+    'The scripted planner and new neural Q observe identical public blueprint coordinates.',
+    'The new MC neural learner uses complete terminal returns and balanced success/failure replay; no planner imitation.']
 },null,2));
