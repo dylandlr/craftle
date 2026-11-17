@@ -1,6 +1,6 @@
-// One-episode scripted-baseline LIVE smoke test for a Minecraft dirt resource
-// chain. World resets only ONCE, before the episode; never between the four
-// actions. No neural updates, no planner imitation, no DQN success claim.
+// One-episode scripted or FROZEN neural policy LIVE evaluation of a resource
+// chain. World resets only ONCE before the episode; never between actions.
+// Offline synthetic training is separate; ZERO live policy updates.
 // Fail closed on action, drop/pickup, inventory or observer proof mismatch.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +19,10 @@ import {
 } from '../src/motor-resource-chain.js';
 import {syntheticEpisode} from '../src/resource-chain-simulator.js';
 import {findResourceChainPickup} from '../src/motor-resource-pickup-proof.js';
+import {loadResourceChainOfflineCheckpoint}
+  from '../src/resource-chain-offline-checkpoint.js';
+import {classifyResourceChainLiveTrial}
+  from '../src/resource-chain-live-result.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url);
@@ -33,13 +37,20 @@ for(let i=2;i<process.argv.length;i+=2){
   args[key]=process.argv[i+1];
 }
 if(!Object.keys(args).every(k=>['self-test','port','rotation','variant',
-  'run-id','paper-jar'].includes(k)))throw Error('Unknown option');
+  'run-id','paper-jar','policy','checkpoint'].includes(k)))throw Error('Unknown option');
 const selfTest=args['self-test']==='true';
 if(args['self-test']!==undefined&&!['true','false'].includes(args['self-test']))
   throw Error('Invalid self-test');
 const port=Number(args.port??25624),rotation=Number(args.rotation??0);
 const variant=args.variant??'base';
-const runId=args['run-id']??('chain-smoke-'+
+const policyMode=args.policy??'scripted';
+if(!['scripted','trained','untrained'].includes(policyMode))
+  throw Error('Invalid --policy; expected scripted|trained|untrained');
+if((policyMode==='scripted'&&args.checkpoint!==undefined)||
+  (policyMode!=='scripted'&&args.checkpoint===undefined))
+  throw Error('Frozen neural eval requires --checkpoint; scripted must omit it');
+const runId=args['run-id']??((policyMode==='scripted'?
+  'chain-smoke-':'chain-frozen-')+
   new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14));
 if(!Number.isSafeInteger(port)||port<1024||port>65535||
   [25565,25567,25575,25617,25623].includes(port)||
@@ -47,14 +58,49 @@ if(!Number.isSafeInteger(port)||port<1024||port>65535||
   !/^[A-Za-z0-9_-]{1,54}$/.test(runId))
   throw Error('Invalid isolated server configuration');
 const layout=chainLayout(rotation,variant);
+const checkpointInput=policyMode==='scripted'?null:
+  path.resolve(args.checkpoint);
+const checkpointContent=checkpointInput?
+  fs.readFileSync(checkpointInput):null;
+const checkpointSha256=checkpointInput?createHash('sha256')
+  .update(checkpointContent).digest('hex'):null;
+const expectedCheckpointHashes=Object.fromEntries([
+  'src/motor-resource-chain.js',
+  'src/resource-chain-q.js',
+  'src/resource-chain-simulator.js',
+  'src/resource-chain-offline-checkpoint.js'
+].map(name=>[name,sha(path.join(root,name))]));
+const loadedCheckpoint=checkpointContent?
+  loadResourceChainOfflineCheckpoint(
+    JSON.parse(checkpointContent.toString('utf8')),
+    {requireSourceHashes:expectedCheckpointHashes}):null;
+if(loadedCheckpoint&&(
+  loadedCheckpoint.metadata.mode!==policyMode||
+  (policyMode==='trained'&&
+    loadedCheckpoint.metadata.validation.successes!==10)))
+  throw Error('Offline policy mode mismatch or failed heldout validation');
+const frozenPolicy=loadedCheckpoint?.policy??null;
+const modelDigestBefore=frozenPolicy?createHash('sha256').update(
+  JSON.stringify(frozenPolicy.snapshot())).digest('hex'):null;
+const chooseAction=(observation,candidates)=>
+  policyMode==='scripted'?
+    {candidate:scriptedResourcePlanner(observation,candidates),
+      features:null,reason:'scripted_public_blueprint'}:
+    frozenPolicy.choose(observation,candidates);
 const outcome=syntheticEpisode(rotation,menu=>
-  scriptedResourcePlanner(menu.observation,menu.candidates),{variant});
-if(!outcome.success||outcome.choices.length!==4)
-  throw Error('Scripted planner self-test failed');
+  chooseAction(menu.observation,menu.candidates),{variant});
+if(outcome.choices.length!==4||
+  (policyMode!=='untrained'&&!outcome.success))
+  throw Error('Policy synthetic preflight failed on requested layout');
 console.log(JSON.stringify({
-  selfTest:'passed',policy:'scripted_nonlearning',
+  selfTest:'passed',
+  policy:policyMode==='scripted'?'scripted_nonlearning':
+    'frozen_'+policyMode+'_neural',
   expectedActions:4,goalFeedback:'terminal_only',
-  rotation,variant,syntheticSuccess:true,liveActions:0
+  rotation,variant,syntheticSuccess:outcome.success,
+  offlineCheckpointSha256:checkpointSha256,
+  offlineTrainingUpdates:loadedCheckpoint?.metadata.model.updates??0,
+  liveActions:0,liveLearningUpdates:0
 }));
 if(selfTest)process.exit(0);
 
@@ -83,7 +129,9 @@ if(typeof executeMotorPrimitive!=='function'||
   typeof guardProtocolIntegrity!=='function')
   throw Error('Local Minecraft action verifier interfaces are incompatible');
 
-const base=path.join(root,'recordings/live-resource-chain-smoke');
+const base=path.join(root,policyMode==='scripted'?
+  'recordings/live-resource-chain-smoke':
+  'recordings/live-resource-chain-frozen-eval');
 const runDir=path.join(base,runId);
 const containerName='craftle-'+runId;
 const botName='CraftleProbe';
@@ -228,9 +276,10 @@ async function actionStep(number,pre,manifest){
   if(itemCount(pre)!==clientInventory.filter(i=>i.name==='dirt')
     .reduce((sum,i)=>sum+i.count,0))
     throw Error('Client inventory and authoritative server inventory disagree');
-  const candidate=scriptedResourcePlanner(observation,candidates);
+  const selected=chooseAction(observation,candidates);
+  const candidate=selected.candidate;
   if(!candidate||!candidate.executable)
-    throw Error('Scripted planner has no executable, observed action');
+    throw Error('Policy has no executable, observed action');
   const target=chainActionTarget(candidate);
   const key=candidate.id,operation=candidate.operation;
   if(!CHAIN_KEYS.includes(key)||JSON.stringify(target)!==
@@ -243,13 +292,19 @@ async function actionStep(number,pre,manifest){
   const decision={id,runId,operation,serverBootId:pre.serverBootId,
     playerUuid:pre.playerUuid,world:pre.world,x:target.x,y:target.y,
     z:target.z,placedBlock:'minecraft:dirt',
-    features:encodeMotorCandidate(observation,candidate)};
-  journal({type:'policy_choice',arm:'scripted_smoke',id,step:number,
+    features:selected.features??encodeMotorCandidate(observation,candidate)};
+  journal({type:'policy_choice',arm:policyMode==='scripted'?
+    'scripted_smoke':'frozen_neural_evaluation',id,step:number,
     candidateKey:key,operation,target,
     candidates:candidates.map(c=>({id:c.id,operation:c.operation,
       args:c.arguments})),
     serverInventoryBefore:itemCount(pre),
-    blueprint:observation.blueprint,policyTrainingUpdates:0});
+    blueprint:observation.blueprint,policyTrainingUpdates:0,
+    offlineTrainingUpdates:loadedCheckpoint?.metadata.model.updates??0,
+    chosenEstimatedQ:selected.q??null,
+    candidateScores:frozenPolicy?frozenPolicy.scoreCandidates(
+      observation,candidates):null,
+    chosenReason:selected.reason??null});
   const reply=await rcon('craftlebind '+id+' '+botName+' '+operation+' '+
     target.x+' '+target.y+' '+target.z);
   if(!reply.includes('CRAFTLE_BIND '+id+' '))
@@ -335,23 +390,35 @@ try{
   fs.mkdirSync(path.join(dataDir,'plugins'),{recursive:true});
   fs.copyFileSync(plugin,path.join(dataDir,'plugins/craftle-observer-0.1.0.jar'));
   fs.copyFileSync(paperJar,path.join(dataDir,'paper.jar'));
+  if(checkpointContent)
+    fs.writeFileSync(path.join(runDir,'frozen-neural-checkpoint.json'),
+      checkpointContent,{flag:'wx'});
   eventPath=path.join(dataDir,'plugins/CraftleObserver/events.jsonl');
   const manifest={
     schema:'craftle.motor-learning-manifest.v1',runId,
     learningEnabled:false,trainingEligible:false,isolated:true,
-    assistance:'scripted_planner',
+    assistance:policyMode==='scripted'?'scripted_planner':
+      'frozen_offline_neural',
     initialStateSource:'single_admin_reset_before_entire_episode',
     task:'four_step_dirt_collection_and_construction_with_two_distractors',
     reward:'terminal_world_state_only_not_action_id',
-    policy:'scripted_nonlearning_smoke'
+    policy:policyMode==='scripted'?'scripted_nonlearning_smoke':
+      'frozen_neural_evaluation'
   };
   writeJson('manifest.json',{...manifest,port,rotation,variant,
-    neuralUpdates:0,training:false,
+    policyMode,neuralUpdates:0,training:false,
+    checkpointSha256,modelDigestBefore,
+    offlineModelUpdates:loadedCheckpoint?.metadata.model.updates??0,
+    offlineTrainingMode:loadedCheckpoint?.metadata.mode??null,
     sourceHashes:Object.fromEntries([
       'scripts/run-live-resource-chain-smoke.js',
       'src/motor-resource-chain.js','src/motor-q-policy.js',
       'src/motor-acceptance.js',
       'src/verified-motor-baseline-action.js',
+      'src/resource-chain-q.js',
+      'src/resource-chain-simulator.js',
+      'src/resource-chain-offline-checkpoint.js',
+      'src/resource-chain-live-result.js',
       'observer/target/craftle-observer-0.1.0.jar'
     ].map(p=>[p,sha(path.join(root,p))]))});
   await docker('run','-d','--name',containerName,
@@ -435,21 +502,38 @@ try{
   const taskResult=chainFinalOutcome({
     initial:first,final,proofs:evidence,maxSteps:CHAIN_MAX_STEPS
   });
-  if(!taskResult.success)throw Error('Four-step world objective failed: '+
-    taskResult.reason);
-  if(evidence.filter(x=>x.operation==='dig').length!==2||
-    evidence.filter(x=>x.operation==='place').length!==2)
-    throw Error('World success did not match exact 2-dig/2-place sequence');
-  summary={schema:'craftle.live-resource-chain-smoke.v1',
-    runId,complete:true,policy:'scripted_nonlearning',
-    rotation,variant,verifiedActions:4,verifiedRealPickups:2,
-    learnedPolicyUpdates:0,taskResult,
+  const classified=classifyResourceChainLiveTrial({
+    policyMode,taskResult,evidence
+  });
+  if(frozenPolicy){
+    const end=createHash('sha256').update(
+      JSON.stringify(frozenPolicy.snapshot())).digest('hex');
+    if(end!==modelDigestBefore||checkpointSha256!==sha(
+      path.join(runDir,'frozen-neural-checkpoint.json')))
+      throw Error('Frozen network weights/checkpoint changed during live evaluation');
+  }
+  summary={schema:policyMode==='scripted'?
+      'craftle.live-resource-chain-smoke.v1':
+      'craftle.live-resource-chain-frozen-eval.v1',
+    runId,complete:true,
+    policy:policyMode==='scripted'?'scripted_nonlearning':
+      'frozen_'+policyMode+'_neural',
+    rotation,variant,...classified,verifiedRealPickups:
+      creditedPickupEntities.length,
+    offlineModelUpdates:loadedCheckpoint?.metadata.model.updates??0,
+    checkpointSha256,modelDigestBefore,
     evidence:evidence.map(x=>({...x}))};
 }catch(error){
-  summary={schema:'craftle.live-resource-chain-smoke.v1',
-    runId,complete:false,policy:'scripted_nonlearning',
+  summary={schema:policyMode==='scripted'?
+      'craftle.live-resource-chain-smoke.v1':
+      'craftle.live-resource-chain-frozen-eval.v1',
+    runId,complete:false,
+    policy:policyMode==='scripted'?'scripted_nonlearning':
+      'frozen_'+policyMode+'_neural',
     rotation,variant,verifiedActions:evidence.length,
     learnedPolicyUpdates:0,
+    offlineModelUpdates:loadedCheckpoint?.metadata.model.updates??0,
+    checkpointSha256,modelDigestBefore,
     error:error.stack??String(error)};
   console.error('RESOURCE_CHAIN_LIVE_SMOKE_FAILED',error.stack??error);
 }finally{
