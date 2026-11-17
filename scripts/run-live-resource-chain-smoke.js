@@ -21,6 +21,8 @@ import {syntheticEpisode} from '../src/resource-chain-simulator.js';
 import {findResourceChainPickup} from '../src/motor-resource-pickup-proof.js';
 import {loadResourceChainOfflineCheckpoint}
   from '../src/resource-chain-offline-checkpoint.js';
+import {classifyResourceChainLiveTrial}
+  from '../src/resource-chain-live-result.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url);
@@ -416,6 +418,7 @@ try{
       'src/resource-chain-q.js',
       'src/resource-chain-simulator.js',
       'src/resource-chain-offline-checkpoint.js',
+      'src/resource-chain-live-result.js',
       'observer/target/craftle-observer-0.1.0.jar'
     ].map(p=>[p,sha(path.join(root,p))]))});
   await docker('run','-d','--name',containerName,
@@ -499,11 +502,9 @@ try{
   const taskResult=chainFinalOutcome({
     initial:first,final,proofs:evidence,maxSteps:CHAIN_MAX_STEPS
   });
-  if(!taskResult.success)throw Error('Four-step world objective failed: '+
-    taskResult.reason);
-  if(evidence.filter(x=>x.operation==='dig').length!==2||
-    evidence.filter(x=>x.operation==='place').length!==2)
-    throw Error('World success did not match exact 2-dig/2-place sequence');
+  const classified=classifyResourceChainLiveTrial({
+    policyMode,taskResult,evidence
+  });
   if(frozenPolicy){
     const end=createHash('sha256').update(
       JSON.stringify(frozenPolicy.snapshot())).digest('hex');
@@ -517,10 +518,10 @@ try{
     runId,complete:true,
     policy:policyMode==='scripted'?'scripted_nonlearning':
       'frozen_'+policyMode+'_neural',
-    rotation,variant,verifiedActions:4,verifiedRealPickups:2,
-    learnedPolicyUpdates:0,
+    rotation,variant,...classified,verifiedRealPickups:
+      creditedPickupEntities.length,
     offlineModelUpdates:loadedCheckpoint?.metadata.model.updates??0,
-    checkpointSha256,modelDigestBefore,taskResult,
+    checkpointSha256,modelDigestBefore,
     evidence:evidence.map(x=>({...x}))};
 }catch(error){
   summary={schema:policyMode==='scripted'?
