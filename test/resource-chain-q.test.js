@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chainCandidateMenu,chainLayout,CHAIN_KEYS,
+import {chainCandidateMenu,chainLayout,CHAIN_KEYS,CHAIN_GEOMETRY_VARIANTS,
   scriptedResourcePlanner} from '../src/motor-resource-chain.js';
 import {createResourceChainQ,encodeResourceChainCandidate,
   RESOURCE_CHAIN_Q_FEATURES,RESOURCE_CHAIN_Q_SCHEMA} from '../src/resource-chain-q.js';
 
-function menu(rotation=0,changes={},count=0){
-  const layout=chainLayout(rotation);
+function menu(rotation=0,changes={},count=0,variant='base'){
+  const layout=chainLayout(rotation,variant);
   const blocks={source0:'dirt',source1:'dirt',decoySource:'dirt',
     site0:'air',site1:'air',decoySite:'air',...changes};
   const blockAt=(x,y,z)=>{
@@ -133,4 +133,26 @@ test('uniform warmup is real exploration, never demonstration or frozen evaluati
     {epsilonOverride:1}));
   assert.equal(q.stats().episodes,0);
   assert.equal(q.stats().updates,0);
+});
+
+test('five geometry families yield distinct physical maps and rotation-invariant encoded actions',()=>{
+  const fingerprints=new Set();
+  for(const variant of CHAIN_GEOMETRY_VARIANTS){
+    const a=menu(0,{},0,variant),b=menu(2,{},0,variant);
+    fingerprints.add(JSON.stringify(a.observation.blueprint));
+    assert.equal(a.candidates.length,3);
+    assert.equal(b.candidates.length,3);
+    for(const key of ['source0','source1','decoySource']){
+      const fa=encodeResourceChainCandidate(a.observation,
+        a.candidates.find(c=>c.id===key));
+      const fb=encodeResourceChainCandidate(b.observation,
+        b.candidates.find(c=>c.id===key));
+      for(let i=0;i<fa.length;i++)assert.ok(Math.abs(fa[i]-fb[i])<1e-10,
+        variant+': '+key+' feature '+i+' is not rotation-invariant');
+    }
+    const p=scriptedResourcePlanner(a.observation,a.candidates);
+    assert.equal(p.id,'source0');
+  }
+  assert.equal(fingerprints.size,CHAIN_GEOMETRY_VARIANTS.length);
+  assert.throws(()=>chainLayout(2,'unseen_invalid_variant'));
 });
