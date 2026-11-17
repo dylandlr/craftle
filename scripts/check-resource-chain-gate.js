@@ -52,12 +52,18 @@ function inspect(run){
     decisionKey:result?.decisionKey??null,
     evidenceKey:result?.evidenceKey??null};
 }
-const original=inspect(manifest);
+// Match the exact runtime object used by the original live runner rather
+// than passing reporting-only fields from manifest.json to the verifier.
+const originalRun=Object.fromEntries([
+  'schema','runId','learningEnabled','trainingEligible','isolated',
+  'assistance','initialStateSource','task','reward'
+].map(key=>[key,manifest[key]]));
+const original=inspect(originalRun);
 if(!original.eligible)
   throw Error('Original previously verified action failed current local gate: '+
     JSON.stringify(original));
 const scripted=inspect({
-  ...manifest,
+  ...originalRun,
   learningEnabled:false,
   trainingEligible:false,
   assistance:'scripted_planner',
