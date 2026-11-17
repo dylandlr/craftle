@@ -69,14 +69,22 @@ const dependencies=[
 if(dependencies.some(p=>!fs.existsSync(p)))
   throw Error('Missing local Paper, compiled observer, motor executor or gate');
 const {executeMotorPrimitive}=await import('../src/motor-acceptance.js');
-const {verifyMotorRewardEvidence}=await import('../src/verified-motor-reward-gate.js');
+const {verifyMotorActionEvidence}=await import('../src/verified-motor-reward-gate.js');
+// Training reward authorization is intentionally NOT a baseline evidence API.
+// Fail BEFORE starting Minecraft rather than learning gate rejection after
+// the first physical block mutation.
+if(typeof verifyMotorActionEvidence!=='function')
+  throw Error('SCRIPTED_BASELINE_ACTION_PROOF_API_MISSING: local reward gate '+
+    'only authorizes learning; a separate verifyMotorActionEvidence export '+
+    'must be implemented and tested against the local source first. '+
+    'No server was started and no run evidence was changed.');
 const {paper1211ProtocolOverride}=await import('../src/paper-1211-protocol.js');
 const {guardProtocolIntegrity}=await import('../src/motor-protocol-integrity.js');
 const mineflayer=(await import('mineflayer')).default;
 const {Vec3}=require('vec3');
 const protocolOverride=paper1211ProtocolOverride(require('minecraft-data')('1.21.1'));
 if(typeof executeMotorPrimitive!=='function'||
-  typeof verifyMotorRewardEvidence!=='function'||
+  typeof verifyMotorActionEvidence!=='function'||
   typeof paper1211ProtocolOverride!=='function'||
   typeof guardProtocolIntegrity!=='function')
   throw Error('Local Minecraft action verifier interfaces are incompatible');
@@ -277,10 +285,10 @@ async function actionStep(number,pre,manifest){
       postTarget.sequence<=pre.lastSequence||
       postTarget.block!==(operation==='dig'?'minecraft:air':'minecraft:dirt'))
     throw Error('Server target post-state did not confirm executed action');
-  const proof=verifyMotorRewardEvidence({
+  const proof=verifyMotorActionEvidence({
     run:manifest,decision,events:readEvents()
   });
-  if(!proof?.eligible)throw Error('Server action proof rejected: '+proof?.reason);
+  if(!proof?.eligible)throw Error('Scripted action proof rejected: '+proof?.reason);
   const sequence=Number(String(proof.evidenceKey).split(':').pop());
   if(!Number.isSafeInteger(sequence)||sequence<=pre.lastSequence||
     sequence>=postTarget.sequence)
