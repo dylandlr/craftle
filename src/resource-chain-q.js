@@ -149,11 +149,16 @@ export function createResourceChainQ({
         id:row.candidate.id,operation:row.candidate.operation,q:row.q
       }));
     },
-    choose(obs,candidates){
+    choose(obs,candidates,{epsilonOverride=null}={}){
       if(!Array.isArray(candidates))throw Error('Candidates required');
+      if(epsilonOverride!==null&&
+        (!training||!Number.isFinite(epsilonOverride)||
+          epsilonOverride<0||epsilonOverride>1))
+        throw Error('Invalid training-only exploration override');
       const scores=score(obs,candidates);
       if(scores.length===0)return {candidate:null,reason:'no_executable_chain_action'};
-      const exploratory=training&&random()<epsilon;
+      const exploratory=training&&random()<
+        (epsilonOverride===null?epsilon:epsilonOverride);
       const pick=exploratory?scores[Math.floor(random()*scores.length)]:
         scores.reduce((best,row)=>!best||row.q>best.q?row:best,null);
       return {candidate:pick.candidate,features:pick.features,
