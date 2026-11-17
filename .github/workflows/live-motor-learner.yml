@@ -8,6 +8,7 @@ on:
       - feat/four-target-oracle-audit-20261116
       - feat/resource-chain-delayed-reward-20261116
       - feat/live-resource-chain-smoke-20261116
+      - feat/live-chain-frozen-neural-eval-20261117
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -32,6 +33,9 @@ on:
       - 'scripts/inspect-resource-chain-failure.js'
       - 'src/verified-motor-baseline-action.js'
       - 'test/verified-motor-baseline-action.test.js'
+      - 'src/resource-chain-offline-checkpoint.js'
+      - 'scripts/build-resource-chain-frozen-policy.js'
+      - 'test/resource-chain-offline-checkpoint.test.js'
       - 'scripts/audit-resource-chain-first-action.js'
       - 'src/motor-resource-pickup-proof.js'
       - 'test/motor-resource-pickup-proof.test.js'
@@ -63,6 +67,12 @@ jobs:
       - run: node --check scripts/inspect-resource-chain-failure.js
       - run: node --test test/motor-resource-pickup-proof.test.js
       - run: node --test test/verified-motor-baseline-action.test.js
+      - run: node --test test/resource-chain-offline-checkpoint.test.js
+      - run: node --check scripts/build-resource-chain-frozen-policy.js
+      - run: node scripts/build-resource-chain-frozen-policy.js --mode trained --seed 17 --episodes 600
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy trained --checkpoint recordings/resource-chain-offline-checkpoints/chain-trained-seed17-600.json --rotation 2 --variant skewed
+      - run: node scripts/build-resource-chain-frozen-policy.js --mode untrained --seed 17 --episodes 600
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy untrained --checkpoint recordings/resource-chain-offline-checkpoints/chain-untrained-seed17-0.json --rotation 3 --variant base
       - run: node --check scripts/audit-resource-chain-first-action.js
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true
       - run: node scripts/diagnose-motor-transfer.js
