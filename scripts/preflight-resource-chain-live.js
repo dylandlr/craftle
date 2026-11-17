@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runId=process.argv[2];
@@ -21,7 +22,13 @@ const summary=JSON.parse(fs.readFileSync(summaryPath,'utf8'));
 if(manifest.runId!==runId||summary.runId!==runId||
    summary.complete!==true||summary.schema!=='craftle.live-four-target-result.v1')
   throw Error('Cannot audit an incomplete or mismatched live run');
-const rows=fs.readFileSync(eventPath,'utf8').split(/\r?\n/)
+const sourceBytes=fs.readFileSync(eventPath);
+const sourceSha256=createHash('sha256').update(sourceBytes).digest('hex');
+if(summary.eventsSha256!==sourceSha256)
+  throw Error('Source observer event digest differs from completed live summary');
+if(!sourceBytes.toString('utf8').endsWith('\n'))
+  throw Error('Source observer event JSONL is not newline-complete');
+const rows=sourceBytes.toString('utf8').split(/\r?\n/)
   .filter(Boolean).map((line,i)=>{
     try{return JSON.parse(line);}catch{
       throw Error('Corrupt server event JSON at line '+(i+1));
@@ -48,7 +55,7 @@ const probeShapeReady=probes.length>0&&probes.every(e=>
 const result={
   schema:'craftle.resource-chain-live-preflight.v1',
   runId,source:'READ_ONLY_PRIOR_LIVE_SERVER_EVENTS',
-  sourceEventCount:rows.length,serverProbes:probes.length,
+  sourceEventCount:rows.length,sourceSha256,serverProbes:probes.length,
   observerProbePhases:phaseCounts,
   readOnlyProbeContract:probeShapeReady,
   serverInventorySamplesWithinProbes:serverInventoryProbes.length,
