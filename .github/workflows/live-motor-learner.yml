@@ -7,6 +7,7 @@ on:
       - feat/motor-four-target-20261116
       - feat/four-target-oracle-audit-20261116
       - feat/resource-chain-delayed-reward-20261116
+      - feat/live-resource-chain-smoke-20261116
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -26,6 +27,7 @@ on:
       - 'src/resource-chain-simulator.js'
       - 'scripts/audit-resource-chain-causality.js'
       - 'scripts/preflight-resource-chain-live.js'
+      - 'scripts/run-live-resource-chain-smoke.js'
       - 'test/resource-chain-q.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
@@ -49,6 +51,8 @@ jobs:
       - run: node scripts/diagnose-resource-chain.js
       - run: node scripts/audit-resource-chain-causality.js
       - run: node --check scripts/preflight-resource-chain-live.js
+      - run: node --check scripts/run-live-resource-chain-smoke.js
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
