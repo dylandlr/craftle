@@ -239,3 +239,19 @@ test('public blueprint and action geometry rotate, and the planner remains equiv
     assert.deepEqual(chainActionTarget(next),chainLayout(rot).sites.site0);
   }
 });
+
+test('completed visible structure is not credited if any required mutation lacks proof',()=>{
+  const initial=snapshot(initialBlocks,[],1);
+  const completed=snapshot(completedBlocks,[],33);
+  const p=proofs();
+  p[1].targetKey='decoySource'; // required source1 mutation has no proof
+  assert.deepEqual(chainFinalOutcome({
+    initial,final:completed,proofs:p
+  }),{terminal:true,reward:-1,success:false,
+    reason:'budget_exhausted_without_final_state'});
+  const q=proofs();
+  q[3].targetKey='decoySite'; // required site1 mutation has no proof
+  assert.equal(chainFinalOutcome({
+    initial,final:completed,proofs:q
+  }).success,false);
+});
