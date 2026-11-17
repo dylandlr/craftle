@@ -7,6 +7,7 @@ on:
       - feat/motor-four-target-20261116
       - feat/four-target-oracle-audit-20261116
       - feat/resource-chain-delayed-reward-20261116
+      - feat/live-resource-chain-smoke-20261116
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -26,6 +27,14 @@ on:
       - 'src/resource-chain-simulator.js'
       - 'scripts/audit-resource-chain-causality.js'
       - 'scripts/preflight-resource-chain-live.js'
+      - 'scripts/run-live-resource-chain-smoke.js'
+      - 'scripts/check-resource-chain-gate.js'
+      - 'scripts/inspect-resource-chain-failure.js'
+      - 'src/verified-motor-baseline-action.js'
+      - 'test/verified-motor-baseline-action.test.js'
+      - 'scripts/audit-resource-chain-first-action.js'
+      - 'src/motor-resource-pickup-proof.js'
+      - 'test/motor-resource-pickup-proof.test.js'
       - 'test/resource-chain-q.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
@@ -49,6 +58,13 @@ jobs:
       - run: node scripts/diagnose-resource-chain.js
       - run: node scripts/audit-resource-chain-causality.js
       - run: node --check scripts/preflight-resource-chain-live.js
+      - run: node --check scripts/run-live-resource-chain-smoke.js
+      - run: node --check scripts/check-resource-chain-gate.js
+      - run: node --check scripts/inspect-resource-chain-failure.js
+      - run: node --test test/motor-resource-pickup-proof.test.js
+      - run: node --test test/verified-motor-baseline-action.test.js
+      - run: node --check scripts/audit-resource-chain-first-action.js
+      - run: node scripts/run-live-resource-chain-smoke.js --self-test true
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
