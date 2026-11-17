@@ -64,27 +64,21 @@ const plugin=path.join(root,'observer/target/craftle-observer-0.1.0.jar');
 const dependencies=[
   paperJar,plugin,
   path.join(root,'src/motor-acceptance.js'),
-  path.join(root,'src/verified-motor-reward-gate.js')
+  path.join(root,'src/verified-motor-baseline-action.js')
 ];
 if(dependencies.some(p=>!fs.existsSync(p)))
   throw Error('Missing local Paper, compiled observer, motor executor or gate');
 const {executeMotorPrimitive}=await import('../src/motor-acceptance.js');
-const {verifyMotorActionEvidence}=await import('../src/verified-motor-reward-gate.js');
-// Training reward authorization is intentionally NOT a baseline evidence API.
-// Fail BEFORE starting Minecraft rather than learning gate rejection after
-// the first physical block mutation.
-if(typeof verifyMotorActionEvidence!=='function')
-  throw Error('SCRIPTED_BASELINE_ACTION_PROOF_API_MISSING: local reward gate '+
-    'only authorizes learning; a separate verifyMotorActionEvidence export '+
-    'must be implemented and tested against the local source first. '+
-    'No server was started and no run evidence was changed.');
+const {verifyMotorBaselineActionEvidence}=await import('../src/verified-motor-baseline-action.js');
+// Baseline action verification is independent of the local TRAINING-only
+// reward gate; scripted smoke never asks that gate to authorize an update.
 const {paper1211ProtocolOverride}=await import('../src/paper-1211-protocol.js');
 const {guardProtocolIntegrity}=await import('../src/motor-protocol-integrity.js');
 const mineflayer=(await import('mineflayer')).default;
 const {Vec3}=require('vec3');
 const protocolOverride=paper1211ProtocolOverride(require('minecraft-data')('1.21.1'));
 if(typeof executeMotorPrimitive!=='function'||
-  typeof verifyMotorActionEvidence!=='function'||
+  typeof verifyMotorBaselineActionEvidence!=='function'||
   typeof paper1211ProtocolOverride!=='function'||
   typeof guardProtocolIntegrity!=='function')
   throw Error('Local Minecraft action verifier interfaces are incompatible');
@@ -285,10 +279,11 @@ async function actionStep(number,pre,manifest){
       postTarget.sequence<=pre.lastSequence||
       postTarget.block!==(operation==='dig'?'minecraft:air':'minecraft:dirt'))
     throw Error('Server target post-state did not confirm executed action');
-  const proof=verifyMotorActionEvidence({
+  const proof=verifyMotorBaselineActionEvidence({
     run:manifest,decision,events:readEvents()
   });
-  if(!proof?.eligible)throw Error('Scripted action proof rejected: '+proof?.reason);
+  if(proof?.actionVerified!==true||proof.rewardEligible!==false)
+    throw Error('Scripted action proof rejected: '+proof?.reason);
   const sequence=Number(String(proof.evidenceKey).split(':').pop());
   if(!Number.isSafeInteger(sequence)||sequence<=pre.lastSequence||
     sequence>=postTarget.sequence)
@@ -311,6 +306,7 @@ async function actionStep(number,pre,manifest){
     throw Error('Final step snapshot does not agree with bound motor action');
   const entry={action:id,targetKey:key,operation,decisionKey:proof.decisionKey,
     evidenceKey:proof.evidenceKey,eventSequence:sequence,gateEligible:true,
+    trainingRewardEligible:false,scriptedActionVerified:true,
     preInventory:itemCount(pre),postInventory:itemCount(post),
     serverBootId:pre.serverBootId};
   if(evidence.some(e=>e.evidenceKey===entry.evidenceKey||
@@ -355,7 +351,7 @@ try{
       'scripts/run-live-resource-chain-smoke.js',
       'src/motor-resource-chain.js','src/motor-q-policy.js',
       'src/motor-acceptance.js',
-      'src/verified-motor-reward-gate.js',
+      'src/verified-motor-baseline-action.js',
       'observer/target/craftle-observer-0.1.0.jar'
     ].map(p=>[p,sha(path.join(root,p))]))});
   await docker('run','-d','--name',containerName,
