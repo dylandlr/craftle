@@ -42,6 +42,7 @@ on:
       - 'scripts/audit-live-resource-chain-pair.js'
       - 'src/resource-chain-benchmark-plan.js'
       - 'test/resource-chain-benchmark-plan.test.js'
+      - 'test/resource-chain-benchmark-runner.test.js'
       - 'scripts/build-resource-chain-benchmark-checkpoint.js'
       - 'scripts/run-live-resource-chain-multi-trial.js'
       - 'scripts/audit-live-resource-chain-trial.js'
@@ -81,6 +82,7 @@ jobs:
       - run: node --test test/resource-chain-live-result.test.js
       - run: node --check scripts/audit-live-resource-chain-pair.js
       - run: node --test test/resource-chain-benchmark-plan.test.js
+      - run: node --test test/resource-chain-benchmark-runner.test.js
       - run: node --check scripts/build-resource-chain-benchmark-checkpoint.js
       - run: node --check scripts/run-live-resource-chain-multi-trial.js
       - run: node --check scripts/audit-live-resource-chain-trial.js
