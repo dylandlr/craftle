@@ -25,6 +25,7 @@ on:
       - 'src/resource-chain-q.js'
       - 'src/resource-chain-simulator.js'
       - 'scripts/audit-resource-chain-causality.js'
+      - 'scripts/preflight-resource-chain-live.js'
       - 'test/resource-chain-q.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
@@ -47,6 +48,7 @@ jobs:
       - run: node --test test/resource-chain-q.test.js
       - run: node scripts/diagnose-resource-chain.js
       - run: node scripts/audit-resource-chain-causality.js
+      - run: node --check scripts/preflight-resource-chain-live.js
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
