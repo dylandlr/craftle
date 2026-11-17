@@ -114,3 +114,23 @@ test('unobserved required block and invalid blueprints fail closed',()=>{
     ...state.observation,remainingSteps:99
   },candidate));
 });
+
+test('uniform warmup is real exploration, never demonstration or frozen evaluation',()=>{
+  const state=menu(0);
+  const q=createResourceChainQ({seed:17,epsilon:0});
+  for(let i=0;i<10;i++){
+    const sampled=q.choose(state.observation,state.candidates,
+      {epsilonOverride:1});
+    assert.equal(sampled.exploratory,true);
+    assert.ok(state.candidates.some(c=>c.id===sampled.candidate.id));
+  }
+  assert.throws(()=>q.choose(state.observation,state.candidates,
+    {epsilonOverride:-0.01}));
+  assert.throws(()=>q.choose(state.observation,state.candidates,
+    {epsilonOverride:1.01}));
+  const frozen=createResourceChainQ({seed:17,training:false});
+  assert.throws(()=>frozen.choose(state.observation,state.candidates,
+    {epsilonOverride:1}));
+  assert.equal(q.stats().episodes,0);
+  assert.equal(q.stats().updates,0);
+});
