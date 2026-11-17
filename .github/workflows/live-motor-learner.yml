@@ -6,6 +6,7 @@ on:
       - feat/motor-transfer-heldout-20261113
       - feat/motor-four-target-20261116
       - feat/four-target-oracle-audit-20261116
+      - feat/resource-chain-delayed-reward-20261116
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -18,6 +19,14 @@ on:
       - 'src/motor-four-target-baselines.js'
       - 'test/motor-four-target-baselines.test.js'
       - 'scripts/audit-four-target-oracle.js'
+      - 'src/motor-resource-chain.js'
+      - 'test/motor-resource-chain.test.js'
+      - 'scripts/diagnose-resource-chain.js'
+      - 'src/resource-chain-q.js'
+      - 'src/resource-chain-simulator.js'
+      - 'scripts/audit-resource-chain-causality.js'
+      - 'scripts/preflight-resource-chain-live.js'
+      - 'test/resource-chain-q.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
   syntax:
@@ -35,6 +44,11 @@ jobs:
       - run: node scripts/diagnose-motor-four-target.js
       - run: node --check scripts/audit-four-target-oracle.js
       - run: node --test test/motor-four-target-baselines.test.js
+      - run: node --test test/motor-resource-chain.test.js
+      - run: node --test test/resource-chain-q.test.js
+      - run: node scripts/diagnose-resource-chain.js
+      - run: node scripts/audit-resource-chain-causality.js
+      - run: node --check scripts/preflight-resource-chain-live.js
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
       - run: node scripts/diagnose-motor-q-learning.js
