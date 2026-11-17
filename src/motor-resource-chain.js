@@ -274,7 +274,9 @@ export function chainFinalOutcome({initial,final,proofs,maxSteps=CHAIN_MAX_STEPS
   if(decisionIds.size!==proofs.length||evidenceIds.size!==proofs.length||
      usedTargets.size!==proofs.length||final.firstSequence<=lastSequence)
     throw Error('Duplicate proof or stale final-world observation');
-  const complete=CHAIN_SOURCES.every(k=>final.blocks?.[k]==='minecraft:air')&&
+  const complete=[...CHAIN_SOURCES,...CHAIN_DESTINATIONS].every(k=>
+    usedTargets.has(k))&&
+    CHAIN_SOURCES.every(k=>final.blocks?.[k]==='minecraft:air')&&
     CHAIN_DESTINATIONS.every(k=>final.blocks?.[k]==='minecraft:dirt')&&
     final.blocks?.decoySource==='minecraft:dirt'&&
     final.blocks?.decoySite==='minecraft:air'&&
