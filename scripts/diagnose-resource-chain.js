@@ -77,8 +77,7 @@ let plannerWins=0,randomWins=0;
 for(let i=0;i<trials;i++){
   const rotation=CHAIN_SPLITS.heldout[i%2];
   const planner=syntheticEpisode(rotation,menu=>
-    scriptedResourcePlanner({inventory:menu.observation.inventory},
-      menu.candidates));
+    scriptedResourcePlanner(menu.observation,menu.candidates));
   const randomOutcome=syntheticEpisode(rotation,menu=>
     menu.candidates[Math.floor(random()*menu.candidates.length)]);
   plannerWins+=Number(planner.success);
