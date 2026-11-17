@@ -30,6 +30,8 @@ on:
       - 'scripts/run-live-resource-chain-smoke.js'
       - 'scripts/check-resource-chain-gate.js'
       - 'scripts/inspect-resource-chain-failure.js'
+      - 'src/verified-motor-baseline-action.js'
+      - 'test/verified-motor-baseline-action.test.js'
       - 'src/motor-resource-pickup-proof.js'
       - 'test/motor-resource-pickup-proof.test.js'
       - 'test/resource-chain-q.test.js'
@@ -59,6 +61,7 @@ jobs:
       - run: node --check scripts/check-resource-chain-gate.js
       - run: node --check scripts/inspect-resource-chain-failure.js
       - run: node --test test/motor-resource-pickup-proof.test.js
+      - run: node --test test/verified-motor-baseline-action.test.js
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
