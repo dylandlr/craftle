@@ -36,6 +36,8 @@ on:
       - 'src/resource-chain-offline-checkpoint.js'
       - 'scripts/build-resource-chain-frozen-policy.js'
       - 'test/resource-chain-offline-checkpoint.test.js'
+      - 'src/resource-chain-live-result.js'
+      - 'test/resource-chain-live-result.test.js'
       - 'scripts/audit-resource-chain-first-action.js'
       - 'src/motor-resource-pickup-proof.js'
       - 'test/motor-resource-pickup-proof.test.js'
@@ -68,6 +70,7 @@ jobs:
       - run: node --test test/motor-resource-pickup-proof.test.js
       - run: node --test test/verified-motor-baseline-action.test.js
       - run: node --test test/resource-chain-offline-checkpoint.test.js
+      - run: node --test test/resource-chain-live-result.test.js
       - run: node --check scripts/build-resource-chain-frozen-policy.js
       - run: node scripts/build-resource-chain-frozen-policy.js --mode trained --seed 17 --episodes 600
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy trained --checkpoint recordings/resource-chain-offline-checkpoints/chain-trained-seed17-600.json --rotation 2 --variant skewed
