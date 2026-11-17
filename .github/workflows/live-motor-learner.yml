@@ -9,6 +9,7 @@ on:
       - feat/resource-chain-delayed-reward-20261116
       - feat/live-resource-chain-smoke-20261116
       - feat/live-chain-frozen-neural-eval-20261117
+      - feat/preregister-live-chain-multiseed-20261117
   pull_request:
     paths:
       - 'scripts/run-live-motor-learning.js'
@@ -39,6 +40,17 @@ on:
       - 'src/resource-chain-live-result.js'
       - 'test/resource-chain-live-result.test.js'
       - 'scripts/audit-live-resource-chain-pair.js'
+      - 'src/resource-chain-benchmark-plan.js'
+      - 'test/resource-chain-benchmark-plan.test.js'
+      - 'test/resource-chain-benchmark-runner.test.js'
+      - 'scripts/build-resource-chain-benchmark-checkpoint.js'
+      - 'scripts/run-live-resource-chain-multi-trial.js'
+      - 'scripts/audit-live-resource-chain-trial.js'
+      - 'scripts/run-resource-chain-benchmark.js'
+      - 'scripts/inspect-resource-chain-benchmark.js'
+      - 'src/resource-chain-benchmark-analysis.js'
+      - 'test/resource-chain-benchmark-analysis.test.js'
+      - 'scripts/analyze-resource-chain-benchmark.js'
       - 'scripts/audit-resource-chain-first-action.js'
       - 'src/motor-resource-pickup-proof.js'
       - 'test/motor-resource-pickup-proof.test.js'
@@ -73,6 +85,19 @@ jobs:
       - run: node --test test/resource-chain-offline-checkpoint.test.js
       - run: node --test test/resource-chain-live-result.test.js
       - run: node --check scripts/audit-live-resource-chain-pair.js
+      - run: node --test test/resource-chain-benchmark-plan.test.js
+      - run: node --test test/resource-chain-benchmark-runner.test.js
+      - run: node --check scripts/build-resource-chain-benchmark-checkpoint.js
+      - run: node --check scripts/run-live-resource-chain-multi-trial.js
+      - run: node --check scripts/audit-live-resource-chain-trial.js
+      - run: node --check scripts/run-resource-chain-benchmark.js
+      - run: node --check scripts/inspect-resource-chain-benchmark.js
+      - run: node --test test/resource-chain-benchmark-analysis.test.js
+      - run: node --check scripts/analyze-resource-chain-benchmark.js
+      - run: node scripts/analyze-resource-chain-benchmark.js chain-multiseed-ci
+      - run: node scripts/run-resource-chain-benchmark.js --plan-only true --suite-id chain-multiseed-ci
+      - run: node scripts/build-resource-chain-benchmark-checkpoint.js --benchmark true --mode trained --seed 101 --episodes 600 --self-test true
+      - run: node scripts/build-resource-chain-benchmark-checkpoint.js --benchmark true --mode untrained --seed 101 --episodes 600 --self-test true
       - run: node --check scripts/build-resource-chain-frozen-policy.js
       - run: node scripts/build-resource-chain-frozen-policy.js --mode trained --seed 17 --episodes 600
       - run: node scripts/run-live-resource-chain-smoke.js --self-test true --policy trained --checkpoint recordings/resource-chain-offline-checkpoints/chain-trained-seed17-600.json --rotation 2 --variant skewed
