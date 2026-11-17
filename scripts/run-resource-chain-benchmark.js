@@ -8,6 +8,8 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {loadResourceChainOfflineCheckpoint}
   from '../src/resource-chain-offline-checkpoint.js';
+import {auditPreregisteredTrial}
+  from './audit-live-resource-chain-trial.js';
 import {
   preregisterChainBenchmark,verifyChainBenchmarkPlan,
   validateChainBenchmarkTrial,summarizeChainBenchmark,
@@ -54,6 +56,7 @@ const sourceFiles=[
   'src/verified-motor-baseline-action.js',
   'scripts/build-resource-chain-benchmark-checkpoint.js',
   'scripts/run-live-resource-chain-multi-trial.js',
+  'scripts/audit-live-resource-chain-trial.js',
   'scripts/run-resource-chain-benchmark.js'
 ];
 const sourceHashes=Object.fromEntries(sourceFiles.map(name=>
@@ -234,6 +237,7 @@ function receiptFor(trial,exit){
     'recordings/live-resource-chain-frozen-eval',trial.runId);
   const summaryFile=path.join(location,'summary.json');
   let observed=null,reason=null,classification='infrastructure_error';
+  let audit=null;
   if(fs.existsSync(summaryFile)){
     try{
       observed=JSON.parse(fs.readFileSync(summaryFile,'utf8'));
@@ -260,10 +264,22 @@ function receiptFor(trial,exit){
           manifest.benchmarkTrialId!==trial.trialId||
           manifest.offlineModelUpdates!==observed.offlineModelUpdates)
           throw Error('Run manifest identity mismatch');
+        if(classification!=='infrastructure_error'){
+          audit=auditPreregisteredTrial({
+            runId:trial.runId,mode:trial.mode,
+            planSha256:plan.planSha256
+          });
+          if(audit.success!==observed.success||
+            audit.terminalReward!==observed.terminalReward||
+            audit.realPickups!==observed.verifiedRealPickups||
+            audit.serverEvidenceSha256!==observed.eventsSha256)
+            throw Error('Independent audit differs from reported outcome');
+        }
       }
     }catch(e){
       classification='infrastructure_error';
-      reason='summary_integrity_error: '+String(e);
+      audit=null;
+      reason='summary_or_replay_integrity_error: '+String(e);
     }
   }else{
     reason='runner_did_not_write_summary';
@@ -282,6 +298,8 @@ function receiptFor(trial,exit){
     terminalReward:classification==='policy_success'?1:
       classification==='policy_failure'?-1:null,
     serverEventSha256:observed?.eventsSha256??null,
+    independentProofReplayPassed:audit?.verified===true,
+    auditedActionKeys:audit?.executedActions??null,
     savedSummarySha256:fs.existsSync(summaryFile)?
       hash(summaryFile):null
   };
