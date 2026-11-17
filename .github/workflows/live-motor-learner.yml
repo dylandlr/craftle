@@ -22,6 +22,8 @@ on:
       - 'src/motor-resource-chain.js'
       - 'test/motor-resource-chain.test.js'
       - 'scripts/diagnose-resource-chain.js'
+      - 'src/resource-chain-q.js'
+      - 'test/resource-chain-q.test.js'
       - '.github/workflows/live-motor-learner.yml'
 jobs:
   syntax:
@@ -40,6 +42,7 @@ jobs:
       - run: node --check scripts/audit-four-target-oracle.js
       - run: node --test test/motor-four-target-baselines.test.js
       - run: node --test test/motor-resource-chain.test.js
+      - run: node --test test/resource-chain-q.test.js
       - run: node scripts/diagnose-resource-chain.js
       - run: node scripts/diagnose-motor-transfer.js
       - run: node --check scripts/fix-paper-same-tick-proof.cjs
