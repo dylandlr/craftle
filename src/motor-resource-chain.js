@@ -20,7 +20,7 @@ function integer3(p) {
 }
 function rotate(x,z,n) {
   for(let i=0;i<n;i++) [x,z]=[-z,x];
-  return {x,y:81,z};
+  return {x:x||0,y:81,z:z||0};
 }
 function keyOf(p) {return [p.x,p.y,p.z].join(':');}
 function itemCount(inventory,item) {
