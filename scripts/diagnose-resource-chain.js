@@ -157,14 +157,19 @@ for(const seed of seeds){
     heldoutWins+=Number(outcome.success);
   }
   const novelGeometries=[];
+  // Same feature encoder and architecture, same seed, but NO updates.
+  const untrained=createResourceChainQ({seed,training:false,epsilon:0});
   for(const variant of CHAIN_GEOMETRY_VARIANTS){
     for(const rotation of evalRotations){
       const test=syntheticEpisode(rotation,menu=>
         frozen.choose(menu.observation,menu.candidates),{variant});
       const planner=syntheticEpisode(rotation,menu=>
         scriptedResourcePlanner(menu.observation,menu.candidates),{variant});
+      const noTraining=syntheticEpisode(rotation,menu=>
+        untrained.choose(menu.observation,menu.candidates),{variant});
       novelGeometries.push({variant,rotation,
         neuralSuccess:test.success,plannerSuccess:planner.success,
+        untrainedSameArchitectureSuccess:noTraining.success,
         neuralChoices:test.choices});
     }
   }
@@ -172,6 +177,8 @@ for(const seed of seeds){
     uniformWarmupEpisodes,learningStages,
     heldoutSyntheticWins:heldoutWins,heldoutSyntheticTrials:100,
     novelGeometryWins:novelGeometries.filter(x=>x.neuralSuccess).length,
+    untrainedSameArchitectureNovelWins:novelGeometries.filter(
+      x=>x.untrainedSameArchitectureSuccess).length,
     novelGeometryCount:novelGeometries.length,
     novelGeometries,
     trainedEpisodes:model.stats().episodes,gradientUpdates:model.stats().updates});
@@ -189,5 +196,6 @@ console.log(JSON.stringify({
     'The scripted planner and new neural Q observe identical public blueprint coordinates.',
     'The new MC neural learner uses terminal returns, success/failure replay and 200 uniform-random warmup episodes; no planner imitation.',
     'The 100 old holdout repetitions are only two layouts; novelGeometryCount reports ten distinct variant/rotation combinations.',
-    'Four non-base geometry variants change source/destination/distractor positions and are never used for training.']
+    'Four non-base geometry variants change source/destination/distractor positions and are never used for training.',
+    'Untrained same-architecture policies use identical blueprint-conditioned features with no updates.']
 },null,2));
