@@ -11,6 +11,7 @@ export const CHAIN_ALL_SOURCES=[...CHAIN_SOURCES,'decoySource'];
 export const CHAIN_ALL_DESTINATIONS=[...CHAIN_DESTINATIONS,'decoySite'];
 export const CHAIN_KEYS=[...CHAIN_SOURCES,...CHAIN_DESTINATIONS,...CHAIN_DECOYS];
 export const CHAIN_MAX_STEPS=4;
+const samePosition=(a,b)=>integer3(a)&&integer3(b)&&a.x===b.x&&a.y===b.y&&a.z===b.z;
 export const CHAIN_SPLITS=Object.freeze({train:Object.freeze([0,1]),
   heldout:Object.freeze([2,3])});
 
@@ -159,7 +160,20 @@ export function chainCandidateMenu({layout,position,blockAt,inventory=[],
     return Math.hypot(p.x+.5-position.x,p.y+.5-position.y,p.z+.5-position.z)>4.5;
   }))
     throw Error('Resource-chain candidate exceeds Minecraft action reach');
+  // The complete required-source and destination blueprint is PUBLIC to all
+  // policies. Distractors are legitimate observed candidates but are absent
+  // from the blueprint. Do not leak candidate id or the intended next action.
+  const blueprint={
+    sources:CHAIN_SOURCES.map(key=>({...layout.sites[key]})),
+    sites:CHAIN_DESTINATIONS.map(key=>({...layout.sites[key]}))
+  };
   return {observation:{
+    blueprint,
+    remainingSteps:CHAIN_MAX_STEPS-CHAIN_KEYS.filter(key=>{
+      const p=layout.sites[key],block=blockAt(p.x,p.y,p.z);
+      return CHAIN_ALL_SOURCES.includes(key)?block?.boundingBox!=='block':
+        block?.boundingBox==='block';
+    }).length,
     position:{x:Math.floor(position.x),y:Math.floor(position.y),
       z:Math.floor(position.z)},
     // A shared global construction objective, NOT the label of the next action.
@@ -168,18 +182,49 @@ export function chainCandidateMenu({layout,position,blockAt,inventory=[],
     inventory:inventory.map(i=>({...i})),health,food,stalls:0,blockAt
   },candidates:options};
 }
-export function scriptedResourcePlanner(snapshot,options) {
-  if(!snapshot||!Array.isArray(options))
-    throw Error('Planner requires observed state and executable options');
-  const dirt=itemCount(snapshot.inventory??[],'dirt');
-  // The planner receives the public build blueprint and avoids distractors.
-  const matching=options.filter(c=>c?.executable &&
-    (CHAIN_SOURCES.includes(c.id)||CHAIN_DESTINATIONS.includes(c.id)));
+// Both the scripted baseline and learning agents receive identical public
+// observation.blueprint, inventory and executable candidate action arguments.
+// No hidden key IDs or task-generation labels are used to select an action.
+export function chainActionTarget(candidate) {
+  if(!candidate?.executable||!['dig','place'].includes(candidate.operation))
+    throw Error('Nonexecutable chain candidate');
+  const args=candidate.arguments;
+  if(candidate.operation==='dig') {
+    if(!integer3(args?.position))throw Error('Invalid dig action geometry');
+    return {...args.position};
+  }
+  if(!integer3(args?.reference)||!integer3(args?.face)||
+      Math.abs(args.face.x)+Math.abs(args.face.y)+Math.abs(args.face.z)!==1)
+    throw Error('Invalid placement action geometry');
+  return {
+    x:args.reference.x+args.face.x,
+    y:args.reference.y+args.face.y,
+    z:args.reference.z+args.face.z
+  };
+}
+export function validateChainBlueprint(observation) {
+  const blueprint=observation?.blueprint;
+  if(!blueprint||!Array.isArray(blueprint.sources)||
+      !Array.isArray(blueprint.sites)||
+      blueprint.sources.length!==2||blueprint.sites.length!==2||
+      ![...blueprint.sources,...blueprint.sites].every(integer3)||
+      new Set([...blueprint.sources,...blueprint.sites].map(keyOf)).size!==4)
+    throw Error('Missing or invalid public construction blueprint');
+  return blueprint;
+}
+export function scriptedResourcePlanner(observation,candidates) {
+  const blueprint=validateChainBlueprint(observation);
+  if(!Array.isArray(candidates)||!Array.isArray(observation.inventory))
+    throw Error('Planner requires public observation and candidate menu');
+  const dirt=itemCount(observation.inventory,'dirt');
+  const matching=candidates.filter(c=>{
+    if(!c?.executable)return false;
+    const target=chainActionTarget(c);
+    const required=c.operation==='dig'?blueprint.sources:blueprint.sites;
+    return required.some(p=>samePosition(p,target));
+  });
   const operation=dirt>0?'place':'dig';
-  const selected=matching.find(c=>c.operation===operation);
-  if(selected)return selected;
-  // If inventory is already held but no site can be filled, do not invent a move.
-  return null;
+  return matching.find(c=>c.operation===operation)??null;
 }
 export function chainFinalOutcome({initial,final,proofs,maxSteps=CHAIN_MAX_STEPS}={}){
   validateInitialChainSnapshot(initial);
