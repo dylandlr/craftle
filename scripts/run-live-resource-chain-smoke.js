@@ -18,6 +18,7 @@ import {
   CHAIN_ALL_SOURCES,CHAIN_KEYS,CHAIN_MAX_STEPS
 } from '../src/motor-resource-chain.js';
 import {syntheticEpisode} from '../src/resource-chain-simulator.js';
+import {findResourceChainPickup} from '../src/motor-resource-pickup-proof.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url);
@@ -95,6 +96,7 @@ const writeJson=(name,value)=>fs.writeFileSync(path.join(runDir,name),
 let bot=null,eventPath=null,created=false,protocolFailure=null,
   interrupted=false,summary={complete:false};
 const evidence=[];
+const creditedPickupEntities=[];
 const abort=()=>{interrupted=true;};
 process.on('SIGINT',abort);process.on('SIGTERM',abort);
 function assertRunning(){
@@ -168,35 +170,29 @@ async function verifyPickup(source,id,earliestSequence,expectedCount){
   while(Date.now()<deadline){
     assertRunning();
     const records=readEvents();
-    const drops=records.filter(e=>
+    const correlated=findResourceChainPickup({
+      events:records,source,playerUuid:id.playerUuid,
+      serverBootId:id.serverBootId,afterSequence:earliestSequence,
+      consumedEntityUuids:creditedPickupEntities
+    });
+    if(correlated){
+      await settle(4);
+      const post=await probeAll('pickup-'+id.action);
+      if(itemCount(post)!==expectedCount||
+        post.firstSequence<=correlated.pickupEventSequence)
+        throw Error('Correlated pickup event lacks subsequent server inventory increase');
+      creditedPickupEntities.push(correlated.itemEntityUuid);
+      journal({type:'verified_real_pickup',action:id.action,
+        ...correlated,afterInventory:itemCount(post)});
+      return post;
+    }
+    const hasSourceDrop=records.some(e=>
       e.event==='block_drops_event'&&
       e.playerUuid===id.playerUuid&&
       e.serverBootId===id.serverBootId&&
       e.sequence>earliestSequence&&
       e.x===source.x&&e.y===source.y&&e.z===source.z);
-    const droppedEntities=new Set(drops.flatMap(e=>
-      (Array.isArray(e.drops)?e.drops:[]).filter(item=>
-        item.item==='minecraft:dirt'&&item.count>=1)
-        .map(item=>item.entityUuid)));
-    const pickups=records.filter(e=>
-      e.event==='item_pickup_event'&&
-      e.playerUuid===id.playerUuid&&
-      e.serverBootId===id.serverBootId&&
-      e.sequence>earliestSequence&&
-      e.item==='minecraft:dirt'&&
-      droppedEntities.has(e.itemEntityUuid));
-    if(pickups.length){
-      await settle(4);
-      const post=await probeAll('pickup-'+id.action);
-      if(itemCount(post)!==expectedCount)
-        throw Error('Pickup event was not followed by authoritative inventory increase');
-      journal({type:'verified_real_pickup',action:id.action,
-        pickupEventSequences:pickups.map(e=>e.sequence),
-        itemEntityUuid:pickups[0].itemEntityUuid,
-        afterInventory:itemCount(post)});
-      return post;
-    }
-    if(!drops.length){
+    if(!hasSourceDrop){
       await settle(3);
       continue;
     }
