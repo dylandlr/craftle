@@ -48,6 +48,9 @@ on:
       - 'scripts/audit-live-resource-chain-trial.js'
       - 'scripts/run-resource-chain-benchmark.js'
       - 'scripts/inspect-resource-chain-benchmark.js'
+      - 'src/resource-chain-benchmark-analysis.js'
+      - 'test/resource-chain-benchmark-analysis.test.js'
+      - 'scripts/analyze-resource-chain-benchmark.js'
       - 'scripts/audit-resource-chain-first-action.js'
       - 'src/motor-resource-pickup-proof.js'
       - 'test/motor-resource-pickup-proof.test.js'
@@ -89,6 +92,9 @@ jobs:
       - run: node --check scripts/audit-live-resource-chain-trial.js
       - run: node --check scripts/run-resource-chain-benchmark.js
       - run: node --check scripts/inspect-resource-chain-benchmark.js
+      - run: node --test test/resource-chain-benchmark-analysis.test.js
+      - run: node --check scripts/analyze-resource-chain-benchmark.js
+      - run: node scripts/analyze-resource-chain-benchmark.js chain-multiseed-ci
       - run: node scripts/run-resource-chain-benchmark.js --plan-only true --suite-id chain-multiseed-ci
       - run: node scripts/build-resource-chain-benchmark-checkpoint.js --benchmark true --mode trained --seed 101 --episodes 600 --self-test true
       - run: node scripts/build-resource-chain-benchmark-checkpoint.js --benchmark true --mode untrained --seed 101 --episodes 600 --self-test true
