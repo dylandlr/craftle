@@ -11,6 +11,24 @@ export const CHAIN_ALL_SOURCES=[...CHAIN_SOURCES,'decoySource'];
 export const CHAIN_ALL_DESTINATIONS=[...CHAIN_DESTINATIONS,'decoySite'];
 export const CHAIN_KEYS=[...CHAIN_SOURCES,...CHAIN_DESTINATIONS,...CHAIN_DECOYS];
 export const CHAIN_MAX_STEPS=4;
+// Only the base template is used for training. These physical geometry
+// variants are RESERVED for holdout evaluation and must never be included in
+// the training sampler or updated network's replay experience.
+export const CHAIN_GEOMETRY_VARIANTS=Object.freeze([
+  'base','far_sources','wide_sites','skewed','close_decoys'
+]);
+const TEMPLATES=Object.freeze({
+  base:{source0:[1,0],source1:[0,1],site0:[-2,0],site1:[0,-2],
+    decoySource:[1,1],decoySite:[-1,-1]},
+  far_sources:{source0:[2,0],source1:[0,2],site0:[-2,0],site1:[0,-2],
+    decoySource:[1,1],decoySite:[-1,-1]},
+  wide_sites:{source0:[1,0],source1:[0,1],site0:[-3,0],site1:[0,-3],
+    decoySource:[1,1],decoySite:[-1,-1]},
+  skewed:{source0:[1,0],source1:[1,2],site0:[-3,0],site1:[0,-2],
+    decoySource:[0,1],decoySite:[-1,-1]},
+  close_decoys:{source0:[1,0],source1:[0,1],site0:[-2,0],site1:[0,-2],
+    decoySource:[2,1],decoySite:[-1,0]}
+});
 const samePosition=(a,b)=>integer3(a)&&integer3(b)&&a.x===b.x&&a.y===b.y&&a.z===b.z;
 export const CHAIN_SPLITS=Object.freeze({train:Object.freeze([0,1]),
   heldout:Object.freeze([2,3])});
@@ -26,20 +44,21 @@ function keyOf(p) {return [p.x,p.y,p.z].join(':');}
 function itemCount(inventory,item) {
   return inventory.filter(x=>x?.name===item).reduce((n,x)=>n+x.count,0);
 }
-export function chainLayout(rotation) {
+export function chainLayout(rotation,variant='base') {
   if(!Number.isSafeInteger(rotation)||rotation<0||rotation>3)
     throw Error('Invalid chain layout rotation');
-  const sites={
-    source0:rotate(1,0,rotation),
-    source1:rotate(0,1,rotation),
-    site0:rotate(-2,0,rotation),
-    site1:rotate(0,-2,rotation),
-    decoySource:rotate(1,1,rotation),
-    decoySite:rotate(-1,-1,rotation)
-  };
+  if(!Object.hasOwn(TEMPLATES,variant))
+    throw Error('Unknown resource-chain geometry variant');
+  const template=TEMPLATES[variant];
+  const sites=Object.fromEntries(
+    CHAIN_KEYS.map(key=>[key,rotate(...template[key],rotation)])
+  );
   if(new Set(Object.values(sites).map(keyOf)).size!==6)
     throw Error('Overlapping resource-chain sites');
-  return {schema:CHAIN_SCHEMA,rotation,sites};
+  if(Object.values(sites).some(p=>
+    Math.hypot(p.x,p.y-81,p.z)>3.5))
+    throw Error('Resource-chain template exceeds bounded reach');
+  return {schema:CHAIN_SCHEMA,rotation,variant,sites};
 }
 export function assertChainSplitDisjoint() {
   const fingerprint=r=>JSON.stringify(chainLayout(r).sites);
@@ -108,6 +127,7 @@ export function chainSnapshotFromProbes(layout,probes) {
   return {
     schema:'craftle.resource-chain-snapshot.v1',
     layoutRotation:layout.rotation,
+    layoutVariant:layout.variant,
     serverBootId:probes[0].serverBootId,
     playerUuid:probes[0].playerUuid,
     world:probes[0].world,
@@ -232,6 +252,7 @@ export function chainFinalOutcome({initial,final,proofs,maxSteps=CHAIN_MAX_STEPS
      initial.serverBootId!==final.serverBootId||
      initial.playerUuid!==final.playerUuid||initial.world!==final.world||
      initial.layoutRotation!==final.layoutRotation||
+     initial.layoutVariant!==final.layoutVariant||
      !Array.isArray(proofs)||!Number.isSafeInteger(maxSteps)||maxSteps<4||
      maxSteps>8||proofs.length>maxSteps)
     throw Error('Invalid chain outcome identity or proof ledger');
