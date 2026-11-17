@@ -119,15 +119,33 @@ for(const seed of seeds){
     accuracy:won/100});
 }
 const episodicNeuralQ=[];
+const uniformWarmupEpisodes=200;
 for(const seed of seeds){
   const model=createResourceChainQ({seed,alpha:0.02,epsilon:0.4,
     gamma:0.95,replayPasses:6,replayCapacity:256});
   let trainWins=0;
-  for(const task of chainTasks(1000,{seed,split:'train'})){
+  const learningStages=[];
+  const trainingTasks=chainTasks(1000,{seed,split:'train'});
+  for(let index=0;index<trainingTasks.length;index++){
+    const task=trainingTasks[index];
+    const warmup=index<uniformWarmupEpisodes;
     const outcome=syntheticEpisode(task.rotation,menu=>model.choose(
-      menu.observation,menu.candidates),{afterEpisode:episode=>
-      model.learnEpisode(episode)});
+      menu.observation,menu.candidates,{
+        epsilonOverride:warmup?1:null
+      }),{afterEpisode:episode=>model.learnEpisode(episode)});
     trainWins+=Number(outcome.success);
+    if([200,400,600,800,1000].includes(index+1)){
+      const checkpoint=createResourceChainQ({seed,training:false,
+        snapshot:model.snapshot(),epsilon:0});
+      let correct=0;
+      for(let evaluation=0;evaluation<20;evaluation++){
+        const trial=syntheticEpisode(evalRotations[evaluation%2],
+          menu=>checkpoint.choose(menu.observation,menu.candidates));
+        correct+=Number(trial.success);
+      }
+      learningStages.push({episodes:index+1,
+        heldoutSuccesses:correct,heldoutTrials:20});
+    }
   }
   const frozen=createResourceChainQ({seed,training:false,
     snapshot:model.snapshot(),epsilon:0});
@@ -138,6 +156,7 @@ for(const seed of seeds){
     heldoutWins+=Number(outcome.success);
   }
   episodicNeuralQ.push({seed,trainWins,trainTrials:1000,
+    uniformWarmupEpisodes,learningStages,
     heldoutSyntheticWins:heldoutWins,heldoutSyntheticTrials:100,
     trainedEpisodes:model.stats().episodes,gradientUpdates:model.stats().updates});
 }
@@ -152,5 +171,6 @@ console.log(JSON.stringify({
   notes:['Simulated inventory pickup is instantaneous; real drops may require movement.',
     'No server proof, no live weights, no claim of autonomous planning.',
     'The scripted planner and new neural Q observe identical public blueprint coordinates.',
-    'The new MC neural learner uses complete terminal returns and balanced success/failure replay; no planner imitation.']
+    'The new MC neural learner uses terminal returns, success/failure replay and 200 uniform-random warmup episodes; no planner imitation.',
+    'Heldout synthetic trials repeat the same two rotated layouts and are not 100 independent unseen worlds.']
 },null,2));
