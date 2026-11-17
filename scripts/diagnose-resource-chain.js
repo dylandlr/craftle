@@ -3,10 +3,11 @@
 import {createMotorQPolicy} from '../src/motor-q-policy.js';
 import {createResourceChainQ} from '../src/resource-chain-q.js';
 import {chainLayout,chainCandidateMenu,scriptedResourcePlanner,
-  CHAIN_KEYS,CHAIN_SPLITS,chainTasks} from '../src/motor-resource-chain.js';
+  CHAIN_KEYS,CHAIN_SPLITS,chainTasks,CHAIN_GEOMETRY_VARIANTS} from '../src/motor-resource-chain.js';
 
-function syntheticEpisode(rotation,choose,{update=null,afterEpisode=null}={}){
-  const layout=chainLayout(rotation);
+function syntheticEpisode(rotation,choose,{update=null,afterEpisode=null,
+    variant='base'}={}){
+  const layout=chainLayout(rotation,variant);
   const blocks={source0:'dirt',source1:'dirt',decoySource:'dirt',
     site0:'air',site1:'air',decoySite:'air'};
   let inventory=0;
@@ -155,9 +156,24 @@ for(const seed of seeds){
       frozen.choose(menu.observation,menu.candidates));
     heldoutWins+=Number(outcome.success);
   }
+  const novelGeometries=[];
+  for(const variant of CHAIN_GEOMETRY_VARIANTS){
+    for(const rotation of evalRotations){
+      const test=syntheticEpisode(rotation,menu=>
+        frozen.choose(menu.observation,menu.candidates),{variant});
+      const planner=syntheticEpisode(rotation,menu=>
+        scriptedResourcePlanner(menu.observation,menu.candidates),{variant});
+      novelGeometries.push({variant,rotation,
+        neuralSuccess:test.success,plannerSuccess:planner.success,
+        neuralChoices:test.choices});
+    }
+  }
   episodicNeuralQ.push({seed,trainWins,trainTrials:1000,
     uniformWarmupEpisodes,learningStages,
     heldoutSyntheticWins:heldoutWins,heldoutSyntheticTrials:100,
+    novelGeometryWins:novelGeometries.filter(x=>x.neuralSuccess).length,
+    novelGeometryCount:novelGeometries.length,
+    novelGeometries,
     trainedEpisodes:model.stats().episodes,gradientUpdates:model.stats().updates});
 }
 console.log(JSON.stringify({
@@ -172,5 +188,6 @@ console.log(JSON.stringify({
     'No server proof, no live weights, no claim of autonomous planning.',
     'The scripted planner and new neural Q observe identical public blueprint coordinates.',
     'The new MC neural learner uses terminal returns, success/failure replay and 200 uniform-random warmup episodes; no planner imitation.',
-    'Heldout synthetic trials repeat the same two rotated layouts and are not 100 independent unseen worlds.']
+    'The 100 old holdout repetitions are only two layouts; novelGeometryCount reports ten distinct variant/rotation combinations.',
+    'Four non-base geometry variants change source/destination/distractor positions and are never used for training.']
 },null,2));
