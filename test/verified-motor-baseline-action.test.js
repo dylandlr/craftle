@@ -146,3 +146,28 @@ test('binding must precede actor and leave positive observed server duration',()
   const h=fixture();h.events[0].sequence=100;
   assert.equal(result(h).reason,'unbound_actor_event');
 });
+
+test('frozen neural observational proof uses truthful no-learning metadata',()=>{
+  const f=fixture();
+  f.run.assistance='frozen_offline_neural';
+  f.run.policy='frozen_neural_evaluation';
+  const proof=result(f);
+  assert.equal(proof.actionVerified,true);
+  assert.equal(proof.trainingRewardEligible,false);
+  assert.equal(proof.rewardEligible,false);
+  assert.equal(proof.reason,'server_bound_frozen_neural_action_and_post_state');
+  assert.equal(proof.evidenceKey,'boot1:11');
+});
+test('frozen training or other policy metadata never gains proof permission',()=>{
+  for(const wrong of [
+    {learningEnabled:true},{trainingEligible:true},{isolated:false},
+    {policy:'scripted_nonlearning_smoke'},
+    {assistance:'none'}
+  ]){
+    const f=fixture();
+    f.run.assistance='frozen_offline_neural';
+    f.run.policy='frozen_neural_evaluation';
+    Object.assign(f.run,wrong);
+    assert.equal(result(f).actionVerified,false);
+  }
+});
