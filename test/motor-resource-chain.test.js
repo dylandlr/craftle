@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {createMotorQPolicy,MOTOR_FEATURE_COUNT} from '../src/motor-q-policy.js';
 import {chainLayout,chainTasks,assertChainSplitDisjoint,chainSnapshotFromProbes,
   validateInitialChainSnapshot,chainCandidateMenu,scriptedResourcePlanner,
-  chainFinalOutcome,CHAIN_KEYS,CHAIN_SCHEMA} from '../src/motor-resource-chain.js';
+  chainFinalOutcome,chainActionTarget,validateChainBlueprint,
+  CHAIN_KEYS,CHAIN_SCHEMA} from '../src/motor-resource-chain.js';
 
 const layout=chainLayout(0);
 const identity={serverBootId:'boot1',playerUuid:'user1',world:'minecraft:overworld'};
@@ -79,7 +80,7 @@ test('starts empty-handed and exposes ONLY the three observed digs (including di
   const menu=chainCandidateMenu(observedContext());
   assert.deepEqual(menu.candidates.map(c=>c.id),['source0','source1','decoySource']);
   assert.ok(menu.candidates.every(c=>c.operation==='dig'));
-  assert.equal(scriptedResourcePlanner(init,menu.candidates).id,'source0');
+  assert.equal(scriptedResourcePlanner(menu.observation,menu.candidates).id,'source0');
   const policy=createMotorQPolicy({seed:17,training:false});
   assert.equal(policy.scoreCandidates(menu.observation,menu.candidates).length,3);
 });
@@ -90,7 +91,7 @@ test('inventory and post-dig observations gate the PLACE affordances',()=>{
   assert.deepEqual(menu.candidates.map(c=>c.id),
     ['source1','decoySource','site0','site1','decoySite']);
   const partial=snapshot(blocks,[{name:'dirt',count:1}],8);
-  assert.equal(scriptedResourcePlanner(partial,menu.candidates).id,'site0');
+  assert.equal(scriptedResourcePlanner(menu.observation,menu.candidates).id,'site0');
   const consumed={...blocks,site0:'minecraft:dirt'};
   const empty=chainCandidateMenu(observedContext(0,consumed,[]));
   assert.deepEqual(empty.candidates.map(c=>c.id),['source1','decoySource']);
@@ -201,11 +202,40 @@ test('scripted planner avoids valid distractors with public construction bluepri
   const start=snapshot(initialBlocks,[],1);
   const first=chainCandidateMenu(observedContext());
   assert.equal(first.candidates.length,3);
-  assert.equal(scriptedResourcePlanner(start,first.candidates).id,'source0');
+  assert.equal(scriptedResourcePlanner(first.observation,first.candidates).id,'source0');
   const postDig={...initialBlocks,source0:'minecraft:air'};
   const next=chainCandidateMenu(observedContext(0,postDig,
     [{name:'dirt',count:1}]));
   assert.equal(next.candidates.length,5);
-  assert.equal(scriptedResourcePlanner(
-    snapshot(postDig,[{name:'dirt',count:1}],10),next.candidates).id,'site0');
+  assert.equal(scriptedResourcePlanner(next.observation,next.candidates).id,'site0');
+});
+
+test('planner uses only candidate operation geometry and the public blueprint',()=>{
+  const menu=chainCandidateMenu(observedContext());
+  const blueprint=validateChainBlueprint(menu.observation);
+  assert.equal(blueprint.sources.length,2);
+  assert.equal(blueprint.sites.length,2);
+  const aliases=menu.candidates.map((c,i)=>({...c,id:'opaque-'+i}));
+  assert.equal(scriptedResourcePlanner(menu.observation,aliases).id,'opaque-0');
+  assert.deepEqual(chainActionTarget(aliases[0]),layout.sites.source0);
+  assert.throws(()=>scriptedResourcePlanner({...menu.observation,
+    blueprint:null},menu.candidates));
+  assert.throws(()=>chainActionTarget({executable:true,
+    operation:'place',arguments:{reference:{x:0,y:80,z:0},
+    face:{x:0,y:2,z:0}}}));
+});
+
+test('public blueprint and action geometry rotate, and the planner remains equivariant',()=>{
+  for(const rot of [0,1,2,3]){
+    const menu=chainCandidateMenu(observedContext(rot));
+    const first=scriptedResourcePlanner(menu.observation,menu.candidates);
+    assert.equal(first.id,'source0');
+    assert.deepEqual(chainActionTarget(first),chainLayout(rot).sites.source0);
+    const postDig={...initialBlocks,source0:'minecraft:air'};
+    const after=chainCandidateMenu(observedContext(rot,postDig,
+      [{name:'dirt',count:1}]));
+    const next=scriptedResourcePlanner(after.observation,after.candidates);
+    assert.equal(next.id,'site0');
+    assert.deepEqual(chainActionTarget(next),chainLayout(rot).sites.site0);
+  }
 });
