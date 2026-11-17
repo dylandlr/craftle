@@ -24,6 +24,8 @@ import {loadResourceChainOfflineCheckpoint}
   from '../src/resource-chain-offline-checkpoint.js';
 import {classifyResourceChainLiveTrial}
   from '../src/resource-chain-live-result.js';
+import {verifyChainBenchmarkPlan}
+  from '../src/resource-chain-benchmark-plan.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url);
@@ -89,6 +91,41 @@ if(loadedCheckpoint&&loadedCheckpoint.metadata.mode!==policyMode)
   throw Error('Frozen checkpoint mode mismatch with preregistration');
  // No success-based screening of trained or untrained policies.
 const frozenPolicy=loadedCheckpoint?.policy??null;
+// CI may preflight a candidate checkpoint without local Paper or suite files.
+ // Every REAL trial must independently re-read the immutable plan and lock.
+if(!selfTest){
+  const benchmarkDir=path.join(root,
+    'recordings/live-resource-chain-benchmarks',suiteId);
+  const preregistration=JSON.parse(fs.readFileSync(
+    path.join(benchmarkDir,'preregistration.json'),'utf8'));
+  verifyChainBenchmarkPlan(preregistration);
+  if(preregistration.planSha256!==planSha256)
+    throw Error('Preregistered plan digest differs from trial contract');
+  const expectedTrial=preregistration.trials.find(t=>
+    t.trialId===trialId);
+  if(!expectedTrial||expectedTrial.runId!==runId||
+    expectedTrial.mode!==policyMode||
+    expectedTrial.rotation!==rotation||
+    expectedTrial.variant!==variant||
+    expectedTrial.seed!==loadedCheckpoint?.metadata.training.seed)
+    throw Error('Trial identity, seed or geometry differs from locked plan');
+  for(const [name,recordedHash] of Object.entries(
+    preregistration.sourceHashes)){
+    if(!/^[a-z0-9][a-z0-9/.-]*$/.test(name)||
+      name.includes('..')||sha(path.join(root,name))!==recordedHash)
+      throw Error('Code changed since benchmark preregistration: '+name);
+  }
+  const locked=JSON.parse(fs.readFileSync(
+    path.join(benchmarkDir,'checkpoint-lock.json'),'utf8'));
+  const entry=locked.checkpoints?.find(t=>
+    t.seed===expectedTrial.seed&&t.mode===policyMode);
+  const {lockSha256,...lockBody}=locked;
+  if(locked.planSha256!==planSha256||
+    createHash('sha256').update(JSON.stringify(lockBody))
+      .digest('hex')!==lockSha256||
+    entry?.byteSha256!==checkpointSha256)
+    throw Error('Frozen trial checkpoint differs from locked study');
+}
 const modelDigestBefore=frozenPolicy?createHash('sha256').update(
   JSON.stringify(frozenPolicy.snapshot())).digest('hex'):null;
 const chooseAction=(observation,candidates)=>
