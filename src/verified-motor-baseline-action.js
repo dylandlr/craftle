@@ -1,4 +1,4 @@
-// Server-bound action verification for an explicitly NON-LEARNING scripted
+// Server-bound action verification for explicitly NON-TRAINING scripted/frozen
 // baseline. Based on the same independent binding -> actor event -> linked
 // post-tick observation evidence used by Craftle's private reward gate.
 // The existing training-reward gate is NOT modified, reused with false
@@ -16,13 +16,16 @@ const reject=reason=>({
 export function verifyMotorBaselineActionEvidence({
   run,decision,events
 }={}){
-  // Strict role separation: this API must NEVER accept training runs or
-  // reclassify scripted actions as unassisted reinforcement learning.
+  // Strict role separation: only a scripted planner or frozen neural policy
+  // may receive an observational action receipt. No training run is eligible.
+  const scripted=run?.assistance==='scripted_planner'&&
+    run?.policy==='scripted_nonlearning_smoke';
+  const frozen=run?.assistance==='frozen_offline_neural'&&
+    run?.policy==='frozen_neural_evaluation';
   if(run?.schema!=='craftle.motor-learning-manifest.v1'||
     !validId(run.runId)||run.learningEnabled!==false||
     run.trainingEligible!==false||run.isolated!==true||
-    run.assistance!=='scripted_planner'||
-    run.policy!=='scripted_nonlearning_smoke')
+    !(scripted||frozen))
     return reject('not_scripted_baseline');
 
   if(!validId(decision?.id)||!validId(decision.runId)||
@@ -110,7 +113,8 @@ export function verifyMotorBaselineActionEvidence({
     decisionKey:run.runId+':'+decision.id,
     eventSequence:actor.sequence,
     steps,serverTick:post.serverTick,
-    reason:'server_bound_scripted_action_and_post_state',
+    reason:scripted?'server_bound_scripted_action_and_post_state':
+      'server_bound_frozen_neural_action_and_post_state',
     limitation:'Server binding and observer post-state verify this controlled action; do not interpret as packet-exclusive causality or eligibility for RL updates.'
   };
 }
