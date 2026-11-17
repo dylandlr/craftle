@@ -139,7 +139,7 @@ test('five geometry families yield distinct physical maps and rotation-invariant
   const fingerprints=new Set();
   for(const variant of CHAIN_GEOMETRY_VARIANTS){
     const a=menu(0,{},0,variant),b=menu(2,{},0,variant);
-    fingerprints.add(JSON.stringify(a.observation.blueprint));
+    fingerprints.add(JSON.stringify(chainLayout(0,variant).sites));
     assert.equal(a.candidates.length,3);
     assert.equal(b.candidates.length,3);
     for(const key of ['source0','source1','decoySource']){
